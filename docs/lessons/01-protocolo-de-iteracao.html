@@ -1,0 +1,1442 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Protocolo de Iteração</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="01">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Trilha DE</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+    <div class="rail-track">
+      <div class="bar"><i id="barFill"></i></div>
+      <span class="pct" id="barPct">0%</span>
+    </div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="6">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span id="k1">Aula 01 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Muita gente aprende <code>yield</code> como um truque e nunca entende o que acontece por baixo. O resultado aparece quando algo dá errado: um generator que “sumiu”, um <code>StopIteration</code> estranho, um <code>for</code> que roda vazio na segunda vez. Sem modelo mental, isso vira tentativa e erro.</p>
+
+    <p>Generator é só uma forma conveniente de criar um <strong>iterator</strong>. Então esta aula não fala de <code>yield</code> nenhuma vez — ela constrói o alicerce sobre o qual as outras cinco aulas da série se apoiam.</p>
+
+    <h2>O que você vai construir</h2>
+    <p>Ao final desta aula você terá escrito, sem usar <code>yield</code> e sem <code>itertools</code>:</p>
+    <ul>
+      <li>Uma reimplementação do <code>for</code> usando apenas <code>iter()</code>, <code>next()</code> e <code>StopIteration</code>;</li>
+      <li>Um leitor de CSV que é reutilizável — dá para iterar duas vezes e funciona nas duas;</li>
+      <li>Um <code>Chunked</code> que quebra qualquer fonte em lotes de tamanho fixo, inclusive uma fonte infinita;</li>
+      <li>Um teste com <code>assert</code> que expõe o bug mais comum de iteração em código de produção.</li>
+    </ul>
+    <p>Esse <code>Chunked</code> reaparece na aula 04, reescrito em três linhas com <code>itertools</code>. A ideia é você sentir a diferença tendo feito à mão antes.</p>
+
+    <h2>Pré-requisitos</h2>
+    <p>Saber usar <code>for</code>, listas, classes e funções em Python. Nada além disso — a aula não assume nenhum contato prévio com generators.</p>
+
+    <h2>Como esta aula está organizada</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tipo de atividade</th><th>O que esperar</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Conteúdo</strong></td><td>O texto principal. Todo bloco de código foi executado; as saídas mostradas são reais, não estimadas.</td></tr>
+          <tr><td><strong>Para saber mais</strong></td><td>Desvios curtos: decisões de design da linguagem, medições, pegadinhas. Dá para pular numa primeira leitura e voltar depois.</td></tr>
+          <tr><td><strong>Mão na massa</strong></td><td>Exercício curto dentro do fluxo, com previsão antes de rodar.</td></tr>
+          <tr><td><strong>Hora da prática</strong></td><td>Os seis exercícios do <code>lesson01.py</code>, cada um com solução comentada escondida.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Convenção de idioma</div>
+      <p>Explicação, enunciado e prosa em português. <strong>Código, docstrings, comentários dentro do código e nomes de variáveis em inglês.</strong> Isso vale para tudo que você escrever no repositório — um comentário em português dentro de um <code>.py</code> é inconsistência que eu aponto em review.</p>
+    </div>
+
+    <h2>Como estudar</h2>
+    <p>Vários trechos pedem que você <strong>escreva a previsão antes de rodar</strong>. Não pule: errar a previsão e entender por que errou é onde o aprendizado acontece de verdade. Acertar sem pensar não ensina nada.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="O que o for realmente faz" data-min="12" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 01 &middot; Atividade 02</span></div>
+  <h1 class="act-title">O que o <code style="font-size:.82em">for</code> realmente faz</h1>
+  <div class="act-meta">12 min</div>
+  <div class="prose">
+    <p class="lead">Vamos começar pelo comando mais banal do Python e descobrir que ele não faz o que quase todo mundo acha que faz.</p>
+
+    <p>Escreva este laço:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">for item in [10, 20, 30]:
+    print(item)</code></pre>
+    </div>
+
+    <p>A leitura intuitiva é “o Python anda pelos índices 0, 1, 2 da lista”. Está errada. Índice não aparece em lugar nenhum — tanto que o mesmo <code>for</code> funciona sobre um <code>set</code>, que não tem ordem, e sobre um arquivo aberto, que não tem tamanho conhecido.</p>
+
+    <h2>O que o interpretador realmente executa</h2>
+    <p>Por baixo dos panos, o laço acima é reescrito para o equivalente a isto:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— o <code style="border:0;background:none;padding:0">for</code> sem açúcar sintático</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">iterator = iter([10, 20, 30])   # 1. pede um iterator ao objeto
+while True:
+    try:
+        item = next(iterator)   # 2. pede o próximo valor
+    except StopIteration:       # 3. o iterator avisa que acabou
+        break
+    print(item)</code></pre>
+    </div>
+
+    <p>São três peças, e só três:</p>
+    <ol>
+      <li><code>iter(obj)</code> — devolve um <strong>iterator</strong>;</li>
+      <li><code>next(iterator)</code> — devolve o próximo valor;</li>
+      <li><code>StopIteration</code> — a exceção que sinaliza “acabou”.</li>
+    </ol>
+
+    <p>Isso é o <strong>protocolo de iteração</strong>. Percorra o passo a passo abaixo antes de seguir: cada clique é uma linha executada.</p>
+
+    <div class="trace" id="trace">
+      <div class="trace-head">
+        <h3>Execução passo a passo</h3>
+        <div class="trace-ctl">
+          <button class="btn btn-ghost btn-sm" id="tPrev">Anterior</button>
+          <button class="btn btn-primary btn-sm" id="tNext">Próximo passo</button>
+          <button class="btn btn-ghost btn-sm" id="tReset">Reiniciar</button>
+        </div>
+      </div>
+      <div class="trace-body">
+        <div class="trace-code" id="tCode"></div>
+        <div class="trace-state">
+          <div class="tstate-row"><span class="tstate-k">iterator</span><span class="tstate-v acc" id="tIter">—</span></div>
+          <div class="tstate-row"><span class="tstate-k">item</span><span class="tstate-v" id="tItem">—</span></div>
+          <div class="tstate-row"><span class="tstate-k">stdout</span><span class="tstate-v" id="tOut">(vazio)</span></div>
+        </div>
+      </div>
+      <div class="trace-note" id="tNote">Passo 1 de 9 &middot; clique em “Próximo passo”.</div>
+    </div>
+
+    <h2>Por que isso vale a pena saber</h2>
+    <p>Porque o protocolo não é usado só pelo <code>for</code>. Qualquer objeto que respeite esse contrato funciona em <code>list()</code>, <code>sum()</code>, <code>max()</code>, <code>sorted()</code>, <code>in</code>, desempacotamento (<code>a, b = obj</code>), compreensões, <code>zip()</code>, argumentos com <code>*</code> — e em praticamente toda função da biblioteca padrão que consome uma sequência.</p>
+
+    <p>Implementar três métodos te integra à linguagem inteira de graça. É o oposto de herdar de uma classe base e ganhar um método só.</p>
+
+    <h2>Cada tipo devolve um iterator diferente</h2>
+    <p>Repare no que <code>iter()</code> retorna para tipos distintos — os nomes das classes contam a história:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">for obj in ([1, 2, 3], "abc", {"a": 1}, range(3), open("events.jsonl")):
+    print(f"{type(obj).__name__:&gt;9} -&gt; {type(iter(obj)).__name__}")</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>     list -&gt; list_iterator
+      str -&gt; str_ascii_iterator
+     dict -&gt; dict_keyiterator
+    range -&gt; range_iterator
+TextIOWrapper -&gt; TextIOWrapper</div>
+    </div>
+
+    <p>Quatro dos cinco fabricam um objeto novo, de uma classe própria, cuja única função é lembrar onde a leitura está. O quinto não: <code>iter()</code> sobre um arquivo devolve <strong>o próprio arquivo</strong>. Guarde essa anomalia — ela volta na atividade 11 e é a raiz de um bug clássico de ETL.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Ponte com a fase 2</div>
+      <p>Quando você chegar em Spark, <code>df.collect()</code> vai parecer familiar: é a mesma decisão de “materializar agora” que <code>list(iterator)</code> toma aqui, só que distribuída e com um custo muito maior de errar.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="note" data-title="Para saber mais: por que o fim é uma exceção" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 01 &middot; Atividade 03</span></div>
+  <h1 class="act-title">Por que o fim da iteração é uma exceção</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p>Sinalizar “acabou” com uma exceção parece estranho — a maioria das linguagens usa um método <code>hasNext()</code> que devolve booleano. A escolha do Python tem uma razão concreta.</p>
+
+    <h2>A alternativa que não funciona</h2>
+    <p>Suponha que <code>next()</code> devolvesse um valor sentinela, digamos <code>None</code>, quando acabasse:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— hipotético, não é assim que funciona</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">while (item := next(iterator)) is not None:
+    process(item)</code></pre>
+    </div>
+
+    <p>Isso quebra no primeiro pipeline real que encontrar um <code>None</code> legítimo no meio dos dados — e coluna nula é a coisa mais comum que existe em ETL. O laço pararia na metade do arquivo, sem erro nenhum, e você entregaria metade das linhas achando que entregou todas.</p>
+
+    <p>Qualquer sentinela tem esse problema: se ele pode aparecer nos dados, ele é ambíguo. <code>StopIteration</code> resolve porque uma exceção viaja por um canal separado do valor de retorno. Não existe dado que possa ser confundido com ela.</p>
+
+    <h2>E o <code>hasNext()</code>?</h2>
+    <p>Um <code>hasNext()</code> exigiria que o iterator soubesse, antes de produzir, se ainda há algo. Para um cursor de banco ou um socket isso significa <em>ler adiante e guardar</em> — o iterator passaria a manter um buffer de um item só para responder a uma pergunta. O protocolo do Python empurra essa complexidade para quem realmente precisa dela, em vez de cobrar de todo mundo.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">O custo escondido</div>
+      <p>Exceção em Python é barata para levantar uma vez no fim de um laço, mas <strong>não</strong> é barata dentro de um laço apertado. Por isso <code>next()</code> tem uma segunda forma: <code>next(iterator, default)</code> devolve o padrão em vez de levantar. Use quando o fim for esperado e frequente.</p>
+    </div>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">it = iter([1, 2])
+print(next(it, None), next(it, None), next(it, None))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>1 2 None</div>
+    </div>
+
+    <div class="callout bug">
+      <div class="callout-title">Armadilha adiantada</div>
+      <p>Se você chamar <code>next()</code> na mão, sem <code>try</code> e sem <code>default</code>, um iterator esgotado levanta <code>StopIteration</code> — e dentro de um generator isso vira <code>RuntimeError</code> desde o Python 3.7 (a <a href="https://peps.python.org/pep-0479/" target="_blank" rel="noopener">PEP 479</a>). É um erro que só aparece com entrada vazia, que é justamente o caso que ninguém testa.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="Iterable ≠ Iterator" data-min="14" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 01 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Iterable ≠ Iterator</h1>
+  <div class="act-meta">14 min</div>
+  <div class="prose">
+    <p class="lead">Essa distinção é responsável por mais bugs de pipeline do que qualquer outro detalhe do protocolo. Vale fixar bem.</p>
+
+    <p>São dois papéis diferentes, com contratos diferentes:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>Iterable</th><th>Iterator</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Define</strong></td><td><code>__iter__()</code></td><td><code>__next__()</code> <strong>e</strong> <code>__iter__()</code></td></tr>
+          <tr><td><strong>Papel</strong></td><td>“Eu sei produzir um iterator”</td><td>“Eu sei produzir o próximo valor”</td></tr>
+          <tr><td><strong>Estado</strong></td><td>Normalmente não guarda posição</td><td>Guarda a posição atual</td></tr>
+          <tr><td><strong>Reutilizável</strong></td><td>Sim — dois <code>for</code> funcionam</td><td>Não — esgota</td></tr>
+          <tr><td><strong>Exemplos</strong></td><td><code>list</code>, <code>dict</code>, <code>str</code>, <code>set</code>, <code>range</code></td><td><code>iter(lista)</code>, generators, <code>map</code>, <code>zip</code>, arquivo aberto</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Passo 1 — a lista fabrica iterators sob demanda</h2>
+    <p>Peça dois iterators para a mesma lista e observe que eles não conversam entre si:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">numbers = [1, 2, 3]
+
+it1 = iter(numbers)
+it2 = iter(numbers)
+
+print(next(it1))   # avança it1
+print(next(it1))   # avança it1 de novo
+print(next(it2))   # it2 tem posição própria</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>1
+2
+1</div>
+    </div>
+
+    <p>O <code>1</code> no fim é o ponto todo: <code>it2</code> nunca ouviu falar de <code>it1</code>. A lista não tem posição — ela é uma <strong>fábrica</strong> de iterators. É por isso que você pode iterar a mesma lista quantas vezes quiser: cada <code>for</code> pede um objeto novo, zerado.</p>
+
+    <h2>Passo 2 — o iterator é descartável</h2>
+    <p>Agora o contraste. Um iterator só entrega seus valores uma vez:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">it = iter([1, 2, 3])
+print(list(it))
+print(list(it))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>[1, 2, 3]
+[]</div>
+    </div>
+
+    <p>Repare no que <em>não</em> aconteceu: nenhum erro. A segunda chamada devolveu uma lista vazia, educadamente, e o programa seguiu em frente. <strong>Não existe rewind</strong> — um iterator esgotado permanece esgotado para sempre, e a única coisa que ele te diz é o silêncio.</p>
+
+    <h2>Passo 3 — todo iterator também é um iterable</h2>
+    <p>Aqui está a assimetria que confunde. O <code>__iter__</code> de um iterator existe, e ele retorna <code>self</code>:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">numbers = [1, 2, 3]
+it = iter(numbers)
+
+print("lista é seu próprio iterator? ", numbers is iter(numbers))
+print("iterator é seu próprio iterator?", it is iter(it))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>lista é seu próprio iterator?  False
+iterator é seu próprio iterator? True</div>
+    </div>
+
+    <p>Esse <code>return self</code> é o que permite passar um iterator direto para um <code>for</code> sem o Python reclamar. A consequência prática é menos óbvia — e é ela que morde:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">it = iter([1, 2, 3, 4])
+next(it)                 # descarta o primeiro
+
+for x in it:
+    print(x)</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>2
+3
+4</div>
+    </div>
+
+    <p>O <code>for</code> continuou de onde o <code>next()</code> parou, não do começo. Faz sentido: o <code>for</code> chamou <code>iter(it)</code>, recebeu o próprio <code>it</code> de volta com a posição já em 1, e seguiu dali.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Onde isso vira bug em ETL</div>
+      <p>Esse comportamento é a explicação para um bug que parece mágica. Você tem um pipeline que lê linhas de um arquivo e, antes de processar, faz uma checagem rápida:</p>
+      <div class="code bare" style="margin-top:14px">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">rows = read_rows(path)          # devolve um iterator
+
+if any(is_header(r) for r in rows):   # &lt;- consome o primeiro registro
+    log.info("header detected")
+
+for row in rows:                # começa do SEGUNDO registro
+    load(row)</code></pre>
+      </div>
+      <p>O <code>any()</code> parou assim que achou o que queria — e o registro que ele examinou foi consumido. Você perde uma linha por execução, sem erro, sem log. Em um carregamento de milhões de linhas isso passa despercebido por meses.</p>
+    </div>
+
+    <h2>Como saber qual é qual</h2>
+    <p>A verificação honesta é perguntar pelos métodos. Um iterator tem <code>__next__</code>; um iterable que não seja iterator, não:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">for name, obj in [("list", [1]), ("iter(list)", iter([1])), ("str", "a"),
+                  ("range", range(3)), ("genexp", (x for x in range(3))),
+                  ("dict", {"a": 1}), ("map", map(str, [1]))]:
+    print(f"{name:&gt;11}: __iter__={hasattr(obj, '__iter__')} "
+          f"__next__={hasattr(obj, '__next__')}")</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>       list: __iter__=True __next__=False
+ iter(list): __iter__=True __next__=True
+        str: __iter__=True __next__=False
+      range: __iter__=True __next__=False
+     genexp: __iter__=True __next__=True
+       dict: __iter__=True __next__=False
+        map: __iter__=True __next__=True</div>
+    </div>
+
+    <p><code>map</code> na última linha merece atenção: ele parece uma lista quando você imprime o resultado de <code>list(map(...))</code>, mas é um iterator — esgota igual, e traz o mesmo risco de consumo acidental.</p>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="lab" data-title="Mão na massa: prevendo o esgotamento" data-min="8" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 01 &middot; Atividade 05</span></div>
+  <h1 class="act-title">Prevendo o esgotamento</h1>
+  <div class="act-meta">08 min</div>
+  <div class="prose">
+    <p class="lead">Antes de seguir para os iterators escritos à mão, um teste rápido do modelo mental. Leia o código, escreva sua previsão e só depois abra a resposta.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class BadCountdown:
+    def __init__(self, start):
+        self.current = start
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.current &lt;= 0:
+            raise StopIteration
+        self.current -= 1
+        return self.current + 1
+
+
+b = BadCountdown(3)
+print(sum(b), max(b, default="VAZIO"))</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="O que essa linha imprime? E por quê?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a saída</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div class="code" style="margin-top:18px">
+          <div class="code-head"><span class="code-file"><b>saída real</b></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-python">6 VAZIO</code></pre>
+        </div>
+        <p style="margin-top:16px">O <code>sum(b)</code> consumiu <code>b</code> inteiro: <code>3 + 2 + 1 = 6</code>. Quando <code>max(b)</code> recebeu o mesmo objeto, ele já estava esgotado — e como <code>max()</code> sobre vazio levantaria <code>ValueError</code>, o <code>default</code> entrou no lugar.</p>
+        <p>Se você tivesse escrito <code>max(b)</code> sem <code>default</code>, o programa teria morrido com <code>ValueError: max() arg is an empty sequence</code> — uma mensagem que não menciona iterators, esgotamento nem <code>BadCountdown</code>, e que manda você caçar no lugar errado.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O padrão a memorizar</div>
+      <p>Sempre que <strong>duas agregações leem a mesma variável</strong> — <code>sum</code> e <code>max</code>, <code>len</code> e <code>for</code>, uma contagem e um carregamento — pergunte se aquela variável é um iterable ou um iterator. Se for iterator, a segunda vê vazio.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="Escrevendo um iterator na mão" data-min="15" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 01 &middot; Atividade 06</span></div>
+  <h1 class="act-title">Escrevendo um iterator na mão</h1>
+  <div class="act-meta">15 min</div>
+  <div class="prose">
+    <p class="lead">Antes de usar <code>yield</code>, vale fazer uma vez do jeito difícil. Isso deixa claro exatamente o que o <code>yield</code> automatiza — e você vai ver, na aula 02, vinte linhas virarem quatro.</p>
+
+    <p>O objetivo: uma contagem regressiva reutilizável. <code>Countdown(3)</code> produz <code>3, 2, 1</code>, e produz de novo se você iterar de novo.</p>
+
+    <h2>Passo 1 — separar os dois papéis em duas classes</h2>
+    <p>A regra que vem da atividade anterior: <strong>quem guarda posição é o iterator, não o iterable</strong>. Então são duas classes. A primeira não tem estado de leitura nenhum:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— o iterable</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class Countdown:
+    """Iterable that counts down from `start` to 1."""
+
+    def __init__(self, start: int) -&gt; None:
+        self.start = start
+
+    def __iter__(self) -&gt; "CountdownIterator":
+        return CountdownIterator(self.start)</code></pre>
+    </div>
+
+    <p><code>Countdown</code> guarda apenas a <em>configuração</em> (de onde contar). Toda vez que alguém chama <code>iter()</code> nele, ele fabrica um objeto novo. É exatamente o que a lista faz.</p>
+
+    <h2>Passo 2 — o iterator, que carrega a posição</h2>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— o iterator</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class CountdownIterator:
+    """Iterator holding the actual position state."""
+
+    def __init__(self, current: int) -&gt; None:
+        self.current = current
+
+    def __iter__(self) -&gt; "CountdownIterator":
+        return self                      # todo iterator é iterable
+
+    def __next__(self) -&gt; int:
+        if self.current &lt;= 0:            # 1. condição de parada primeiro
+            raise StopIteration
+        value = self.current             # 2. captura o valor atual
+        self.current -= 1                # 3. avança o estado
+        return value                     # 4. entrega</code></pre>
+    </div>
+
+    <p>Os quatro passos dentro de <code>__next__</code> aparecem em <em>todo</em> iterator que você vai escrever, nessa ordem. Inverter os passos 2 e 3 é o erro mais comum: você acaba devolvendo o valor já decrementado e a contagem sai <code>2, 1, 0</code>.</p>
+
+    <h2>Passo 3 — verificar as duas propriedades</h2>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">for n in Countdown(3):
+    print(n)
+
+c = Countdown(3)
+print(list(c), list(c))     # reutilizável?</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>3
+2
+1
+[3, 2, 1] [3, 2, 1]</div>
+    </div>
+
+    <p>Duas listas cheias. É essa segunda linha que separa um iterable bem escrito de um que só parece funcionar.</p>
+
+    <h2>Passo 4 — o teste que mostra o ganho</h2>
+    <p>Agora o ponto que justifica todo o trabalho. Conte a partir de três bilhões:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">import sys
+
+it = iter(Countdown(3_000_000_000))
+print([next(it) for _ in range(3)])
+print(sys.getsizeof(it), "bytes")</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>[3000000000, 2999999999, 2999999998]
+56 bytes</div>
+    </div>
+
+    <p>Instantâneo, e o objeto inteiro ocupa <strong>56 bytes</strong>. Em nenhum momento existiu uma lista com três bilhões de números — cada valor foi calculado no instante em que foi pedido e descartado logo depois. A memória usada é a mesma para <code>Countdown(3)</code> e <code>Countdown(3_000_000_000)</code>.</p>
+
+    <p>Esse é o conceito que a próxima atividade sobre lazy evaluation vai nomear formalmente. Você acabou de implementá-lo à mão.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Repare no trabalho que deu</div>
+      <p>Duas classes, quatro métodos, controle manual de estado e um <code>raise StopIteration</code> escrito à mão — para produzir uma contagem regressiva. Guarde essa sensação: na aula 02, <code>yield</code> reduz isso a uma função de quatro linhas, com exatamente o mesmo comportamento. Saber o que ele está escondendo é o que te permite debugar quando ele escorrega.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="video" data-title="O anti-padrão: iterator disfarçado de iterable" data-min="11" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 01 &middot; Atividade 07</span></div>
+  <h1 class="act-title">O anti-padrão: iterator disfarçado de iterable</h1>
+  <div class="act-meta">11 min</div>
+  <div class="prose">
+    <p class="lead">Duas classes para uma contagem regressiva parece exagero. A tentação de juntar tudo numa só é enorme — e é o bug que você viu na atividade 05.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— não faça isso</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class BadCountdown:
+    def __init__(self, start):
+        self.current = start
+
+    def __iter__(self):
+        return self          # devolve a si mesmo, com o estado já consumido
+
+    def __next__(self):
+        if self.current &lt;= 0:
+            raise StopIteration
+        self.current -= 1
+        return self.current + 1
+
+
+c = BadCountdown(3)
+print(list(c))
+print(list(c))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>[3, 2, 1]
+[]</div>
+    </div>
+
+    <h2>Por que é tão difícil de pegar</h2>
+    <p>Três razões, e as três conspiram contra você:</p>
+    <ol>
+      <li><strong>Passa em qualquer teste rápido.</strong> Você escreve <code>assert list(BadCountdown(3)) == [3, 2, 1]</code>, vê verde e segue.</li>
+      <li><strong>Não levanta exceção.</strong> A segunda iteração devolve vazio, e vazio é um resultado válido em quase todo lugar.</li>
+      <li><strong>O nome mente.</strong> A classe se parece com uma coleção, e quem usa trata como coleção. Ninguém escreve <code>list(minha_lista)</code> duas vezes esperando resultado diferente.</li>
+    </ol>
+
+    <h2>Como isso chega em produção</h2>
+    <p>Raramente com <code>list()</code> duas vezes seguidas. O caminho real é uma refatoração inocente — alguém acrescenta uma métrica antes do carregamento:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">records = ExtractedRecords(source)      # parece uma coleção
+
+log.info("extracted %d records", sum(1 for _ in records))   # métrica nova
+
+for record in records:                  # não roda nenhuma vez
+    warehouse.insert(record)</code></pre>
+    </div>
+
+    <p>O deploy passa, os logs mostram <code>extracted 4821 records</code>, e a tabela de destino recebe zero linhas. O log — a única coisa que alguém vai olhar — afirma que os dados existem. É o pior formato possível de falha: silencioso e com evidência que aponta na direção errada.</p>
+
+    <h2>Como detectar</h2>
+    <p>Uma linha resolve. Se o objeto é seu próprio iterator, ele não é reutilizável:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">c = BadCountdown(3)
+print("reutilizável?", iter(c) is not iter(c))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>reutilizável? False</div>
+    </div>
+
+    <p>Duas chamadas a <code>iter()</code> num iterable de verdade devolvem objetos <em>diferentes</em>. Num iterator disfarçado, devolvem o mesmo. Vale como <code>assert</code> em teste:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def assert_reusable(iterable) -&gt; None:
+    """Fail loudly when `iterable` is secretly a one-shot iterator."""
+    assert iter(iterable) is not iter(iterable), (
+        f"{type(iterable).__name__} is an iterator, not a reusable iterable"
+    )</code></pre>
+    </div>
+
+    <div class="callout bug">
+      <div class="callout-title">Guarde este padrão</div>
+      <p>Ele é a raiz de metade dos problemas com generators que você vai ver na aula 02 — porque <strong>toda função com <code>yield</code> devolve um iterator</strong>, não um iterable reutilizável. O mesmo bug, com sintaxe mais bonita.</p>
+    </div>
+
+    <h2>Quando o anti-padrão é a escolha certa</h2>
+    <p>Nem sempre é erro. Um leitor de socket, um consumidor de fila, um cursor que só anda para a frente — esses <em>são</em> iterators por natureza, e fingir reutilização seria mentir. A regra não é “nunca retorne <code>self</code>”; é <strong>não prometa reutilização que você não pode cumprir</strong>. Quando a fonte é de passagem única, deixe isso explícito no nome (<code>Stream</code>, <code>Cursor</code>, <code>Reader</code>) e na docstring.</p>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="note" data-title="Para saber mais: o protocolo legado __getitem__" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 01 &middot; Atividade 08</span></div>
+  <h1 class="act-title">O protocolo legado <code style="font-size:.82em">__getitem__</code></h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p>Existe um segundo caminho, mais antigo, pelo qual o <code>for</code> funciona. Se o objeto não tem <code>__iter__</code> mas tem <code>__getitem__</code>, o Python tenta os índices <code>0, 1, 2, ...</code> até tomar um <code>IndexError</code>:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from collections.abc import Iterable
+
+class Legacy:
+    def __init__(self, data):
+        self.data = data
+    def __getitem__(self, i):
+        return self.data[i]
+
+L = Legacy([10, 20, 30])
+print("tem __iter__?      ", hasattr(L, "__iter__"))
+print("for funciona:      ", [x for x in L])
+print("iter(L) devolve:   ", type(iter(L)).__name__)
+print("isinstance Iterable:", isinstance(L, Iterable))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>tem __iter__?       False
+for funciona:       [10, 20, 30]
+iter(L) devolve:    iterator
+isinstance Iterable: False</div>
+    </div>
+
+    <p>Repare na contradição da última linha: o objeto itera perfeitamente, mas <code>isinstance(L, Iterable)</code> diz <code>False</code>. A ABC <code>Iterable</code> só checa <code>__iter__</code> — ela não conhece o caminho legado.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Por que isso importa para você</div>
+      <p>Se você escrever uma função de pipeline que valida a entrada com <code>isinstance(x, Iterable)</code>, ela vai rejeitar objetos que iteram sem problema. E o inverso é pior: <code>isinstance(x, Iterable)</code> devolve <code>True</code> para <code>str</code>, então uma string passa pela validação e seu pipeline processa cada caractere como se fosse um registro.</p>
+    </div>
+
+    <p>Na prática, para código novo, ignore o protocolo legado: implemente <code>__iter__</code>. Saber que ele existe serve para não se assustar quando um objeto de biblioteca antiga iterar “sem motivo aparente”.</p>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="video" data-title="Lazy e eager: o que muda na memória" data-min="13" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 01 &middot; Atividade 09</span></div>
+  <h1 class="act-title">Lazy e eager: o que muda na memória</h1>
+  <div class="act-meta">13 min</div>
+  <div class="prose">
+    <p class="lead">Você já implementou o conceito na atividade 06. Agora ele ganha nome, e ganha número.</p>
+
+    <p><strong>Lazy evaluation</strong> (avaliação preguiçosa): o valor só é produzido quando alguém pede. <strong>Eager evaluation</strong> (avaliação ansiosa): tudo é calculado de uma vez, guardado, e entregue pronto — que é o que uma lista faz.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">eager = [x * 2 for x in range(1_000_000_000)]   # colchetes: calcula tudo agora
+lazy  = (x * 2 for x in range(1_000_000_000))   # parênteses: uma receita</code></pre>
+    </div>
+
+    <p>Um caractere de diferença. A primeira linha tenta alocar um bilhão de inteiros e mata o processo; a segunda retorna instantaneamente e ocupa algumas centenas de bytes.</p>
+
+    <h2>Medindo de verdade</h2>
+    <p>“Ocupa menos memória” é fácil de afirmar. Vamos medir com <code>tracemalloc</code>, que reporta o pico de alocação do interpretador — um milhão de elementos, não um bilhão, para o eager caber:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">import tracemalloc
+
+tracemalloc.start()
+eager = [x * 2 for x in range(1_000_000)]
+_, peak = tracemalloc.get_traced_memory()
+tracemalloc.stop()
+print(f"eager  -&gt; pico {peak / 1024 / 1024:.1f} MiB")
+
+tracemalloc.start()
+total = 0
+for v in (x * 2 for x in range(1_000_000)):
+    total += v
+_, peak = tracemalloc.get_traced_memory()
+tracemalloc.stop()
+print(f"lazy   -&gt; pico {peak / 1024:.1f} KiB")</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>eager  -&gt; pico 38.6 MiB
+lazy   -&gt; pico 0.5 KiB</div>
+    </div>
+
+    <p>38,6 MiB contra meio kilobyte, para produzir a mesma soma. E repare que o custo do eager <em>cresce com a entrada</em>, enquanto o do lazy é constante: dez milhões de elementos levariam o primeiro a ~386 MiB e deixariam o segundo em 0,5 KiB.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Ponte com a fase 2</div>
+      <p>Essa é exatamente a distinção entre <em>transformação</em> e <em>ação</em> no Spark. <code>df.filter(...)</code> e <code>df.select(...)</code> são lazy — montam um plano, não leem dado nenhum. <code>.count()</code>, <code>.collect()</code> e <code>.write()</code> são as ações que disparam a execução. Quando você entender por que <code>lazy</code> acima não fez nada até o <code>for</code>, o modelo do Spark já está entendido.</p>
+    </div>
+
+    <h2>O Python 3 é lazy por padrão</h2>
+    <p>Isso não é um recurso opcional que você liga. Boa parte da biblioteca padrão já devolve objetos preguiçosos:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">print(map(str, [1, 2, 3]))
+print(list(map(str, [1, 2, 3])))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>&lt;map object at 0x7fd37490bfa0&gt;
+['1', '2', '3']</div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Chamada</th><th>Devolve</th><th>Reutilizável</th></tr></thead>
+        <tbody>
+          <tr><td><code>range(n)</code></td><td>objeto <code>range</code> (lazy, <em>iterable</em>)</td><td>sim</td></tr>
+          <tr><td><code>map(f, xs)</code></td><td>iterator</td><td>não</td></tr>
+          <tr><td><code>filter(f, xs)</code></td><td>iterator</td><td>não</td></tr>
+          <tr><td><code>zip(a, b)</code></td><td>iterator</td><td>não</td></tr>
+          <tr><td><code>enumerate(xs)</code></td><td>iterator</td><td>não</td></tr>
+          <tr><td><code>d.items()</code></td><td>view (lazy, <em>iterable</em>)</td><td>sim</td></tr>
+          <tr><td><code>open(path)</code></td><td>arquivo — é seu próprio iterator</td><td>não</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>A coluna da direita é a que importa no dia a dia. <code>range</code> e <code>d.items()</code> são lazy <em>e</em> reutilizáveis; os outros são de passagem única. Isso explica um comportamento que confunde quem vem de pandas: <code>zip(a, b)</code> não “é” os pares, é uma receita para produzi-los — e você só pode consumi-la uma vez.</p>
+
+    <h2>Onde lazy não ajuda</h2>
+    <p>Esta é a parte que separa entender de decorar. Avaliação preguiçosa não resolve nada quando a operação precisa de <strong>todos</strong> os dados antes de produzir o primeiro resultado:</p>
+    <ul>
+      <li><code>sorted()</code> — precisa ver o último elemento para saber qual é o primeiro;</li>
+      <li><code>len()</code> e qualquer contagem exata do total;</li>
+      <li>deduplicação — exige guardar o que já foi visto;</li>
+      <li>join entre duas fontes — um dos lados precisa caber em memória;</li>
+      <li><code>pd.read_csv()</code> sem <code>chunksize</code> — o pandas materializa o DataFrame inteiro, e passar um generator para ele não muda nada.</li>
+    </ul>
+    <p>Nesses casos o custo de memória é inerente ao problema, não à sua escolha de código. A solução não é lazy — é particionar, ordenar externamente ou empurrar a operação para o banco.</p>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="note" data-title="Para saber mais: por que sys.getsizeof mente" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 01 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Por que <code style="font-size:.82em">sys.getsizeof</code> mente</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p>O exercício 1.5 vai te pedir para comparar tamanhos com <code>sys.getsizeof</code>. Antes disso, entenda o que essa função mede — e o que ela não mede.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">import sys
+
+print(sys.getsizeof(list(range(1_000_000))))
+print(sys.getsizeof(range(1_000_000)))
+print(sys.getsizeof((x for x in range(1_000_000))))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>8000056
+48
+200</div>
+    </div>
+
+    <p>À primeira vista a conclusão é óbvia: 8 MB contra 48 bytes contra 200 bytes. Mas os três números mentem de formas diferentes.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Objeto</th><th class="num">getsizeof</th><th>O que o número realmente é</th></tr></thead>
+        <tbody>
+          <tr><td><code>list(range(1e6))</code></td><td class="num">8 000 056</td><td>Só o array de <strong>ponteiros</strong>. Os inteiros apontados não estão contados.</td></tr>
+          <tr><td><code>range(1e6)</code></td><td class="num">48</td><td>Honesto: três inteiros (start, stop, step). O range não guarda mais nada.</td></tr>
+          <tr><td>generator</td><td class="num">200</td><td>O frame do generator. Não diz nada sobre o que ele vai produzir.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>O que falta na conta da lista</h2>
+    <p>Um <code>int</code> em Python ocupa 28 bytes — ele é um objeto completo, com contador de referências e tipo:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">print(sys.getsizeof(1), sys.getsizeof(999_999))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>28 28</div>
+    </div>
+
+    <p>Então o custo real de <code>list(range(1_000_000))</code> é ~8 MB de ponteiros <strong>mais</strong> ~28 MB de inteiros. O <code>tracemalloc</code> da atividade anterior mediu 38,6 MiB para uma lista comparável — e é esse o número que importa, não o 8 MB.</p>
+
+    <h2>E o generator é pior ainda</h2>
+    <p>Os 200 bytes do generator são o tamanho da <em>receita</em>, não do consumo. Se o generator carregar uma referência a uma lista de 2 GB no seu escopo, <code>getsizeof</code> continua dizendo 200.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">A ferramenta certa</div>
+      <p><code>sys.getsizeof</code> responde “quanto ocupa este objeto”. A pergunta que você tem em ETL é “quanto meu processo aloca enquanto roda este pipeline” — e quem responde isso é <code>tracemalloc</code>, medindo o <strong>pico</strong>. A aula 05 é inteira sobre isso; por enquanto, basta desconfiar do número fácil.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="video" data-title="Arquivos: o caso que mais importa para ETL" data-min="12" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 01 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Arquivos: o caso que mais importa para ETL</h1>
+  <div class="act-meta">12 min</div>
+  <div class="prose">
+    <p class="lead">Tudo que você viu até aqui converge neste ponto. Um objeto de arquivo aberto é um iterator lazy sobre linhas — e esse detalhe separa código de ETL que escala de código que não escala.</p>
+
+    <p>Os dois trechos abaixo produzem exatamente o mesmo resultado:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python"># EAGER: carrega o arquivo INTEIRO na memória
+with open("events.jsonl", encoding="utf-8") as f:
+    lines = f.readlines()
+    for line in lines:
+        process(line)
+
+# LAZY: uma linha por vez
+with open("events.jsonl", encoding="utf-8") as f:
+    for line in f:
+        process(line)</code></pre>
+    </div>
+
+    <p>A diferença é uma chamada a <code>readlines()</code>. Vamos medir sobre um <code>events.jsonl</code> real de <strong>9,3 MiB e 200 000 linhas</strong>:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">import tracemalloc
+
+tracemalloc.start()
+with open("events.jsonl", encoding="utf-8") as f:
+    n = sum(1 for _ in f.readlines())
+_, peak = tracemalloc.get_traced_memory(); tracemalloc.stop()
+print(f"readlines()   -&gt; {n} linhas, pico {peak / 1024 / 1024:.1f} MiB")
+
+tracemalloc.start()
+with open("events.jsonl", encoding="utf-8") as f:
+    n = sum(1 for _ in f)
+_, peak = tracemalloc.get_traced_memory(); tracemalloc.stop()
+print(f"for line in f -&gt; {n} linhas, pico {peak / 1024:.1f} KiB")</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>readlines()   -&gt; 200000 linhas, pico 20.3 MiB
+for line in f -&gt; 200000 linhas, pico 21.7 KiB</div>
+    </div>
+
+    <p>20,3 MiB contra 21,7 KiB — cerca de <strong>950 vezes menos memória</strong> para contar as mesmas linhas. E o número da esquerda cresce linearmente com o arquivo: troque por um dump de 10 GB e o primeiro trecho mata o processo, enquanto o segundo continua em ~20 KiB.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Sempre com <code>encoding="utf-8"</code></div>
+      <p>Você trabalha no Windows com WSL2. Sem <code>encoding</code> explícito, o Python usa o padrão da plataforma — que no Windows pode ser <code>cp1252</code>. O mesmo script roda no seu WSL e quebra no PowerShell de um colega, com <code>UnicodeDecodeError</code> numa linha aleatória do meio do arquivo.</p>
+    </div>
+
+    <h2>A anomalia do arquivo</h2>
+    <p>Lembra da atividade 02, quando <code>iter()</code> sobre um arquivo devolveu <code>TextIOWrapper</code> em vez de uma classe de iterator dedicada? Agora o motivo importa:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">with open("events.jsonl", encoding="utf-8") as f:
+    print("f is iter(f)?", f is iter(f))
+    first = next(f)
+    print(first.strip()[:44])</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>f is iter(f)? True
+{"id": 0, "user": "u5306", "amount": 473.98}</div>
+    </div>
+
+    <p>O arquivo <strong>é</strong> seu próprio iterator — exatamente o padrão que a atividade 07 chamou de anti-padrão. Aqui não é erro: um handle de arquivo tem uma posição de leitura real no sistema operacional, e fingir que dá para iterar duas vezes seria mentira. Mas as consequências são as mesmas:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— bug clássico</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">with open("events.jsonl", encoding="utf-8") as f:
+    total = sum(1 for _ in f)       # consome o arquivo inteiro
+    for line in f:                  # não executa nenhuma vez
+        load(line)</code></pre>
+    </div>
+
+    <p>Contar antes de processar destrói o processamento. Se você precisa mesmo das duas passadas sobre um arquivo, as opções honestas são: abrir duas vezes, chamar <code>f.seek(0)</code> entre elas, ou — se couber na memória — materializar com <code>list()</code> de forma consciente e comentada.</p>
+
+    <h2>O padrão que você vai usar sempre</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def read_events(path: str) -&gt; Iterator[dict]:
+    """Stream JSON records from a JSONL file, one line at a time."""
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:                       # pula linhas em branco no fim
+                yield json.loads(line)</code></pre>
+    </div>
+
+    <p>Sim, tem um <code>yield</code> aí — é a aula 02. Mas repare que a estrutura é a mesma coisa que você construiu à mão na atividade 06: uma fonte que entrega um registro por vez, com memória constante, independente do tamanho do arquivo.</p>
+  </div>
+</article>
+
+<!-- ==================== 12 ==================== -->
+<article class="act" id="a12" data-kind="video" data-title="Armadilhas desta aula" data-min="9" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 01 &middot; Atividade 12</span></div>
+  <h1 class="act-title">Armadilhas desta aula</h1>
+  <div class="act-meta">09 min</div>
+  <div class="prose">
+    <p class="lead">Bug que levanta exceção é fácil — o stack trace te leva até ele. As quatro armadilhas abaixo não levantam nada. Elas devolvem vazio, contam errado, ou perdem uma linha por execução.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <div>
+          <h3>Assumir que tudo que itera é uma lista</h3>
+          <p><code>map</code>, <code>filter</code>, <code>zip</code>, <code>enumerate</code>, <code>open()</code> e generators não são listas. Não têm <code>len()</code>, não aceitam índice, e esgotam. O código roda no teste com três registros e falha diferente em produção.</p>
+          <p>Sintoma típico: <code>TypeError: object of type 'generator' has no len()</code> — ou pior, nenhum sintoma, só o resultado errado.</p>
+        </div>
+      </div>
+      <div class="trap">
+        <div>
+          <h3>Chamar <code>len()</code> num iterator</h3>
+          <p>Não existe, e não é omissão: o iterator não sabe quantos itens virão, e pode nem ser finito. Se você precisa do total, tem duas saídas honestas — consumir e contar (<code>sum(1 for _ in it)</code>, sabendo que isso <em>gasta</em> o iterator), ou materializar com <code>list()</code> e assumir o custo de memória.</p>
+        </div>
+      </div>
+      <div class="trap">
+        <div>
+          <h3>Iterar duas vezes e receber vazio na segunda</h3>
+          <p>A armadilha central da aula. Aparece disfarçada: um <code>log.info</code> com contagem antes do laço, um <code>any()</code> de validação, uma métrica nova que alguém acrescentou numa refatoração inocente.</p>
+          <p>Se você precisa de múltiplas passadas, materialize com <code>list()</code> <strong>conscientemente</strong> — e deixe um comentário dizendo por que cabe na memória. Materializar não é pecado; materializar por acidente é.</p>
+        </div>
+      </div>
+      <div class="trap">
+        <div>
+          <h3><code>StopIteration</code> vazando</h3>
+          <p>Chamar <code>next()</code> na mão sem <code>try</code> derruba o código quando o iterator está vazio. Use <code>next(it, None)</code> quando o fim for esperado.</p>
+          <p>Dentro de um generator é ainda mais traiçoeiro: desde o Python 3.7, um <code>StopIteration</code> que escapa vira <code>RuntimeError: generator raised StopIteration</code> — mensagem que não aponta para a linha que causou o problema.</p>
+        </div>
+      </div>
+    </div>
+
+    <h2>O checklist de review</h2>
+    <p>Quatro perguntas para rodar em qualquer código que consome dados. Elas pegam as quatro armadilhas acima:</p>
+    <ol>
+      <li>Esta variável é um <em>iterable</em> ou um <em>iterator</em>? (<code>hasattr(x, "__next__")</code> responde)</li>
+      <li>Ela é lida mais de uma vez neste escopo? Conte também <code>len</code>, <code>any</code>, <code>sum</code>, <code>max</code> e logs.</li>
+      <li>Se é lida duas vezes, a materialização foi <strong>deliberada</strong> e está comentada?</li>
+      <li>Existe algum <code>next()</code> sem <code>default</code> e sem <code>try</code>?</li>
+    </ol>
+
+    <div class="callout next">
+      <div class="callout-title">Pronto para a prática</div>
+      <p>As próximas duas atividades são os exercícios. Elas fecham a aula e produzem o arquivo que eu vou revisar.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 13 ==================== -->
+<article class="act" id="a13" data-kind="note" data-title="Preparando o exercises/lesson01.py" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 01 &middot; Atividade 13</span></div>
+  <h1 class="act-title">Preparando o <code style="font-size:.8em">exercises/lesson01.py</code></h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p>Os seis exercícios da próxima atividade vão todos para o mesmo arquivo. Deixe o ambiente pronto antes de começar.</p>
+
+    <h2>Onde o arquivo mora</h2>
+    <p>No repositório de estudos, não no portfólio. A separação é a regra que já vale desde a fase 1:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">cd ~/projetos/estudos
+mkdir -p exercises data
+touch exercises/lesson01.py</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Estudo não é portfólio</div>
+      <p>Os <code>lessonNN.py</code> ficam no repo <code>estudos</code>. O <code>data-engineering-portfolio</code> só recebe código já refatorado em pacote, com teste e README — foi o que aconteceu com o <code>lesson03.py</code>. Um avaliador que abre o portfólio e encontra <code>lesson01.py</code> na raiz perde a impressão de “engenheiro” em dez segundos.</p>
+    </div>
+
+    <h2>O CSV do exercício 1.3</h2>
+    <p>O exercício do leitor de CSV precisa de um arquivo de entrada. Crie este:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>data/sales.csv</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">order_id,customer,amount
+1001,ACME,250.00
+1002,Globex,180.50
+1003,Initech,99.99</code></pre>
+    </div>
+
+    <p>Três linhas bastam. O objetivo é exercitar o protocolo, não o parsing — por isso o enunciado proíbe o módulo <code>csv</code> e não pede tratamento de aspas, vírgula dentro de campo ou quebra de linha embutida.</p>
+
+    <h2>Convenções obrigatórias</h2>
+    <ul>
+      <li><strong>Type hints em todas as funções</strong>, inclusive no retorno (<code>-&gt; None</code> quando não retorna nada).</li>
+      <li><strong>Docstrings curtas em inglês</strong> — uma linha, no imperativo ou descritiva. Nada de parágrafo.</li>
+      <li><strong>Só biblioteca padrão.</strong> Nenhuma dependência externa nesta aula.</li>
+      <li><strong>Sem <code>yield</code> e sem <code>itertools</code>.</strong> Essa é a versão “na mão”; a aula 02 e a 04 reescrevem tudo isso.</li>
+      <li>Comentários dentro do código em inglês; suas explicações pedidas nos enunciados podem ser em português, marcadas como bloco de resposta.</li>
+    </ul>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>exercises/lesson01.py</b> <span style="color:var(--ink-3)">— esqueleto</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">"""Lesson 01 — the iteration protocol. Standard library only."""
+
+from __future__ import annotations
+
+import sys
+from typing import Any, Callable, Iterable, Iterator
+
+
+# --- 1.1 ---------------------------------------------------------------
+def manual_for(iterable: Iterable[Any], action: Callable[[Any], None]) -&gt; None:
+    """Consume `iterable` using the raw protocol, calling `action` per item."""
+    raise NotImplementedError
+
+
+if __name__ == "__main__":
+    manual_for("abc", print)</code></pre>
+    </div>
+
+    <h2>Como eu avalio</h2>
+    <p>Correção, uso idiomático do protocolo, type hints, clareza dos nomes — e, principalmente, <strong>os comentários onde eu peço explicação</strong>. É neles que eu consigo ver se o modelo mental está certo. Um exercício que roda mas não tem a parte escrita conta como incompleto.</p>
+  </div>
+</article>
+
+<!-- ==================== 14 ==================== -->
+<article class="act" id="a14" data-kind="lab" data-title="Hora da prática: os seis exercícios" data-min="90" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 01 &middot; Atividade 14</span></div>
+  <h1 class="act-title">Hora da prática</h1>
+  <div class="act-meta">90 min &middot; 6 exercícios</div>
+  <div class="prose">
+    <p class="lead">A progressão é deliberada: aquecimento, aplicação, caça ao bug, medição e desafio. Cada solução está escondida atrás de um botão — abra só depois de tentar, inclusive quando você achar que não vai conseguir.</p>
+
+    <!-- 1.1 -->
+    <section class="ex">
+      <div class="ex-head"><span class="ex-id">1.1</span><h2>Simulando o <code>for</code></h2><span class="ex-kind">Aquecimento</span></div>
+      <p>Escreva <code>manual_for(iterable, action)</code>, que percorre <code>iterable</code> e chama <code>action(item)</code> para cada item — <strong>sem usar <code>for</code></strong> e sem <code>while</code> com índice. Só <code>iter()</code>, <code>next()</code> e tratamento de <code>StopIteration</code>.</p>
+      <p>Teste com <code>"abc"</code>, <code>range(3)</code> e uma lista vazia. O caso vazio importa: ele deve terminar sem erro e sem chamar <code>action</code> nenhuma vez.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+          <div class="code has-out">
+            <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-python">def manual_for(iterable: Iterable[Any], action: Callable[[Any], None]) -&gt; None:
+    """Consume `iterable` with the raw iteration protocol."""
+    iterator = iter(iterable)
+    while True:
+        try:
+            item = next(iterator)
+        except StopIteration:
+            return
+        action(item)
+
+
+collected: list[Any] = []
+manual_for("abc", collected.append)
+manual_for(range(3), collected.append)
+manual_for([], collected.append)
+print(collected)</code></pre>
+            <div class="out"><span class="out-label">Saída real</span>['a', 'b', 'c', 0, 1, 2]</div>
+          </div>
+          <p><strong>O detalhe que separa certo de quase certo:</strong> a chamada a <code>action(item)</code> está <em>fora</em> do <code>try</code>. Se você escrever assim —</p>
+          <div class="code bare">
+            <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— errado</span></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-python">try:
+    item = next(iterator)
+    action(item)          # &lt;- dentro do try
+except StopIteration:
+    return</code></pre>
+          </div>
+          <p>— então um <code>StopIteration</code> levantado <em>pela própria <code>action</code></em> encerra o laço silenciosamente, como se a fonte tivesse acabado. É um bug raro e horrível de diagnosticar. Mantenha dentro do <code>try</code> só a operação cuja exceção você quer capturar.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- 1.2 -->
+    <section class="ex">
+      <div class="ex-head"><span class="ex-id">1.2</span><h2>Iterable ou iterator?</h2><span class="ex-kind">Prever antes de rodar</span></div>
+      <p>Escreva <code>is_iterator(obj) -&gt; bool</code>, que devolve <code>True</code> se o objeto for um iterator — e não apenas um iterable.</p>
+      <p>Teste com: <code>[1,2,3]</code>, <code>iter([1,2,3])</code>, <code>"texto"</code>, <code>range(3)</code>, <code>(x for x in range(3))</code>, <code>open(__file__)</code>.</p>
+      <p><strong>Antes de rodar</strong>, escreva num comentário o que você espera de cada um. Depois compare. Se errou algum, explique por quê no mesmo comentário.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+          <div class="code has-out">
+            <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-python">def is_iterator(obj: object) -&gt; bool:
+    """Return True when `obj` is an iterator, not merely an iterable."""
+    return hasattr(obj, "__next__") and hasattr(obj, "__iter__")</code></pre>
+            <div class="out"><span class="out-label">Saída real</span>               [1,2,3]: False
+         iter([1,2,3]): True
+                "texto": False
+              range(3): False
+ (x for x in range(3)): True
+        open(__file__): True
+        enumerate([1]): True
+       {'a':1}.items(): False</div>
+          </div>
+          <p>Os dois que costumam surpreender:</p>
+          <ul>
+            <li><code>range(3)</code> é <strong>False</strong>. Range é lazy, mas é um iterable reutilizável — lazy e “iterator” não são sinônimos. É a confusão mais comum da aula.</li>
+            <li><code>open(__file__)</code> é <strong>True</strong>. O arquivo é seu próprio iterator, como você viu na atividade 11.</li>
+          </ul>
+          <p>A versão com ABC também vale, e é a que eu prefiro em código de produção porque diz a intenção com uma palavra:</p>
+          <div class="code has-out bare">
+            <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-python">from collections.abc import Iterator
+
+def is_iterator(obj: object) -&gt; bool:
+    """Return True when `obj` is an iterator."""
+    return isinstance(obj, Iterator)</code></pre>
+            <div class="out"><span class="out-label">Saída real</span>True</div>
+          </div>
+          <p>Ela funciona porque <code>collections.abc.Iterator</code> implementa <code>__subclasshook__</code>, que checa estruturalmente a presença de <code>__next__</code> e <code>__iter__</code> — não exige herança.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- 1.3 -->
+    <section class="ex">
+      <div class="ex-head"><span class="ex-id">1.3</span><h2>Iterator manual: leitor de CSV</h2><span class="ex-kind">Aplicação</span></div>
+      <p>Implemente <code>CsvSource</code> (iterable) e <code>CsvSourceIterator</code> (iterator) que, juntas, permitam:</p>
+      <div class="code bare">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">source = CsvSource("data/sales.csv")
+for row in source:      # cada row é um dict {coluna: valor}
+    ...
+for row in source:      # DEVE funcionar de novo, do começo
+    ...</code></pre>
+      </div>
+      <p>Regras: sem o módulo <code>csv</code>, sem <code>yield</code>, e a primeira linha é o cabeçalho. <strong>Abra o arquivo dentro do iterator, não do iterable</strong> — e escreva num comentário por quê.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+          <div class="code has-out">
+            <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-python">class CsvSource:
+    """Reusable iterable over the rows of a CSV file, yielding dicts."""
+
+    def __init__(self, path: str, encoding: str = "utf-8") -&gt; None:
+        self.path = path
+        self.encoding = encoding
+
+    def __iter__(self) -&gt; "CsvSourceIterator":
+        return CsvSourceIterator(self.path, self.encoding)
+
+
+class CsvSourceIterator:
+    """One-shot iterator owning the open file handle and the header."""
+
+    def __init__(self, path: str, encoding: str) -&gt; None:
+        self._file = open(path, encoding=encoding)
+        try:
+            header = self._file.readline()
+        except BaseException:
+            self._file.close()
+            raise
+        self._header = header.rstrip("\n").split(",") if header else []
+
+    def __iter__(self) -&gt; "CsvSourceIterator":
+        return self
+
+    def __next__(self) -&gt; dict[str, str]:
+        line = self._file.readline()
+        if not line:
+            self._file.close()
+            raise StopIteration
+        return dict(zip(self._header, line.rstrip("\n").split(",")))
+
+
+source = CsvSource("data/sales.csv")
+print(list(source))
+print(list(source))</code></pre>
+            <div class="out"><span class="out-label">Saída real</span>[{'order_id': '1001', 'customer': 'ACME', 'amount': '250.00'}, ...]
+[{'order_id': '1001', 'customer': 'ACME', 'amount': '250.00'}, ...]</div>
+          </div>
+          <h3>Por que o arquivo abre no iterator</h3>
+          <p>Porque o <em>handle</em> é estado de posição, e estado de posição pertence ao iterator. Se <code>CsvSource.__init__</code> abrisse o arquivo, os dois <code>for</code> compartilhariam o mesmo handle: o segundo começaria no fim e devolveria vazio — exatamente o anti-padrão da atividade 07, só que escondido atrás de duas classes corretas na aparência.</p>
+          <p>Há um segundo motivo, mais sutil: abrir no iterable significa que o arquivo fica aberto desde a construção do objeto até alguém lembrar de fechá-lo. Abrindo no iterator, o tempo de vida do handle coincide com o tempo de vida da iteração.</p>
+          <div class="callout warn">
+            <div class="callout-title">O que esta solução ainda não resolve</div>
+            <p>Se o consumidor abandonar o laço no meio (<code>break</code>, exceção), o <code>StopIteration</code> nunca chega e o arquivo <strong>fica aberto</strong>. Sem <code>yield</code> não há como amarrar isso elegantemente — a saída seria implementar o protocolo de context manager (<code>__enter__</code>/<code>__exit__</code>) ou <code>__del__</code>, ambos com pegadinhas próprias. A aula 02 mostra como <code>try/finally</code> dentro de um generator resolve isso em duas linhas. Reconhecer o problema já conta a favor.</p>
+          </div>
+          <p>Detalhe do <code>zip</code>: se uma linha tiver menos campos que o cabeçalho, ele para no mais curto e você perde colunas <em>sem erro</em>. É aceitável aqui porque o exercício é sobre o protocolo — mas num parser de verdade essa é uma validação obrigatória.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- 1.4 -->
+    <section class="ex">
+      <div class="ex-head"><span class="ex-id">1.4</span><h2>Caça ao bug: <code>Repeater</code></h2><span class="ex-kind">Caça ao bug</span></div>
+      <p>Dada a classe abaixo: <strong>(a)</strong> explique num comentário por que ela quebra, <strong>(b)</strong> escreva um teste com <code>assert</code> que prove o bug, <strong>(c)</strong> conserte separando iterable de iterator.</p>
+      <div class="code bare">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">class Repeater:
+    def __init__(self, values):
+        self.values = values
+        self.index = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.index &gt;= len(self.values):
+            raise StopIteration
+        value = self.values[self.index]
+        self.index += 1
+        return value</code></pre>
+      </div>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+          <p><strong>(a)</strong> <code>Repeater</code> guarda <code>index</code> em si mesmo e devolve <code>self</code> em <code>__iter__</code>. Ele é um iterator anunciando-se como coleção. Depois da primeira passada, <code>index</code> ficou no fim e nunca volta.</p>
+          <p><strong>(b)</strong> O teste precisa provar o silêncio — ou seja, afirmar que a segunda passada devolve vazio, não que ela levanta erro:</p>
+          <div class="code has-out">
+            <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-python">r = Repeater([1, 2, 3])
+assert list(r) == [1, 2, 3], "primeira passada deveria funcionar"
+assert list(r) == [], "BUG: segunda passada devolve vazio, sem erro"
+
+r2 = Repeater([1, 2, 3])
+assert (sum(r2), sum(r2)) == (6, 0), "BUG: agregações consecutivas divergem"
+print("asserts do bug passaram")</code></pre>
+            <div class="out"><span class="out-label">Saída real</span>asserts do bug passaram</div>
+          </div>
+          <p>O segundo <code>assert</code> é o que eu quero ver. Ele documenta o formato real da falha em produção: duas agregações sobre a mesma variável dando números diferentes.</p>
+          <p><strong>(c)</strong> A correção é mecânica — mover <code>index</code> para uma segunda classe:</p>
+          <div class="code has-out">
+            <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-python">class FixedRepeater:
+    """Iterable over a fixed sequence; iteration state lives in the iterator."""
+
+    def __init__(self, values: list[Any]) -&gt; None:
+        self.values = values
+
+    def __iter__(self) -&gt; "FixedRepeaterIterator":
+        return FixedRepeaterIterator(self.values)
+
+
+class FixedRepeaterIterator:
+    """Iterator holding the cursor into the underlying sequence."""
+
+    def __init__(self, values: list[Any]) -&gt; None:
+        self.values = values
+        self.index = 0
+
+    def __iter__(self) -&gt; "FixedRepeaterIterator":
+        return self
+
+    def __next__(self) -&gt; Any:
+        if self.index &gt;= len(self.values):
+            raise StopIteration
+        value = self.values[self.index]
+        self.index += 1
+        return value
+
+
+f = FixedRepeater([1, 2, 3])
+print(list(f), list(f))</code></pre>
+            <div class="out"><span class="out-label">Saída real</span>[1, 2, 3] [1, 2, 3]</div>
+          </div>
+          <p>Se você respondeu “é só remover <code>__iter__</code> e usar <code>__getitem__</code>”, funciona — mas é o protocolo legado da atividade 08, e o objeto continua falhando em <code>isinstance(x, Iterable)</code>. Não é a resposta que eu queria.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- 1.5 -->
+    <section class="ex">
+      <div class="ex-head"><span class="ex-id">1.5</span><h2>Medindo o custo</h2><span class="ex-kind">Medição</span></div>
+      <p>Usando <code>sys.getsizeof</code>, compare o tamanho em bytes de <code>list(range(1_000_000))</code>, <code>range(1_000_000)</code> e <code>(x for x in range(1_000_000))</code>. Reporte os números medidos num comentário.</p>
+      <p>Depois responda, também em comentário: <strong>por que <code>sys.getsizeof</code> de um generator é enganoso</strong> como medida de “memória usada pelo pipeline”?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+          <div class="code has-out">
+            <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-python">import sys
+
+print(sys.getsizeof(list(range(1_000_000))))   # 8000056
+print(sys.getsizeof(range(1_000_000)))         #      48
+print(sys.getsizeof((x for x in range(1_000_000))))  # 200
+print(sys.getsizeof(1), sys.getsizeof(999_999))      # 28 28</code></pre>
+            <div class="out"><span class="out-label">Saída real</span>8000056
+48
+200
+28 28</div>
+          </div>
+          <p>A resposta escrita tem que cobrir três pontos:</p>
+          <ol>
+            <li><code>getsizeof</code> mede <strong>o objeto, não o que o objeto vai produzir</strong>. Os 200 bytes são o frame do generator; ele pode gerar um terabyte.</li>
+            <li>O número da lista também engana, na direção oposta: 8 000 056 bytes é só o array de ponteiros. Os inteiros custam 28 bytes cada — mais ~28 MB que não aparecem na conta.</li>
+            <li>A pergunta certa em ETL é “quanto meu processo aloca no <strong>pico</strong>”, e quem responde é <code>tracemalloc</code>. Para a mesma lista de um milhão, ele mediu 38,6 MiB.</li>
+          </ol>
+          <p>Se você escreveu só “ele mede o objeto e não o conteúdo”, está certo mas incompleto — faltou dizer qual é a ferramenta certa.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- 1.6 -->
+    <section class="ex">
+      <div class="ex-head"><span class="ex-id">1.6</span><h2>Desafio: <code>Chunked</code></h2><span class="ex-kind">Desafio</span></div>
+      <p>Implemente <code>Chunked(iterable, size)</code>, um <strong>iterable</strong> que produz listas de até <code>size</code> elementos:</p>
+      <div class="code bare">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">list(Chunked([1, 2, 3, 4, 5], 2))   # [[1, 2], [3, 4], [5]]</code></pre>
+      </div>
+      <p>Sem <code>yield</code>, sem <code>itertools</code>. Deve funcionar com qualquer iterable — inclusive um generator infinito — e ser reutilizável quando a fonte for reutilizável. Pense: o que acontece se a fonte já for um iterator esgotado?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+          <div class="code has-out">
+            <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-python">class Chunked:
+    """Iterable producing lists of at most `size` items from `source`."""
+
+    def __init__(self, source: Iterable[Any], size: int) -&gt; None:
+        if size &lt; 1:
+            raise ValueError("size must be &gt;= 1")
+        self.source = source
+        self.size = size
+
+    def __iter__(self) -&gt; "ChunkedIterator":
+        return ChunkedIterator(iter(self.source), self.size)
+
+
+class ChunkedIterator:
+    """Iterator draining `source` into fixed-size batches."""
+
+    def __init__(self, source: Iterator[Any], size: int) -&gt; None:
+        self.source = source
+        self.size = size
+
+    def __iter__(self) -&gt; "ChunkedIterator":
+        return self
+
+    def __next__(self) -&gt; list[Any]:
+        chunk: list[Any] = []
+        while len(chunk) &lt; self.size:
+            try:
+                chunk.append(next(self.source))
+            except StopIteration:
+                break                  # fonte acabou: entrega o lote parcial
+        if not chunk:
+            raise StopIteration        # nada sobrou: acabou de verdade
+        return chunk</code></pre>
+          </div>
+          <p>Rodando os casos que o enunciado pede:</p>
+          <div class="code has-out">
+            <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-python">def naturals():
+    n = 0
+    while True:
+        yield n
+        n += 1
+
+print(list(Chunked([1, 2, 3, 4, 5], 2)))
+print(list(Chunked([], 3)), list(Chunked([1], 3)))
+
+c = Chunked([1, 2, 3, 4, 5], 2)
+print("reutilizável:", list(c), list(c))
+
+it = iter(Chunked(naturals(), 3))
+print("infinita:    ", next(it), next(it))
+
+once = Chunked(iter([1, 2]), 2)
+print("fonte iterator:", list(once), list(once))</code></pre>
+            <div class="out"><span class="out-label">Saída real</span>[[1, 2], [3, 4], [5]]
+[] [[1]]
+reutilizável: [[1, 2], [3, 4], [5]] [[1, 2], [3, 4], [5]]
+infinita:     [0, 1, 2] [3, 4, 5]
+fonte iterator: [[1, 2]] []</div>
+          </div>
+          <h3>Os três pontos onde a maioria escorrega</h3>
+          <ol>
+            <li><strong>O <code>break</code> dentro do <code>except</code>.</strong> Quando a fonte acaba no meio de um lote, o lote parcial ainda precisa ser entregue. Quem escreve <code>raise StopIteration</code> ali perde os últimos registros — e num carregamento em lote isso significa perder silenciosamente o resto da última página.</li>
+            <li><strong>A checagem <code>if not chunk</code>.</strong> É ela que distingue “acabou no meio de um lote” de “acabou de vez”. Sem ela, o iterator devolve <code>[]</code> para sempre e o <code>list()</code> nunca termina.</li>
+            <li><strong>O <code>iter(self.source)</code> em <code>__iter__</code>, não em <code>__init__</code>.</strong> É isso que torna <code>Chunked</code> reutilizável quando a fonte é reutilizável. Se você chamar <code>iter()</code> no construtor, a segunda passada vem vazia.</li>
+          </ol>
+          <p>Sobre a pergunta do enunciado: com uma fonte que já é iterator (<code>Chunked(iter([1,2]), 2)</code>), a primeira passada funciona e a segunda vem vazia — e está <strong>correto</strong>. <code>Chunked</code> não pode ser mais reutilizável que sua fonte. Prometer o contrário exigiria bufferizar tudo, que é justamente o que estamos evitando.</p>
+          <div class="callout next">
+            <div class="callout-title">Onde isso reaparece</div>
+            <p>Na aula 04 essa classe inteira vira <code>itertools.batched(iterable, n)</code>, disponível a partir do Python 3.12. Na fase 3, é o mesmo raciocínio por trás do tamanho de lote de um <code>executemany()</code> e do <code>max_active_runs</code> de uma DAG.</p>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <div class="callout tip">
+      <div class="callout-title">Como entregar</div>
+      <p>Me mande o <code>lesson01.py</code> — arquivo ou link no repositório. Eu reviso ordenando por gravidade: bug real primeiro, cosmético por último, com o porquê de cada item. E confiro se cada parte escrita que os enunciados pedem foi de fato entregue.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 15 ==================== -->
+<article class="act" id="a15" data-kind="recap" data-title="O que aprendemos?" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-lab">Fechamento</span><span class="dot"></span><span>Aula 01 &middot; Atividade 15</span></div>
+  <h1 class="act-title">O que aprendemos?</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Nessa aula, você aprendeu:</p>
+    <ul>
+      <li>Que o <code>for</code> é açúcar sintático para <code>iter()</code> + <code>next()</code> + <code>StopIteration</code>, e que implementar esses três pontos integra seu objeto a toda a linguagem — <code>sum</code>, <code>sorted</code>, <code>in</code>, desempacotamento, compreensões;</li>
+      <li>Que <strong>iterable</strong> é uma fábrica de iterators e <strong>iterator</strong> é quem guarda a posição — e que todo iterator também é iterable, porque seu <code>__iter__</code> devolve <code>self</code>;</li>
+      <li>Que iterator esgota em silêncio: a segunda passada devolve <code>[]</code>, sem erro nenhum;</li>
+      <li>A escrever um iterator à mão com duas classes, e os quatro passos que sempre aparecem dentro de <code>__next__</code>: parar, capturar, avançar, entregar;</li>
+      <li>A reconhecer o anti-padrão do <strong>iterator disfarçado de iterable</strong>, e a detectá-lo com <code>iter(x) is not iter(x)</code>;</li>
+      <li>A diferença entre <strong>lazy</strong> e <strong>eager</strong> medida em número: 38,6 MiB contra 0,5 KiB para a mesma soma de um milhão de elementos;</li>
+      <li>Que <code>map</code>, <code>filter</code>, <code>zip</code> e <code>enumerate</code> são iterators de passagem única, enquanto <code>range</code> e <code>d.items()</code> são lazy <em>e</em> reutilizáveis;</li>
+      <li>Que um arquivo aberto é seu próprio iterator — e que trocar <code>f.readlines()</code> por <code>for line in f</code> derrubou o pico de memória de 20,3 MiB para 21,7 KiB num arquivo de 9,3 MiB;</li>
+      <li>Onde lazy <strong>não</strong> ajuda: sort, dedup, join, contagem exata e <code>pd.read_csv()</code>;</li>
+      <li>Que <code>sys.getsizeof</code> mede o objeto, não o pipeline — e que a ferramenta certa é <code>tracemalloc</code> medindo o pico.</li>
+    </ul>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 02: Generators e yield</div>
+      <p>As vinte e poucas linhas do exercício 1.3 viram quatro. Você vai ver a mecânica de pausa e retomada, generator expressions, <code>yield from</code>, e como <code>try/finally</code> resolve o problema do arquivo que fica aberto quando o consumidor abandona o laço.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Antes de avançar</div>
+      <p>Só siga depois de entregar o <code>lesson01.py</code>. A aula 02 refatora o que você escreveu aqui — se o <code>Chunked</code> e o <code>CsvSource</code> não existirem, a comparação perde a graça.</p>
+    </div>
+  </div>
+</article>
+
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/15</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 01</div>
+          <div class="lh-n">O protocolo de iteração</div>
+        </div>
+      </div>
+      <ul class="acts" id="actList"></ul>
+      <div class="locked">
+        <div class="locked-item"><div><div class="lk-n">Aula 02</div><div class="lk-t">Generators e yield</div></div><span class="lk-c">0/14</span></div>
+        <div class="locked-item"><div><div class="lk-n">Aula 03</div><div class="lk-t">Pipelines de generators</div></div><span class="lk-c">0/12</span></div>
+        <div class="locked-item"><div><div class="lk-n">Aula 04</div><div class="lk-t">itertools e batching</div></div><span class="lk-c">0/13</span></div>
+        <div class="locked-item"><div><div class="lk-n">Aula 05</div><div class="lk-t">Memória na prática</div></div><span class="lk-c">0/11</span></div>
+        <div class="locked-item"><div><div class="lk-n">Aula 06</div><div class="lk-t">Git e o repositório</div></div><span class="lk-c">0/10</span></div>
+      </div>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Arquivos da aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/lesson01.py<span class="rs">o arquivo que você entrega</span></span></li>
+        <li><span class="res-static">data/sales.csv<span class="rs">entrada do exercício 1.3</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://docs.python.org/3/library/stdtypes.html#iterator-types" target="_blank" rel="noopener">Iterator Types<span class="rs">docs.python.org</span></a></li>
+        <li><a href="https://docs.python.org/3/library/collections.abc.html" target="_blank" rel="noopener">collections.abc<span class="rs">Iterable, Iterator e os subclasshooks</span></a></li>
+        <li><a href="https://peps.python.org/pep-0234/" target="_blank" rel="noopener">PEP 234 — Iterators<span class="rs">a proposta original do protocolo</span></a></li>
+        <li><a href="https://peps.python.org/pep-0479/" target="_blank" rel="noopener">PEP 479 — StopIteration em generators<span class="rs">por que vira RuntimeError</span></a></li>
+        <li><a href="https://docs.python.org/3/library/tracemalloc.html" target="_blank" rel="noopener">tracemalloc<span class="rs">medir pico de alocação</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">Fluent Python, 2ª ed. — cap. 17<span class="rs">Ramalho · iterators, generators e corrotinas clássicas</span></span></li>
+        <li><span class="res-static">Effective Python, 3ª ed. — itens 20-24<span class="rs">Slatkin · hábitos de iteração no dia a dia</span></span></li>
+      </ul>
+      <h3>Próximo passo</h3>
+      <ul>
+        <li><span class="res-static">Aula 02 — Generators e yield<span class="rs">liberada depois da entrega do lesson01.py</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
