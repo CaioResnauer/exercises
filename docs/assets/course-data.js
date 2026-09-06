@@ -82,6 +82,16 @@ window.COURSE = {
       id: "12", title: "Logging estruturado",
       slug: "lessons/12-logging-estruturado.html",
       acts: 10, published: true, delivery: "pending"
+    },
+    {
+      id: "13", title: "SQL: window functions a fundo",
+      slug: "lessons/13-sql-window-functions.html",
+      acts: 12, published: true, delivery: "pending"
+    },
+    {
+      id: "14", title: "SQL: CTEs recursivas",
+      slug: "lessons/14-sql-ctes-recursivas.html",
+      acts: 10, published: true, delivery: "pending"
     }
   ],
 

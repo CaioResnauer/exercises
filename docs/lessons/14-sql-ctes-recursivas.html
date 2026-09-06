@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SQL: CTEs recursivas</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="14" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 14 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aula 13</div>
+  <div class="prose">
+    <p class="lead">SQL é declarativo e não tem laço. A CTE recursiva é a exceção — e é o que permite responder perguntas cuja profundidade você não sabe de antemão.</p>
+
+    <p>Três famílias de problema caem aqui, e as três aparecem em engenharia de dados:</p>
+
+    <ul>
+      <li><strong>Hierarquia:</strong> quem se reporta a quem, categoria e subcategoria, plano de contas;</li>
+      <li><strong>Grafo:</strong> quais nós são alcançáveis, qual o caminho, há ciclo;</li>
+      <li><strong>Geração:</strong> uma linha por dia do mês, mesmo nos dias sem venda.</li>
+    </ul>
+
+    <div class="callout warn">
+      <div class="callout-title">A aula tem uma query que não termina</div>
+      <p>A atividade 06 mostra uma travessia sobre dados com ciclo. Ela ficou rodando até eu matar o processo — e é assim que ela se comporta em produção. Vale ver o mecanismo antes de escrever a primeira.</p>
+    </div>
+
+    <h2>Tempo estimado</h2>
+    <p>40 min de leitura, 1 h 30 de exercícios. Tudo roda em <code>sqlite3</code>.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="O algoritmo, em quatro passos" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 14 &middot; Atividade 02</span></div>
+  <h1 class="act-title">O algoritmo, em quatro passos</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">O nome assusta e o mecanismo é um laço <code>while</code>. Comece pelo caso mais simples possível: gerar uma sequência de datas.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">WITH RECURSIVE dias(d) AS (
+    SELECT DATE('2026-03-01')                          -- âncora: o ponto de partida
+    UNION ALL
+    SELECT DATE(d, '+1 day') FROM dias WHERE d &lt; '2026-03-07'   -- passo: usa o anterior
+)
+SELECT d FROM dias;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>d
+----------
+2026-03-01
+2026-03-02
+2026-03-03
+2026-03-04
+2026-03-05
+2026-03-06
+2026-03-07</div>
+    </div>
+
+    <h2>O que o banco faz</h2>
+    <div class="traps">
+      <div class="trap">
+        <h3>1. Roda a âncora</h3>
+        <p>A parte antes do <code>UNION ALL</code>, uma vez. O resultado vai para o conjunto final <em>e</em> para uma fila de trabalho.</p>
+      </div>
+      <div class="trap">
+        <h3>2. Roda o passo sobre a fila</h3>
+        <p>A parte depois do <code>UNION ALL</code>. Nela, o nome da CTE (<code>dias</code>) se refere <strong>apenas ao que foi produzido na iteração anterior</strong> — não ao acumulado. Esse é o detalhe que quase todo mundo entende errado.</p>
+      </div>
+      <div class="trap">
+        <h3>3. Acumula e repete</h3>
+        <p>O que saiu vira o novo conteúdo da fila, e o passo roda de novo.</p>
+      </div>
+      <div class="trap">
+        <h3>4. Para quando o passo não produz nada</h3>
+        <p>Fila vazia, fim. <strong>É a única condição de parada.</strong> Se o passo sempre produzir alguma linha, o laço é infinito — não existe limite implícito.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O <code>WHERE</code> do passo é o <code>while</code></div>
+      <p>Em <code>WHERE d &lt; '2026-03-07'</code>, a comparação é a condição de continuação. Sem ela, a query gera datas até o fim dos tempos. É literalmente o mesmo papel do teste de parada do <code>__next__</code> na aula 01 — e o mesmo tipo de bug quando está errado.</p>
+    </div>
+
+    <p>A palavra <code>RECURSIVE</code> vem logo depois de <code>WITH</code> e vale para o bloco inteiro, mesmo que só uma das CTEs seja recursiva. Em PostgreSQL ela é obrigatória; no SQLite e no SQL Server, opcional.</p>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="Hierarquia: quem se reporta a quem" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 14 &middot; Atividade 03</span></div>
+  <h1 class="act-title">Hierarquia: quem se reporta a quem</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">O caso clássico. Uma tabela que aponta para ela mesma, e uma pergunta cuja resposta tem profundidade desconhecida.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">CREATE TABLE employee(id INTEGER PRIMARY KEY, name TEXT, manager_id INTEGER);
+INSERT INTO employee VALUES
+ (1,'Marina',NULL),(2,'Caio',1),(3,'Ana',1),
+ (4,'Bruno',2),(5,'Dora',2),(6,'Eva',4),(7,'Fabio',3);</code></pre>
+    </div>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">WITH RECURSIVE chain(id, name, manager_id, depth, path) AS (
+    SELECT id, name, manager_id, 0, name
+      FROM employee WHERE manager_id IS NULL          -- âncora: a raiz
+    UNION ALL
+    SELECT e.id, e.name, e.manager_id, c.depth + 1, c.path || ' &gt; ' || e.name
+      FROM employee e JOIN chain c ON e.manager_id = c.id
+)
+SELECT depth, name, path FROM chain ORDER BY path;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>depth | name   | path
+------+--------+----------------------------
+0     | Marina | Marina
+1     | Ana    | Marina &gt; Ana
+2     | Fabio  | Marina &gt; Ana &gt; Fabio
+1     | Caio   | Marina &gt; Caio
+2     | Bruno  | Marina &gt; Caio &gt; Bruno
+3     | Eva    | Marina &gt; Caio &gt; Bruno &gt; Eva
+2     | Dora   | Marina &gt; Caio &gt; Dora</div>
+    </div>
+
+    <p>Duas colunas foram construídas no caminho, e as duas são o padrão que vale guardar:</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3><code>depth</code> — a distância até a raiz</h3>
+        <p>Começa em 0 na âncora e soma 1 a cada nível. Serve para indentar na saída, para limitar a profundidade (<code>WHERE depth &lt; 10</code>) e para responder "quantos níveis tem a organização".</p>
+      </div>
+      <div class="trap">
+        <h3><code>path</code> — o caminho concatenado</h3>
+        <p><code>c.path || ' &gt; ' || e.name</code> acumula o trajeto. Além de legível, ele resolve dois problemas: dá uma ordenação que agrupa a árvore corretamente (o <code>ORDER BY path</code> acima), e é a base da guarda de ciclo da atividade 07.</p>
+      </div>
+    </div>
+
+    <h2>Só uma subárvore</h2>
+    <p>Trocar a âncora troca a pergunta. Mesma estrutura, agora partindo de um nó qualquer:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">WITH RECURSIVE sub(id, name, depth) AS (
+    SELECT id, name, 0 FROM employee WHERE name = 'Caio'
+    UNION ALL
+    SELECT e.id, e.name, s.depth + 1 FROM employee e JOIN sub s ON e.manager_id = s.id
+)
+SELECT depth, name FROM sub ORDER BY depth, name;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>depth | name
+------+------
+0     | Caio
+1     | Bruno
+1     | Dora
+2     | Eva</div>
+    </div>
+
+    <p>"O time do Caio, em qualquer nível" — quatro pessoas, incluindo ele. Um <code>COUNT(*) - 1</code> nisso é o tamanho da equipe indireta, que é uma métrica que gente de RH pede e que nenhum <code>JOIN</code> de profundidade fixa responde.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Subir em vez de descer</div>
+      <p>Inverta o <code>JOIN</code> e você percorre para cima: <code>JOIN chain c ON e.id = c.manager_id</code>, partindo do funcionário. É como se responde "quem são todos os gestores acima desta pessoa" — a cadeia de aprovação.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="lab" data-title="Mão na massa: onde a recursão para" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 14 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Onde a recursão para</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Duas CTEs recursivas. Uma termina, a outra não — e a diferença não está em nenhum <code>WHERE</code>.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">-- A
+WITH RECURSIVE t(n) AS (
+    SELECT 1
+    UNION ALL
+    SELECT n + 1 FROM t WHERE n &lt; 5
+) SELECT * FROM t;
+
+-- B
+WITH RECURSIVE t(n) AS (
+    SELECT 1
+    UNION ALL
+    SELECT n + 1 FROM t
+) SELECT * FROM t LIMIT 5;</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="As duas terminam? A B tem LIMIT 5 — isso basta?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a resposta</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <p style="margin-top:18px"><strong>As duas terminam</strong> — e por motivos completamente diferentes.</p>
+        <p><strong>A</strong> para porque o passo deixa de produzir linhas: quando <code>n</code> chega a 5, o <code>WHERE n &lt; 5</code> não seleciona nada, a fila esvazia, fim. É a condição de parada de verdade.</p>
+        <p><strong>B</strong> para porque o SQLite avalia a recursão <em>preguiçosamente</em> e o <code>LIMIT 5</code> fecha a torneira depois de cinco linhas. A CTE em si é infinita — o que a segurou foi o consumidor.</p>
+        <div class="callout bug">
+          <div class="callout-title">Por que B é uma armadilha</div>
+          <p>Depender do <code>LIMIT</code> só funciona enquanto ele estiver <strong>diretamente</strong> sobre a CTE recursiva. Acrescente um <code>ORDER BY</code>, um <code>GROUP BY</code>, um <code>JOIN</code> ou um <code>COUNT(*)</code> e o banco precisa materializar tudo antes de aplicar o limite — e aí a query nunca termina.</p>
+          <div class="code bare" style="margin-top:12px">
+            <div class="code-head"><span class="code-file"><b>sql</b> <span style="color:var(--danger)">— o mesmo B, com uma ordenação</span></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-sql">... SELECT * FROM t ORDER BY n LIMIT 5;   -- nunca termina</code></pre>
+          </div>
+          <p>E nem todo banco é preguiçoso aqui. Em PostgreSQL, a CTE recursiva é materializada por completo antes do <code>LIMIT</code> — o B trava lá mesmo sem <code>ORDER BY</code>.</p>
+        </div>
+        <div class="callout tip">
+          <div class="callout-title">A regra</div>
+          <p><strong>A condição de parada mora dentro do passo recursivo</strong>, no <code>WHERE</code>. O <code>LIMIT</code> lá fora é para o resultado, não para a recursão — tratá-lo como freio é confiar num detalhe de implementação que muda entre bancos e entre versões.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="video" data-title="Séries e calendários" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 14 &middot; Atividade 05</span></div>
+  <h1 class="act-title">Séries e calendários</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">O uso menos glamouroso e o mais frequente: preencher os dias em que não aconteceu nada.</p>
+
+    <p>O problema aparece em todo relatório. <code>GROUP BY sale_date</code> devolve só os dias com venda; o gráfico fica com buracos, a média móvel da aula 13 conta linhas em vez de dias, e o dia zerado — que é exatamente o que interessa — some.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>sql</b> <span style="color:var(--ok)">— calendário à esquerda, dados à direita</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">WITH RECURSIVE calendario(d) AS (
+    SELECT DATE('2026-03-01')
+    UNION ALL
+    SELECT DATE(d, '+1 day') FROM calendario WHERE d &lt; DATE('2026-03-31')
+)
+SELECT c.d AS dia,
+       COALESCE(SUM(s.amount), 0) AS total,
+       COUNT(s.id)                AS vendas
+FROM calendario c
+LEFT JOIN sales s ON s.sale_date = c.d
+GROUP BY c.d
+ORDER BY c.d;</code></pre>
+    </div>
+
+    <p>Três peças fazem isso funcionar, e errar qualquer uma devolve o buraco:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Peça</th><th>Se errar</th></tr></thead>
+        <tbody>
+          <tr><td><code>LEFT JOIN</code>, com o calendário à esquerda</td><td>um <code>JOIN</code> comum descarta os dias vazios de novo</td></tr>
+          <tr><td><code>COALESCE(SUM(...), 0)</code></td><td>o dia vazio aparece com <code>NULL</code> em vez de zero</td></tr>
+          <tr><td><code>COUNT(s.id)</code>, não <code>COUNT(*)</code></td><td><code>COUNT(*)</code> conta a linha do calendário e devolve 1 num dia sem venda</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">O <code>COUNT(*)</code> que conta o nada</div>
+      <p>Esse terceiro item é sutil e passa em revisão. Num <code>LEFT JOIN</code> sem correspondência, a linha existe com as colunas da direita nulas — então <code>COUNT(*)</code> vê uma linha. <code>COUNT(s.id)</code> ignora nulos e devolve 0, que é a resposta certa.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Em PostgreSQL, use <code>generate_series</code></div>
+      <p><code>SELECT generate_series('2026-03-01'::date, '2026-03-31', '1 day')</code> faz o mesmo em uma linha, e o planejador entende melhor. A CTE recursiva é o jeito portátil — e no sqlite, o único. Vale conhecer os dois.</p>
+    </div>
+
+    <p>O mesmo padrão serve para gerar faixas numéricas (histogramas com baldes vazios), horas do dia, meses do ano. Sempre que o relatório precisa mostrar o que <em>não</em> aconteceu, é isso.</p>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="O ciclo que trava a query" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 14 &middot; Atividade 06</span></div>
+  <h1 class="act-title">O ciclo que trava a query</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Dados de hierarquia vêm de sistemas onde alguém, um dia, apontou um nó para o próprio ancestral. A query não avisa: ela roda.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">CREATE TABLE loopy(id INTEGER, next_id INTEGER);
+INSERT INTO loopy VALUES (1,2),(2,3),(3,1);      -- 1 -> 2 -> 3 -> 1
+
+WITH RECURSIVE walk(id) AS (
+    SELECT 1
+    UNION ALL
+    SELECT l.next_id FROM loopy l JOIN walk w ON l.id = w.id
+)
+SELECT COUNT(*) FROM walk;</code></pre>
+    </div>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>saída real</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">sem guarda de ciclo: ainda rodando depois de 3 s? True   &lt;- nunca termina</code></pre>
+    </div>
+
+    <p>O passo sempre encontra uma linha, então a fila nunca esvazia. Não há limite de profundidade, não há timeout, não há aviso. Em produção isso é uma conexão presa, uma tabela temporária crescendo e um disco enchendo.</p>
+
+    <h2>A guarda: carregue o caminho</h2>
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">WITH RECURSIVE walk(id, path) AS (
+    SELECT 1, ',1,'
+    UNION ALL
+    SELECT l.next_id, w.path || l.next_id || ','
+      FROM loopy l JOIN walk w ON l.id = w.id
+     WHERE w.path NOT LIKE '%,' || l.next_id || ',%'      -- já visitei?
+)
+SELECT id, path FROM walk;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>id | path
+---+--------
+1  | ,1,
+2  | ,1,2,
+3  | ,1,2,3,</div>
+    </div>
+
+    <p>A coluna <code>path</code> é a mesma da atividade 03, agora com um segundo emprego: guardar quem já foi visitado. As vírgulas em volta de cada id não são enfeite — sem elas, <code>,12,</code> daria falso positivo ao procurar por <code>1</code>.</p>
+
+    <h2>A alternativa mais simples</h2>
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">WITH RECURSIVE walk(id) AS (
+    SELECT 1
+    UNION           -- em vez de UNION ALL
+    SELECT l.next_id FROM loopy l JOIN walk w ON l.id = w.id
+) SELECT id FROM walk ORDER BY id;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>id
+--
+1
+2
+3</div>
+    </div>
+
+    <p><code>UNION</code> sem <code>ALL</code> deduplica a cada iteração; quando o passo só produz linhas já vistas, a fila esvazia e acaba. Funciona, é mais curto — e tem dois custos: você perde o caminho, e a deduplicação exige comparar contra tudo que já saiu, o que é mais caro quando o conjunto cresce.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Guarda</th><th>Preserva o caminho</th><th>Custo</th><th>Detecta ciclo</th></tr></thead>
+        <tbody>
+          <tr><td><code>path NOT LIKE</code></td><td>sim</td><td>string crescente por linha</td><td>sim, e diz onde</td></tr>
+          <tr><td><code>UNION</code></td><td>não</td><td>deduplicação a cada passo</td><td>só evita, não reporta</td></tr>
+          <tr><td><code>WHERE depth &lt; n</code></td><td>sim</td><td>nenhum</td><td>não — só limita o estrago</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Em PostgreSQL há sintaxe para isso</div>
+      <p><code>CYCLE id SET is_cycle USING path</code> monta a guarda automaticamente e ainda marca a linha onde o ciclo fechou. Se o seu banco é Postgres 14+, use — é mais rápido e não erra a comparação de string.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Ponha um limite de profundidade de qualquer jeito</div>
+      <p>Mesmo com guarda de ciclo, <code>WHERE depth &lt; 50</code> custa nada e transforma "a query travou" em "a query devolveu 50 níveis, o que é suspeito". Um cinto de segurança para o caso que você não previu.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="note" data-title="Para saber mais: quando não usar recursão" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 14 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Quando não usar recursão</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">CTE recursiva é elegante e é a construção mais cara do SQL. Vale conhecer as alternativas.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Profundidade fixa e conhecida</h3>
+        <p>"Categoria e subcategoria", dois níveis, sempre. Um <code>LEFT JOIN</code> resolve, é mais rápido e mais legível. Recursão só quando a profundidade é <em>desconhecida</em>.</p>
+      </div>
+      <div class="trap">
+        <h3>A hierarquia muda pouco e é lida muito</h3>
+        <p>Materialize. Uma coluna <code>path</code> na própria tabela — <code>/1/2/4/</code> — transforma "toda a subárvore de X" num <code>WHERE path LIKE '/1/2/%'</code> que usa índice. É o padrão <em>materialized path</em>, e é o que a maioria dos sistemas de categoria usa.</p>
+      </div>
+      <div class="trap">
+        <h3>Você vai percorrer a mesma árvore várias vezes por execução</h3>
+        <p>Rode a recursão uma vez, guarde numa tabela temporária, e faça os <code>JOIN</code> contra ela. Repetir a CTE em cinco queries é pagar cinco vezes.</p>
+      </div>
+      <div class="trap">
+        <h3>O grafo é grande e denso</h3>
+        <p>Alcançabilidade em grafo com milhões de arestas não é trabalho para SQL recursivo — o conjunto intermediário explode. É o momento de um banco de grafo, ou de processar fora com uma busca em largura.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Como decidir, na prática</div>
+      <p>Rode a recursão com <code>EXPLAIN QUERY PLAN</code> e olhe quantas linhas o passo produz por iteração. Se o número cresce a cada volta em vez de encolher, você está multiplicando caminhos — e provavelmente falta uma condição no <code>JOIN</code> ou uma guarda de ciclo.</p>
+    </div>
+
+    <p>A aula 15 é sobre exatamente isso: ler o plano antes de aceitar que a query é rápida.</p>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="note" data-title="Referência rápida" data-min="3" hidden>
+  <div class="kicker"><span class="tag is-note">Referência</span><span class="dot"></span><span>Aula 14 &middot; Atividade 08</span></div>
+  <h1 class="act-title">Referência rápida</h1>
+  <div class="act-meta">03 min</div>
+  <div class="prose">
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>sql</b> <span style="color:var(--ink-3)">— o esqueleto, com tudo que costuma faltar</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">WITH RECURSIVE nome(col1, col2, depth, path) AS (
+
+    -- ÂNCORA: de onde parte. Sem referência à própria CTE.
+    SELECT c1, c2, 0, ',' || c1 || ','
+      FROM tabela
+     WHERE &lt;condição da raiz&gt;
+
+    UNION ALL           -- ALL: mais rápido. Sem ALL: deduplica e evita ciclo.
+
+    -- PASSO: usa apenas o que a iteração anterior produziu.
+    SELECT t.c1, t.c2, r.depth + 1, r.path || t.c1 || ','
+      FROM tabela t
+      JOIN nome r ON t.pai = r.col1
+     WHERE r.depth &lt; 50                                  -- cinto de segurança
+       AND r.path NOT LIKE '%,' || t.c1 || ',%'          -- guarda de ciclo
+)
+SELECT * FROM nome;</code></pre>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Sintoma</th><th>Causa provável</th></tr></thead>
+        <tbody>
+          <tr><td>a query não termina</td><td>ciclo nos dados, ou o passo sempre produz linha</td></tr>
+          <tr><td>volta só a âncora</td><td>o <code>JOIN</code> do passo não casa — confira a direção</td></tr>
+          <tr><td>linhas duplicadas</td><td>vários caminhos até o mesmo nó; use <code>UNION</code> ou <code>DISTINCT</code></td></tr>
+          <tr><td>"recursive reference in a subquery"</td><td>a CTE só pode ser referenciada uma vez, e não dentro de subquery ou <code>OUTER JOIN</code></td></tr>
+          <tr><td>resultado explode</td><td>falta condição no <code>JOIN</code>; virou produto cartesiano por iteração</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">A restrição que pega todo mundo uma vez</div>
+      <p>O passo recursivo pode citar a CTE <strong>uma vez só</strong>, e não pode fazer isso dentro de subquery, <code>LEFT JOIN</code> do lado direito, agregação ou <code>ORDER BY</code>. Se a sua ideia exige duas referências, ela precisa virar duas CTEs ou um <code>JOIN</code> extra fora da recursão.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="lab" data-title="Hora da prática: 14.1 a 14.4" data-min="50" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 14 &middot; Atividade 09</span></div>
+  <h1 class="act-title">Exercícios 14.1 a 14.4</h1>
+  <div class="act-meta">50 min &middot; arquivo <code>exercises/sql/lesson14.sql</code></div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">14.1</span><h2>A organização inteira</h2><span class="ex-kind">consulta</span></div>
+      <p>Monte uma tabela <code>employee</code> com pelo menos 15 pessoas e 4 níveis. Produza: a árvore com <code>depth</code> e <code>path</code>, o tamanho da equipe indireta de cada gestor, e a profundidade máxima da organização.</p>
+      <p>Depois responda com uma query: quem são as pessoas que <strong>não têm ninguém abaixo</strong>?</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">14.2</span><h2>O calendário sem buracos</h2><span class="ex-kind">consulta</span></div>
+      <p>Gere um calendário de março e junte com as vendas da aula 13, garantindo que dias sem venda apareçam com zero. Verifique que a contagem é 31 linhas.</p>
+      <p>Depois erre de propósito das três formas da atividade 05 — <code>JOIN</code> em vez de <code>LEFT JOIN</code>, sem <code>COALESCE</code>, e <code>COUNT(*)</code> — e mostre o que cada erro produz.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">14.3</span><h2>O ciclo</h2><span class="ex-kind">experimento</span></div>
+      <p>Insira um ciclo na sua tabela <code>employee</code> — faça a raiz reportar para um subordinado. Rode a query da atividade 03 <strong>com timeout</strong> e mostre que ela não termina.</p>
+      <div class="callout warn">
+        <div class="callout-title">Como não travar o terminal</div>
+        <p>Em Python: rode a query numa <code>threading.Thread(daemon=True)</code> e faça <code>join(timeout=5)</code>; se <code>is_alive()</code> ainda for verdadeiro, a query não terminou. Foi assim que a medição da atividade 06 foi feita.</p>
+      </div>
+      <p>Depois aplique as três guardas — <code>path</code>, <code>UNION</code> e limite de profundidade — e compare o que cada uma devolve.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">14.4</span><h2>Explosão de caminhos</h2><span class="ex-kind">análise</span></div>
+      <p>Construa um grafo pequeno onde existam <strong>vários caminhos</strong> até o mesmo nó (um losango: A→B, A→C, B→D, C→D). Rode a travessia com <code>UNION ALL</code> e conte as linhas; rode com <code>UNION</code> e conte de novo.</p>
+      <p>Explique a diferença, e diga em que situação cada uma é a resposta certa — porque as duas são, dependendo da pergunta.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="lab" data-title="Hora da prática: 14.5 a 14.6 e entrega" data-min="40" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 14 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Exercícios 14.5 a 14.6 e entrega</h1>
+  <div class="act-meta">40 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">14.5</span><h2>Recursão contra caminho materializado</h2><span class="ex-kind">medição</span></div>
+      <p>Gere uma hierarquia de 10.000 nós com 6 níveis. Responda "toda a subárvore do nó X" de duas formas: com CTE recursiva, e com uma coluna <code>path</code> materializada mais <code>LIKE '/1/2/%'</code> com índice.</p>
+      <p>Meça as duas com <code>perf_counter</code> e reporte. Depois diga qual o custo escondido da segunda — o que acontece quando alguém <strong>move</strong> um nó de lugar?</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">14.6</span><h2>Desafio: explodir a nota fiscal</h2><span class="ex-kind">desafio</span></div>
+      <p>Uma tabela <code>bom(parent_sku, child_sku, qty)</code> descreve produtos compostos: um kit contém peças, que podem conter outras peças. Escreva a query que, dado um SKU, devolve <strong>todas as peças elementares e a quantidade total de cada uma</strong>.</p>
+      <div class="callout tip">
+        <div class="callout-title">A parte difícil é a multiplicação</div>
+        <p>A quantidade não soma ao descer, ela <em>multiplica</em>: <code>r.qty * b.qty</code>. E uma mesma peça pode ser alcançada por dois caminhos, então o total exige um <code>GROUP BY child_sku</code> depois da recursão. Peça elementar é a que não aparece como <code>parent_sku</code> em nenhuma linha.</p>
+      </div>
+      <p>Inclua um caso com peça compartilhada por dois ramos, e prove que a soma está correta.</p>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>lesson14.sql</code> com o seed, as queries e a saída de cada uma. No 14.3, inclua a evidência de que a query sem guarda não terminou.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de commitar</div>
+      <ul>
+        <li>Toda CTE recursiva tem condição de parada <strong>dentro</strong> do passo?</li>
+        <li>Toda travessia de grafo tem guarda de ciclo?</li>
+        <li>Todo <code>LEFT JOIN</code> com calendário usa <code>COUNT(coluna)</code> e não <code>COUNT(*)</code>?</li>
+        <li>Alguma query depende de <code>LIMIT</code> para terminar?</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 15: EXPLAIN, índices e particionamento</div>
+      <p>As duas aulas anteriores escreveram queries. Esta é sobre descobrir o que o banco realmente faz com elas: <code>SCAN</code> contra <code>SEARCH</code>, um índice que derruba 20 ms para 0,01 ms, e um <code>substr()</code> na coluna que apaga o índice e multiplica o tempo por 16.</p>
+    </div>
+
+  </div>
+</article>
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/10</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 14</div>
+          <div class="lh-n">CTEs recursivas</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/sql/lesson14.sql<span class="rs">o arquivo que você entrega</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://www.sqlite.org/lang_with.html" target="_blank" rel="noopener">SQLite — WITH RECURSIVE<span class="rs">a melhor explicação do algoritmo</span></a></li>
+        <li><a href="https://www.postgresql.org/docs/current/queries-with.html" target="_blank" rel="noopener">PostgreSQL — WITH queries<span class="rs">CYCLE e SEARCH, que o sqlite não tem</span></a></li>
+        <li><a href="https://www.sqlite.org/lang_with.html#recursive_query_examples" target="_blank" rel="noopener">Exemplos oficiais<span class="rs">Mandelbrot em SQL, entre outros</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">SQL for Data Analysis — cap. 8<span class="rs">Tanimura · hierarquias e séries</span></span></li>
+        <li><span class="res-static">Joe Celko's Trees and Hierarchies in SQL<span class="rs">as alternativas à recursão</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
