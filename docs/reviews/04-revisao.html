@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Revisão da aula 04</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="04-revisao">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Trilha DE</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Revisão &middot; Aula 04 &middot; itertools e batching</div>
+    <div class="rail-track">
+      <div class="bar"><i id="barFill"></i></div>
+      <span class="pct" id="barPct">0%</span>
+    </div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+
+<!-- ==================== 01 ==================== -->
+<article class="act" id="r1" data-kind="note" data-title="Veredito" data-min="4">
+  <div class="kicker"><span class="tag is-note">Revisão</span><span class="dot"></span><span>Aula 04 &middot; Item 01</span></div>
+  <h1 class="act-title">Veredito</h1>
+  <div class="act-meta">04 min &middot; revisado sobre o commit <code>012e669</code></div>
+  <div class="prose">
+    <p class="lead">Entrega boa. Os dois exercícios de medição — 4.3 e 4.7 — estão entre as melhores respostas que você escreveu até agora: você mediu, tabelou e explicou o mecanismo por trás do número em vez de só reportá-lo. É exatamente o hábito que o enunciado estava tentando construir.</p>
+
+    <p>Há <strong>dois bugs reais</strong>, e os dois têm a mesma causa de fundo: código que não foi executado. Um deles trava o programa se você chamá-lo. Há também uma regressão de contrato que passou despercebida e uma análise que está certa pela metade.</p>
+
+    <h2>Como cada exercício ficou</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ex.</th><th>Situação</th><th>O que houve</th></tr></thead>
+        <tbody>
+          <tr><td><strong>4.1</strong></td><td>parcial</td><td>Código certo, mas mudou o contrato do <code>Chunked</code> sem notar; e a segunda metade da pergunta ficou sem resposta</td></tr>
+          <tr><td><strong>4.2</strong></td><td class="num" style="color:var(--danger)">bug</td><td><code>manual_batched</code> entra em loop infinito — e nunca foi chamada</td></tr>
+          <tr><td><strong>4.3</strong></td><td class="num" style="color:var(--ok)">ótimo</td><td>Medição correta e análise de custo fixo × variável precisa</td></tr>
+          <tr><td><strong>4.4</strong></td><td>parcial</td><td>(a) e (b) certos. (c) está certo para o caso que você testou e ignora o caso que inverte a conclusão</td></tr>
+          <tr><td><strong>4.5</strong></td><td class="num" style="color:var(--danger)">bug</td><td>A função está certa; o teste itera as chaves de um dict. E o enunciado pedia <code>chain.from_iterable</code></td></tr>
+          <tr><td><strong>4.6</strong></td><td>ok</td><td>Funciona. Falta o timestamp na saída para o gap ser localizável</td></tr>
+          <tr><td><strong>4.7</strong></td><td class="num" style="color:var(--ok)">ótimo</td><td>Medição limpa, com <code>CountingSink</code> para não contaminar o número. Conclusão certa</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>O fio que liga os dois bugs</h2>
+    <p>O <code>manual_batched</code> nunca foi chamado no <code>main()</code>. O teste do 4.5 foi escrito, roda, imprime alguma coisa — e o que imprime não é um registro. Nos dois casos o código <em>parece</em> pronto porque nada reclamou.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">A regra que faltou</div>
+      <p>Uma função que você escreveu e nunca executou não é uma resposta — é uma hipótese. E um teste que imprime alguma coisa não é um teste; é um teste quando você <strong>olha</strong> o que ele imprimiu e confere contra o que esperava. Os dois bugs desta entrega morreriam em cinco segundos com essa checagem.</p>
+    </div>
+
+    <p>Os itens a seguir explicam cada ponto com calma, com a execução real ao lado. O último item traz o que refazer, em ordem.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="r2" data-kind="video" data-title="Bug 4.2 — manual_batched nunca termina" data-min="8" hidden>
+  <div class="kicker"><span class="tag is-lab" style="color:var(--danger)">Bug</span><span class="dot"></span><span>Aula 04 &middot; Item 02</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">manual_batched</code> nunca termina</h1>
+  <div class="act-meta">08 min &middot; exercício 4.2</div>
+  <div class="prose">
+    <p class="lead">Esse é o bug sério da entrega. O que você escreveu:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>lesson04.py</b> <span style="color:var(--ink-3)">— como está</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def manual_batched(iterator, size):
+    it = iter(iterator)
+    batch = islice(it, size)
+    while batch:
+        yield tuple(batch)
+        batch = islice(it, size)</code></pre>
+    </div>
+
+    <p>Você acertou a peça mais difícil: o <code>iter()</code> explícito, para que cada <code>islice</code> continue de onde o anterior parou. Sem isso a função reiniciaria a leitura a cada volta. Essa parte está certa.</p>
+
+    <p>O problema está na <strong>condição de parada</strong>. Rodando de verdade:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">g = manual_batched([1, 2, 3, 4, 5], 2)
+print(list(islice(g, 6)))    # só os 6 primeiros, para poder imprimir
+list(g)                      # e agora, sem o limite...</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>[(1, 2), (3, 4), (5,), (), (), ()]
+<b>^C  — matei em 6 s; o list(g) nunca retorna</b></div>
+    </div>
+
+    <p>Os três primeiros lotes estão corretos. Depois disso a função entra em regime permanente devolvendo <code>()</code> para sempre. Um <code>for batch in manual_batched(...)</code> em produção nunca sairia do laço, e um <code>list()</code> consumiria toda a memória da máquina.</p>
+
+    <h2>Por quê</h2>
+    <p><code>while batch:</code> pergunta <em>"o objeto <code>batch</code> é verdadeiro?"</em>. E <code>batch</code>, no seu código, é um objeto <code>islice</code>:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from itertools import islice
+vazio = islice(iter([]), 3)          # não há absolutamente nada para produzir
+print(bool(vazio))
+print(bool(tuple(vazio)))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>True
+False</div>
+    </div>
+
+    <p>Um objeto <code>islice</code> é verdadeiro <strong>sempre</strong> — cheio, vazio ou esgotado. Ele não tem como não ser: para responder "estou vazio?" ele teria que olhar adiante no iterador de origem, consumir um item e guardá-lo. É o <code>hasNext()</code> que o Python decidiu não ter, e que a atividade 03 da aula 01 já tinha explicado por outro caminho.</p>
+
+    <h2>A correção</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>lesson04.py</b> <span style="color:var(--ok)">— corrigido</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def manual_batched(iterable, size):
+    """Batch data into tuples of length `size`. The last batch may be shorter."""
+    if size &lt; 1:
+        raise ValueError("size must be at least one")
+    it = iter(iterable)
+    while batch := tuple(islice(it, size)):
+        yield batch</code></pre>
+    </div>
+
+    <p>A diferença é onde o <code>tuple()</code> fica. No seu código ele está <strong>depois</strong> do teste, no <code>yield</code> — materializa para entregar. Na versão correta ele está <strong>dentro</strong> do teste — materializa para <em>poder testar</em>. É a mesma chamada, mas só uma das duas posições resolve o problema.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Sobre o <code>:=</code></div>
+      <p>O walrus não é enfeite aqui: ele permite atribuir e testar na mesma expressão, o que elimina a duplicação do <code>batch = islice(...)</code> antes do laço e no fim dele. A sua versão precisou escrever a mesma linha duas vezes — e é exatamente esse tipo de duplicação que costuma esconder um bug de condição de parada.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="r3" data-kind="note" data-title="Devagar: como o Python decide o que é verdadeiro" data-min="7" hidden>
+  <div class="kicker"><span class="tag is-note">Com mais calma</span><span class="dot"></span><span>Aula 04 &middot; Item 03</span></div>
+  <h1 class="act-title">Como o Python decide o que é verdadeiro</h1>
+  <div class="act-meta">07 min &middot; a raiz do bug do 4.2</div>
+  <div class="prose">
+    <p class="lead">Vale parar aqui, porque esse mecanismo é curto, é usado o tempo todo, e quando você o conhece o bug do 4.2 deixa de ser uma pegadinha e vira uma consequência óbvia.</p>
+
+    <p>Quando o Python precisa de um booleano onde você deu um objeto qualquer — <code>if x:</code>, <code>while x:</code>, <code>not x</code>, <code>x and y</code> — ele segue exatamente três passos, nesta ordem:</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>O objeto tem <code>__bool__</code>?</h3>
+        <p>Se tiver, chama e usa o resultado. Fim. É o que <code>bool</code>, <code>int</code> e <code>float</code> fazem — <code>0</code> é falso, o resto é verdadeiro.</p>
+      </div>
+      <div class="trap">
+        <h3>Não tem. E <code>__len__</code>?</h3>
+        <p>Se tiver, chama e testa se o comprimento é zero. Comprimento zero é falso. É daqui que vem <code>[] == False</code>, <code>"" == False</code>, <code>{} == False</code>, <code>() == False</code> — todas as coleções seguem esta regra, nenhuma delas define <code>__bool__</code>.</p>
+      </div>
+      <div class="trap">
+        <h3>Não tem nenhum dos dois?</h3>
+        <p>Então o objeto é <strong>verdadeiro</strong>. Sempre. Este é o padrão do Python, e é o passo que morde.</p>
+      </div>
+    </div>
+
+    <p>Confira nos objetos do seu código:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from itertools import islice
+
+i = islice(iter([]), 3)
+print("islice   ", hasattr(i, "__bool__"), hasattr(i, "__len__"), bool(i))
+
+g = (x for x in [])
+print("generator", hasattr(g, "__bool__"), hasattr(g, "__len__"), bool(g))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>islice    False False True
+generator False False True</div>
+    </div>
+
+    <p>Nenhum dos dois define nada, então os dois caem no passo 3 e são verdadeiros. Não é uma exceção esquisita do <code>islice</code> — é a regra padrão, aplicada a um objeto que não tem como implementar as outras duas.</p>
+
+    <h2>Por que um iterador não pode ter <code>__len__</code></h2>
+    <p>Porque ele não sabe. Um <code>islice</code> sobre um arquivo de 40 GB não faz ideia de quantas linhas restam, e descobrir custaria ler o arquivo inteiro — destruindo a única razão de ele existir. O mesmo vale para um cursor de banco, um socket, uma API paginada.</p>
+
+    <p>E não pode ter <code>__bool__</code> pelo mesmo motivo mais um: para dizer "tenho pelo menos um item", ele teria que <em>consumir</em> esse item e guardá-lo num buffer. O ato de perguntar mudaria o estado — que é a pior propriedade possível numa expressão booleana.</p>
+
+    <div class="callout bug">
+      <div class="callout-title">As três formas do mesmo erro</div>
+      <div class="code bare" style="margin-top:14px">
+        <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— nenhuma delas funciona</span></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">if records:              # sempre True se records for iterador
+    process(records)
+
+while batch:             # o seu bug do 4.2
+    ...
+
+if not rows:             # sempre False
+    log.warning("arquivo vazio")</code></pre>
+      </div>
+      <p>Todas as três compilam, rodam e mentem em silêncio. Nenhum linter padrão avisa.</p>
+    </div>
+
+    <h2>O que fazer no lugar</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Você quer</th><th>Escreva</th></tr></thead>
+        <tbody>
+          <tr><td>Testar se um lote saiu vazio</td><td><code>while batch := tuple(islice(it, n)):</code></td></tr>
+          <tr><td>Pegar o próximo item ou desistir</td><td><code>first = next(it, None)</code></td></tr>
+          <tr><td>Saber se há algo, sem perder o item</td><td>pegue com <code>next(it, sentinel)</code> e recoloque com <code>chain([item], it)</code></td></tr>
+          <tr><td>Saber se há algo, e pode perder</td><td><code>if next(it, None) is not None:</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O padrão do sentinela</div>
+      <p><code>next(it, None)</code> tem o mesmo problema que a aula 01 apontou em <code>StopIteration</code>: se <code>None</code> pode aparecer nos dados, ele é ambíguo. Em ETL isso acontece. Quando importar, use um sentinela seu: <code>_MISSING = object()</code>, e teste com <code>is _MISSING</code>.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="r4" data-kind="video" data-title="Bug 4.5 — o teste lê chaves, não registros" data-min="7" hidden>
+  <div class="kicker"><span class="tag is-lab" style="color:var(--danger)">Bug</span><span class="dot"></span><span>Aula 04 &middot; Item 04</span></div>
+  <h1 class="act-title">O teste do 4.5 lê chaves, não registros</h1>
+  <div class="act-meta">07 min &middot; exercício 4.5</div>
+  <div class="prose">
+    <p class="lead">A função está certa. O teste que deveria prová-la é que não prova nada.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>lesson04.py</b> <span style="color:var(--ink-3)">— o teste, como está</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">for records_iterator in read_patitioned(TEST_PATH):
+    for record in records_iterator:
+        print(record)
+        break  # Just test first record
+    break  # Just test first file</code></pre>
+    </div>
+
+    <p>O nome da variável entrega a intenção: você esperava que cada item fosse um <em>iterador de registros</em>, um por arquivo. Rodando:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>saída real</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">opening .../data/users.jsonl
+id</code></pre>
+    </div>
+
+    <p><code>id</code>. Não um registro — a string <code>"id"</code>, que é a <strong>primeira chave</strong> do primeiro dict do arquivo.</p>
+
+    <h2>O que aconteceu, passo a passo</h2>
+    <ol>
+      <li><code>read_patitioned</code> faz <code>yield from read_jsonl(f)</code>. O <code>yield from</code> <strong>repassa cada item</strong> do gerador interno — não repassa o gerador. Então a função produz <code>dict</code>, um por linha de arquivo.</li>
+      <li>O <code>for</code> externo, portanto, dá a você um <code>dict</code>, não um iterador. A variável se chama <code>records_iterator</code>, mas contém <code>{"id": 1, "name": "Alice Johnson", ...}</code>.</li>
+      <li>O <code>for</code> interno itera esse dict. E iterar um dict em Python percorre as <strong>chaves</strong>: <code>"id"</code>, <code>"name"</code>, <code>"age"</code>, <code>"city"</code>.</li>
+      <li>O <code>break</code> para na primeira. Imprime <code>id</code>.</li>
+    </ol>
+
+    <p>Nada disso levantou erro, porque cada passo é uma operação perfeitamente legal sobre o tipo que recebeu. O programa fez exatamente o que você mandou — só não era o que você queria.</p>
+
+    <h2>O teste que o enunciado pedia</h2>
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>lesson04.py</b> <span style="color:var(--ok)">— corrigido</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">for record in take(read_partitioned(TEST_PATH), 2):
+    print(record)</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>opening .../data/users.jsonl
+{'id': 1, 'name': 'Alice Johnson', 'age': 29, 'city': 'New York'}
+{'id': 2, 'name': 'Bob Smith', 'age': 34, 'city': 'Chicago'}</div>
+    </div>
+
+    <p>Agora sim são registros. E repare no que a saída prova de quebra: <strong>um único <code>opening</code></strong>. Há dois arquivos <code>.jsonl</code> no diretório, e o segundo nunca foi aberto, porque os dois registros pedidos saíram do primeiro. É essa a prova de laziness que o enunciado queria — e ela só aparece quando o teste consome registros de verdade.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">O sinal de alerta que estava na frente</div>
+      <p>Você anotou a assinatura certa: <code>-&gt; Iterator[dict]</code>. Ela diz, em letras grandes, que cada item é um <code>dict</code>. Um <code>for</code> aninhado sobre o resultado contradiz a própria anotação que você escreveu. Quando o type hint e o laço discordam, um dos dois está errado — e vale trinta segundos descobrir qual.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="r5" data-kind="video" data-title="Regressão 4.1 — o chunked perdeu a reusabilidade" data-min="8" hidden>
+  <div class="kicker"><span class="tag" style="color:var(--warn)">Regressão</span><span class="dot"></span><span>Aula 04 &middot; Item 05</span></div>
+  <h1 class="act-title">O <code style="font-size:.82em">chunked</code> perdeu a reusabilidade</h1>
+  <div class="act-meta">08 min &middot; exercício 4.1</div>
+  <div class="prose">
+    <p class="lead">Esse é o item mais interessante da entrega, porque o código está certo, os testes passam, e mesmo assim alguma coisa se perdeu no caminho.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— antes (aula 01) e depois (aula 04)</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class Chunked:                        # aula 01 — um ITERABLE
+    def __init__(self, iterable, size):
+        self.iterable = iterable
+        self.size = size
+    def __iter__(self):
+        return ChunkedIterator(self.iterable, self.size)   # objeto novo a cada for
+
+
+def chunked(it, size):                # aula 04 — um ITERATOR
+    for batch in batched(it, size):
+        yield list(batch)</code></pre>
+    </div>
+
+    <p>Seu <code>assert</code> passa nos dois casos. Mas o <code>assert</code> só itera uma vez:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">c = Chunked([1, 2, 3, 4, 5], 2)
+print("Chunked  1ª:", list(c), " 2ª:", list(c))
+
+g = chunked([1, 2, 3, 4, 5], 2)
+print("chunked  1ª:", list(g), " 2ª:", list(g))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>Chunked  1ª: [[1, 2], [3, 4], [5]]  2ª: [[1, 2], [3, 4], [5]]
+chunked  1ª: [[1, 2], [3, 4], [5]]  2ª: <b>[]</b></div>
+    </div>
+
+    <p>É o anti-padrão da atividade 07 da aula 01, só que ao contrário: lá você tinha um iterator disfarçado de iterable por acidente; aqui você <em>trocou</em> um iterable por um iterator e o nome ficou o mesmo. Quem chamar <code>chunked()</code> esperando o comportamento antigo vai receber uma lista vazia na segunda passada, sem erro nenhum.</p>
+
+    <h2>Mas a versão nova também ganhou alguma coisa</h2>
+    <p>E é importante ser justo, porque o <code>Chunked</code> antigo tinha um defeito pior:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— alimentando os dois com um generator</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">fonte = (x for x in range(10))
+print(list(islice(Chunked(fonte, 3), 2)))    # o da aula 01
+print(list(islice(chunked((x for x in range(10)), 3), 2)))   # o da aula 04</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>TypeError: object of type 'generator' has no len()
+[[0, 1, 2], [3, 4, 5]]</div>
+    </div>
+
+    <p>O <code>ChunkedIterator</code> da aula 01 testava <code>self.index &gt;= len(self.iterable)</code> — o que exige que a fonte tenha tamanho conhecido. Ele funcionava com listas e quebrava com <em>exatamente</em> as fontes que o curso inteiro está tratando: arquivos, generators, streams. A sua versão nova conserta isso.</p>
+
+    <h2>A resposta que o exercício queria</h2>
+    <p>Não é "a nova é mais legível". É esta: <strong>você trocou reusabilidade por suporte a fontes infinitas</strong>. Nos dois casos, uma propriedade real foi embora e outra chegou, e a escolha depende de quem chama.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th><code>Chunked</code> (aula 01)</th><th><code>chunked</code> (aula 04)</th></tr></thead>
+        <tbody>
+          <tr><td>Iterar duas vezes</td><td class="num" style="color:var(--ok)">funciona</td><td class="num" style="color:var(--danger)">2ª vem vazia</td></tr>
+          <tr><td>Fonte sem <code>len()</code></td><td class="num" style="color:var(--danger)">TypeError</td><td class="num" style="color:var(--ok)">funciona</td></tr>
+          <tr><td>Fonte infinita</td><td class="num" style="color:var(--danger)">TypeError</td><td class="num" style="color:var(--ok)">funciona</td></tr>
+          <tr><td>Linhas de código</td><td class="num">22</td><td class="num">3</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Se você quiser as duas propriedades ao mesmo tempo — e em ETL geralmente quer — o padrão é guardar a <em>fábrica</em>, não o iterador:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— reusável e sem len()</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class Chunked:
+    """Reusable iterable of fixed-size chunks over a re-openable source."""
+
+    def __init__(self, source_factory, size: int) -&gt; None:
+        self._source_factory = source_factory   # chamável que devolve uma fonte nova
+        self._size = size
+
+    def __iter__(self):
+        return (list(b) for b in batched(self._source_factory(), self._size))</code></pre>
+    </div>
+
+    <p>Repare que a fonte virou um <em>chamável</em>. É a mesma decisão do <code>CsvSource</code> da aula 01: um iterable reutilizável não pode guardar um iterador já aberto — ele precisa saber como <strong>abrir um novo</strong> a cada <code>for</code>.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">A pergunta de review para levar</div>
+      <p>Depois de todo refactor que troca uma classe por uma função de <code>itertools</code>, rode <code>list(x)</code> duas vezes. Se a segunda vier diferente da primeira, você não fez refactor — mudou o contrato. Pode ser a escolha certa; só precisa ser uma escolha, e estar escrita no comentário.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="r6" data-kind="video" data-title="4.4 — a análise está certa, e pela metade" data-min="8" hidden>
+  <div class="kicker"><span class="tag">Análise</span><span class="dot"></span><span>Aula 04 &middot; Item 06</span></div>
+  <h1 class="act-title">A análise do 4.4 está certa, e pela metade</h1>
+  <div class="act-meta">08 min &middot; exercício 4.4 (c)</div>
+  <div class="prose">
+    <p class="lead">Começo pela parte boa, porque eu fui medir esperando te corrigir e o número me deu razão a você.</p>
+
+    <p>Você escreveu que <code>sorted()</code> + <code>groupby</code> usa mais memória que o <code>defaultdict</code>, porque o <code>sorted()</code> constrói uma cópia completa. Medindo com 300 mil registros <strong>desordenados</strong>:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>tracemalloc</b> <span style="color:var(--ink-3)">— fonte desordenada, 300 grupos</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">sorted() + groupby : pico   6.86 MB
+defaultdict        : pico   2.49 MB</code></pre>
+    </div>
+
+    <p>Certo, e pelo motivo que você deu. Ponto para a sua análise.</p>
+
+    <h2>O que ficou de fora</h2>
+    <p>Você mediu o cenário em que a fonte chega bagunçada. Mas a pergunta era "em que situação cada uma é preferível" — e existe uma segunda situação, muito comum em engenharia de dados, em que a resposta se inverte inteira: <strong>a fonte já vem ordenada pela chave</strong>.</p>
+
+    <p>Acontece o tempo todo: um <code>ORDER BY</code> no banco, arquivos particionados lidos em ordem, um log cronológico, o resultado de um estágio anterior que já agrupou. Nesse caso o <code>sorted()</code> some da conta, e com ele some a única razão de o <code>groupby</code> gastar memória:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>tracemalloc</b> <span style="color:var(--ink-3)">— mesma carga, fonte já ordenada</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">groupby em streaming : pico   0.00 MB
+defaultdict          : pico  11.70 MB</code></pre>
+    </div>
+
+    <p>De 2,8× a favor do <code>defaultdict</code> para quatro ordens de grandeza a favor do <code>groupby</code>. Não é um ajuste na conclusão; é a conclusão oposta.</p>
+
+    <h2>Por que a inversão é tão violenta</h2>
+    <p>Porque as duas abordagens respondem a perguntas diferentes sobre <em>quando</em> o primeiro resultado pode sair:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th><code>groupby</code> em fonte ordenada</th><th><code>defaultdict</code></th></tr></thead>
+        <tbody>
+          <tr><td>Quando o 1º grupo fica pronto</td><td>ao ver a primeira chave diferente</td><td>só no fim do arquivo</td></tr>
+          <tr><td>O que fica na memória</td><td>um grupo</td><td>todos os grupos</td></tr>
+          <tr><td>Memória</td><td class="num">O(maior grupo)</td><td class="num">O(n)</td></tr>
+          <tr><td>Cabe em fonte infinita</td><td class="num" style="color:var(--ok)">sim</td><td class="num" style="color:var(--danger)">não</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>O <code>defaultdict</code> não pode emitir nada antes do último registro, porque o próximo registro sempre pode pertencer a um grupo já visto. O <code>groupby</code> sobre fonte ordenada pode: quando a chave muda, ele <em>sabe</em> que aquele grupo acabou. Ordenação é uma promessa, e essa promessa é o que compra a memória constante.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">A pergunta que substitui as duas</div>
+      <p>Não é "<code>groupby</code> ou <code>defaultdict</code>?". É <strong>"minha fonte já está ordenada pela chave — e, se não está, consigo pedir para ela vir ordenada?"</strong>. Empurrar um <code>ORDER BY</code> para o banco transforma uma agregação O(n) em O(1) e não custa nada do seu lado. É o mesmo raciocínio que, na fase 2, decide se uma operação no Spark provoca shuffle.</p>
+    </div>
+
+    <p>Reescreva o comentário do 4.4 (c) cobrindo os dois cenários, com os dois números. A resposta completa é "depende de a fonte estar ordenada" — e você já tem metade dela medida.</p>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="r7" data-kind="note" data-title="Pendências do enunciado" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-note">Pendências</span><span class="dot"></span><span>Aula 04 &middot; Item 07</span></div>
+  <h1 class="act-title">O que o enunciado pediu e não veio</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Nada aqui é bug. São pedaços do enunciado que ficaram sem resposta — e em dois casos a resposta que falta é a parte que ensina.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>4.1 — a segunda metade da pergunta</h3>
+        <p>Você escreveu: <em>"Using itertools, the code is shorter and more readable"</em>. A pergunta era em duas partes, e a segunda era <strong>"e se a resposta muda dependendo de quem lê o código"</strong>.</p>
+        <p>Ela não é retórica. <code>islice(it, n)</code> é instantaneamente legível para quem conhece <code>itertools</code> e é opaco para quem não conhece — enquanto o laço explícito da aula 02 é legível para qualquer um e mais longo. Num time júnior a resposta pode ser a oposta da sua. Vale escrever isso.</p>
+      </div>
+      <div class="trap">
+        <h3>4.2 — a comparação com a receita</h3>
+        <p>O enunciado pedia para comparar sua versão com a receita e comentar as diferenças. Como a sua versão nunca foi executada, a comparação não aconteceu — e era exatamente ela que exporia o bug do item 02 desta revisão.</p>
+      </div>
+      <div class="trap">
+        <h3>4.5 — <code>chain.from_iterable</code></h3>
+        <p>O enunciado dizia "usando <code>chain.from_iterable</code>". Você importou <code>chain</code>, não usou, e resolveu com <code>yield from</code> dentro de um laço. <strong>As duas soluções são igualmente lazy e igualmente corretas</strong> — não há erro técnico. Mas o exercício existia para você praticar essa função específica, então vale escrever as duas e comparar. Fica assim:</p>
+      </div>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— a versão que o enunciado pedia</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def read_partitioned(directory, pattern: str = "*.jsonl") -&gt; Iterator[dict]:
+    """Read every matching file in `directory` as a single stream of records."""
+    paths = sorted(Path(directory).glob(pattern))
+    return chain.from_iterable(read_jsonl(p) for p in paths)</code></pre>
+    </div>
+
+    <p>Duas observações sobre ela. A função deixa de ser generator (não tem <code>yield</code>) e passa a <em>devolver</em> um iterador — o que significa que o corpo roda na chamada, e o <code>glob</code> acontece imediatamente. E note o <code>sorted()</code>: <code>Path.glob</code> não garante ordem, e num pipeline particionado por data ler as partições fora de ordem é um bug que só aparece quando o sistema de arquivos muda.</p>
+
+    <div class="trap" style="border-bottom:0">
+      <h3>4.6 — o gap não é localizável</h3>
+      <p><code>track_variations</code> devolve <code>(delta, houve_gap)</code>. Funciona, mas quando ele apontar um gap num arquivo de 2 milhões de leituras, você não terá como saber <em>onde</em>. Devolva o timestamp junto — o custo é zero e transforma a saída em algo que dá para investigar:</p>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def track_variations(records, max_gap_minutes: float):
+    """Yield (timestamp, delta, gap) for each consecutive pair of readings."""
+    for previous, current in pairwise(records):
+        minutes = (current["timestamp"] - previous["timestamp"]).total_seconds() / 60
+        yield (current["timestamp"],
+               current["value"] - previous["value"],
+               minutes &gt; max_gap_minutes)</code></pre>
+    </div>
+
+    <p>De quebra, <code>max_gap_minutes</code> em vez de <code>N</code>: nome maiúsculo de uma letra é convenção para constante de módulo, não para parâmetro.</p>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="r8" data-kind="note" data-title="Higiene do arquivo" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Higiene</span><span class="dot"></span><span>Aula 04 &middot; Item 08</span></div>
+  <h1 class="act-title">Higiene do arquivo</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Itens rápidos. Nenhum quebra nada hoje; o último tem potencial para estragar seu dia mais adiante.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Onde</th><th>O quê</th><th>Correção</th></tr></thead>
+        <tbody>
+          <tr><td>topo</td><td><code>import lesson03</code> — não usado, e <code>lesson03.py</code> está vazio</td><td>remover</td></tr>
+          <tr><td>topo</td><td><code>chain</code> importado e não usado</td><td>usar no 4.5, como no item anterior</td></tr>
+          <tr><td>4.5</td><td><code>read_patitioned</code> — falta o <b>r</b></td><td><code>read_partitioned</code></td></tr>
+          <tr><td>4.3</td><td><code>insert_many(records)</code> direto é o mesmo caso que <code>batch_size=10000</code></td><td>é redundante; pode sair</td></tr>
+          <tr><td><code>read_jsonl</code></td><td>linha em branco sobrando dentro do <code>except</code></td><td>remover</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>O <code>except</code> que engole dados</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>lesson04.py</b> <span style="color:var(--danger)">— como está</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">try:
+    yield json.loads(line)
+except Exception:
+
+    continue</code></pre>
+    </div>
+
+    <p>Isso descarta linhas malformadas em silêncio absoluto:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">Path("x.jsonl").write_text('{"ok":1}\n{isso nao e json}\n{"ok":2}\n')
+print(list(read_jsonl("x.jsonl")))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>[{'ok': 1}, {'ok': 2}]      <b># 3 linhas no arquivo, 2 registros, zero aviso</b></div>
+    </div>
+
+    <p>É o formato de falha que a aula 01 chamou de pior possível: silencioso, e com evidência apontando na direção errada. Um relatório sai com 2 registros, o arquivo tem 3 linhas, e nada no log liga uma coisa à outra. Num arquivo de milhões de linhas você perde 3% dos dados por meses.</p>
+
+    <p>Duas correções, e a escolha entre elas é de produto, não de estilo:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— pelo menos, deixe rastro</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def read_jsonl(path: Path) -&gt; Iterator[dict]:
+    """Yield one record per line, logging and skipping malformed ones."""
+    with open(path, encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError as error:
+                log.warning("%s:%d skipped: %s", path, line_number, error)</code></pre>
+    </div>
+
+    <p>Três mudanças que valem por si: <code>json.JSONDecodeError</code> em vez de <code>Exception</code> (um <code>KeyboardInterrupt</code> ou um <code>MemoryError</code> não deveriam virar "linha ruim"); o número da linha, que é o que torna o aviso acionável; e <code>encoding="utf-8"</code> explícito, porque o padrão depende da locale da máquina e um pipeline que funciona no seu WSL pode falhar no container.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">E a outra escolha</div>
+      <p>Em muitos pipelines, pular linha ruim é errado mesmo com log — o certo é falhar alto, ou desviar para uma <em>dead-letter queue</em> e contabilizar. "Quantos registros ruins são aceitáveis antes de abortar?" é uma pergunta de negócio, e o código precisa ter uma resposta explícita para ela. <code>except Exception: continue</code> responde "infinitos", em silêncio, sem que ninguém tenha decidido isso.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="r9" data-kind="note" data-title="O que ficou muito bom" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note" style="color:var(--ok)">Destaques</span><span class="dot"></span><span>Aula 04 &middot; Item 09</span></div>
+  <h1 class="act-title">O que ficou muito bom</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Não é consolo. São três coisas que eu destacaria num code review de verdade.</p>
+
+    <h2>1. A análise do 4.3</h2>
+    <p>Você não parou no "batching é mais rápido". Você separou o custo fixo por chamada do custo variável por registro, e concluiu que só o fixo é economizável — o que explica por que a curva achata em <code>batch=1000</code> em vez de melhorar para sempre.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Lote</th><th>Chamadas</th><th>Tempo</th><th>Ganho sobre o anterior</th></tr></thead>
+        <tbody>
+          <tr><td>um a um</td><td class="num">10.000</td><td class="num">8,43 s</td><td>—</td></tr>
+          <tr><td class="num">10</td><td class="num">1.000</td><td class="num">0,96 s</td><td class="num">−7,47 s</td></tr>
+          <tr><td class="num">100</td><td class="num">100</td><td class="num">0,19 s</td><td class="num">−0,77 s</td></tr>
+          <tr><td class="num">1.000</td><td class="num">10</td><td class="num">0,11 s</td><td class="num">−0,08 s</td></tr>
+          <tr><td class="num">10.000</td><td class="num">1</td><td class="num">0,10 s</td><td class="num">−0,01 s</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Os tempos na minha máquina saíram um pouco menores que os seus, mas a forma da curva é idêntica — e é a forma que importa. Você identificou o ponto de retorno decrescente em 1.000 e justificou com o mecanismo, não com o gráfico. Essa é a resposta certa.</p>
+
+    <h2>2. O <code>CountingSink</code> do 4.7</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>lesson04.py</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class CountingSink:
+    """A sink that only counts, so it doesn't affect the measurement."""</code></pre>
+    </div>
+
+    <p>Isso é sofisticação de quem já se queimou. Se os sinks acumulassem em listas, as duas medições seriam dominadas pelo tamanho das listas e a diferença entre <code>tee</code> e roteamento sumiria no ruído. Você isolou a variável que queria medir — e escreveu na docstring <em>por que</em>. O <code>measure_peak</code> como context manager na mesma linha de raciocínio.</p>
+
+    <p>O número, aliás, reproduz aqui: <strong>0,0 MB</strong> no loop único contra <strong>57,6 MB</strong> no <code>tee</code>. Sua conclusão está certa. Se for completar uma coisa, explique <em>por que</em> este caso é o pior caso do <code>tee</code>: você drena o ramo dos válidos inteiro antes de tocar no dos rejeitados, então no fim do primeiro laço o buffer interno guarda os 200 mil itens. Com os ramos avançando juntos, o mesmo <code>tee</code> custaria quase nada.</p>
+
+    <h2>3. Os <code>take</code> e <code>drop</code> novos consertaram um bug antigo</h2>
+    <p>Você provavelmente nem percebeu. O <code>take</code> da aula 02 tinha isto:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">print(list(take_da_aula_02([1, 2], 5)))   # pedindo mais itens do que existem
+print(list(take_da_aula_04([1, 2], 5)))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>RuntimeError: generator raised StopIteration
+[1, 2]</div>
+    </div>
+
+    <p>O <code>next(it)</code> sem default dentro de um generator, esgotando a fonte, vira <code>RuntimeError</code> pela PEP 479 — o erro que só aparece com entrada curta ou vazia, que é o caso que ninguém testa. Trocar por <code>islice</code> matou a classe inteira de problema de graça. Vale um comentário no 4.1: é o argumento mais forte a favor da versão nova, e é bem melhor que "mais legível".</p>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="r10" data-kind="lab" data-title="O que refazer, em ordem" data-min="25" hidden>
+  <div class="kicker"><span class="tag is-lab">Ação</span><span class="dot"></span><span>Aula 04 &middot; Item 10</span></div>
+  <h1 class="act-title">O que refazer, em ordem</h1>
+  <div class="act-meta">25 min</div>
+  <div class="prose">
+    <p class="lead">Em ordem de impacto. Os dois primeiros são obrigatórios antes de seguir para a aula 05; o resto é o que transforma uma entrega correta numa entrega boa.</p>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">1</span><h2>Conserte o <code>manual_batched</code></h2><span class="ex-kind">obrigatório</span></div>
+      <p>Mova o <code>tuple()</code> para dentro do teste, com walrus. <strong>E chame a função no <code>main()</code></strong> — a correção não vale nada sem a chamada que teria pego o bug:</p>
+      <div class="code">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">assert list(manual_batched([1, 2, 3, 4, 5], 2)) == [(1, 2), (3, 4), (5,)]
+assert list(manual_batched([], 2)) == []
+assert list(manual_batched(iter([1, 2, 3]), 5)) == [(1, 2, 3)]</code></pre>
+      </div>
+      <p>A segunda linha é a que teria travado na sua versão. A terceira confirma que um iterador já em curso funciona como fonte.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">2</span><h2>Conserte o teste do 4.5</h2><span class="ex-kind">obrigatório</span></div>
+      <p>Um <code>for</code> só, sobre <code>take(read_partitioned(path), 2)</code>. Confirme que a saída traz dois dicts e um único <code>opening</code>. De passagem, corrija o nome da função e passe a usar <code>chain.from_iterable</code>.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">3</span><h2>Complete o comentário do 4.4 (c)</h2><span class="ex-kind">análise</span></div>
+      <p>Meça também com a fonte já ordenada e escreva as duas conclusões. O comentário final deve dizer que a resposta depende de a fonte chegar ordenada, com um número para cada cenário.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">4</span><h2>Escreva o trade-off do 4.1</h2><span class="ex-kind">análise</span></div>
+      <p>Reusabilidade perdida, suporte a fontes infinitas ganho, <code>RuntimeError</code> da PEP 479 eliminado. E a segunda metade da pergunta: para quem esse código é mais legível?</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">5</span><h2>Higiene</h2><span class="ex-kind">limpeza</span></div>
+      <p>Remova <code>import lesson03</code>, troque <code>except Exception</code> por <code>json.JSONDecodeError</code> com log e número de linha, adicione <code>encoding="utf-8"</code>, e devolva o timestamp em <code>track_variations</code>.</p>
+    </div>
+
+    <hr>
+
+    <h2>Antes de commitar</h2>
+    <div class="callout warn">
+      <div class="callout-title">O checklist que teria pego os dois bugs</div>
+      <ul>
+        <li>Toda função definida no arquivo é <strong>chamada</strong> em algum lugar do <code>main()</code>?</li>
+        <li>Você <strong>leu</strong> a saída de cada teste e conferiu contra o que esperava — ou só verificou que não deu erro?</li>
+        <li>Cada função com type hint produz mesmo o tipo anotado?</li>
+        <li>Rodou o arquivo inteiro do começo ao fim, sem travar?</li>
+      </ul>
+    </div>
+
+    <p>Mensagem de commit sugerida, seguindo a convenção do repositório:</p>
+    <div class="code bare">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">git commit -m "fix(lesson04): stop manual_batched from looping forever
+
+The while guard tested an islice object, which is always truthy, so the
+loop kept yielding empty tuples after the source was exhausted. Move the
+tuple() inside the condition and add the assertions that catch it."</code></pre>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Depois disso — aula 05: Memória na prática</div>
+      <p>Cai bem agora. Esta revisão usou <code>tracemalloc</code> quatro vezes para decidir questões que pareciam de estilo, e em uma delas a medição contrariou o que eu esperava. A aula 05 é sobre transformar isso em hábito: medir, provar, e reconhecer quando lazy é a escolha errada.</p>
+    </div>
+  </div>
+</article>
+
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como resolvido</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/10</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Revisão &middot; Aula 04</div>
+          <div class="lh-n">itertools e batching</div>
+        </div>
+      </div>
+      <ul class="acts" id="actList"></ul>
+      <div class="locked">
+        <div class="locked-item"><div><div class="lk-n">Aula 05</div><div class="lk-t">Memória na prática</div></div><span class="lk-c">0/11</span></div>
+      </div>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Contexto</h3>
+      <ul>
+        <li><a href="../lessons/04-itertools-e-batching.html">Aula 04 — itertools e batching<span class="rs">o enunciado que gerou esta revisão</span></a></li>
+        <li><a href="../lessons/01-protocolo-de-iteracao.html">Aula 01 — O protocolo de iteração<span class="rs">atividades 03 e 07: a raiz dos dois bugs</span></a></li>
+        <li><span class="res-static">exercises/python/lesson04.py<span class="rs">revisado no commit 012e669</span></span></li>
+      </ul>
+      <h3>Para os pontos desta revisão</h3>
+      <ul>
+        <li><a href="https://docs.python.org/3/library/stdtypes.html#truth-value-testing" target="_blank" rel="noopener">Truth Value Testing<span class="rs">os três passos do item 03</span></a></li>
+        <li><a href="https://peps.python.org/pep-0572/" target="_blank" rel="noopener">PEP 572 — Walrus<span class="rs">o := que conserta o 4.2</span></a></li>
+        <li><a href="https://peps.python.org/pep-0479/" target="_blank" rel="noopener">PEP 479 — StopIteration em generators<span class="rs">o bug que o islice eliminou</span></a></li>
+        <li><a href="https://docs.python.org/3/library/itertools.html#itertools.tee" target="_blank" rel="noopener">itertools.tee<span class="rs">leia a nota sobre o buffer interno</span></a></li>
+        <li><a href="https://docs.python.org/3/library/json.html#json.JSONDecodeError" target="_blank" rel="noopener">json.JSONDecodeError<span class="rs">no lugar do except Exception</span></a></li>
+      </ul>
+      <h3>Próximo passo</h3>
+      <ul>
+        <li><span class="res-static">Refazer os itens 1 e 2<span class="rs">obrigatórios antes da aula 05</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
