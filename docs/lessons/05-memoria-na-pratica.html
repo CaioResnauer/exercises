@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Memória na prática</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="05">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Trilha DE</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+    <div class="rail-track">
+      <div class="bar"><i id="barFill"></i></div>
+      <span class="pct" id="barPct">0%</span>
+    </div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 05 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aulas 01 a 04</div>
+  <div class="prose">
+    <p class="lead">Quatro aulas afirmando "isso é O(1) de memória". Chegou a hora de provar — e de descobrir os casos em que a afirmação é falsa.</p>
+
+    <p>Esta aula é a mais curta em conceito novo e a mais densa em ferramenta. Você vai sair dela sabendo responder, com número, três perguntas que hoje você responde com intuição:</p>
+
+    <ul>
+      <li><strong>Quanta memória este pipeline usa de verdade?</strong> — e por que <code>sys.getsizeof</code> mente sobre isso;</li>
+      <li><strong>Ele escala?</strong> — a diferença entre "usou pouco" e "usa a mesma coisa independente do tamanho da entrada";</li>
+      <li><strong>Lazy é a escolha certa aqui?</strong> — porque em pelo menos quatro situações comuns não é.</li>
+    </ul>
+
+    <div class="callout warn">
+      <div class="callout-title">A aula que desmancha as anteriores</div>
+      <p>Até agora o curso vendeu laziness. Aqui ela é medida, e em vários casos perde. Um dos exercícios pede que você <strong>encontre um caso em que materializar é a resposta certa</strong> e prove com número. Se você sair daqui achando que generator é sempre melhor, a aula falhou.</p>
+    </div>
+
+    <h2>Tempo estimado</h2>
+    <p>50 min de leitura, 2 h de exercícios. Todas as medições mostradas aqui foram executadas — se as suas derem diferente na sua máquina, o que importa é a <em>forma</em> da curva, não o valor absoluto.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="sys.getsizeof e o que ele não conta" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 05 &middot; Atividade 02</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">sys.getsizeof</code> e o que ele não conta</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">É a primeira ferramenta que todo mundo encontra, e a que mais produz conclusão errada. Vale entender exatamente o que ela mede antes de confiar nela.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">import sys
+print(sys.getsizeof([1, 2, 3]))
+print(sys.getsizeof(list(range(1_000_000))))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>88
+8000056</div>
+    </div>
+
+    <p>8 MB para um milhão de inteiros. Oito bytes por item mais um cabeçalho — parece exato. E é, para <em>este</em> caso, porque os inteiros pequenos são objetos compartilhados que o Python já tinha na memória.</p>
+
+    <h2>Onde ele deixa de dizer a verdade</h2>
+    <p>Troque os inteiros por registros — que é o que existe em ETL:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">row  = {"id": 1, "name": "Alice Johnson", "city": "New York"}
+rows = [dict(row) for _ in range(10_000)]
+
+shallow = sys.getsizeof(rows)
+deep = shallow + sum(
+    sys.getsizeof(d) + sum(sys.getsizeof(k) + sys.getsizeof(v) for k, v in d.items())
+    for d in rows
+)
+print(f"getsizeof   : {shallow:,} bytes")
+print(f"soma real   : {deep:,} bytes")</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>getsizeof   : 85,176 bytes
+soma real   : 4,565,176 bytes</div>
+    </div>
+
+    <p>Errou por <strong>54 vezes</strong>. Não é um bug: <code>getsizeof</code> mede o objeto e só o objeto. Uma lista é um vetor de <em>ponteiros</em>, então ela reporta 8 bytes por elemento — e os dicts de verdade, com suas chaves e strings, ficam de fora da conta.</p>
+
+    <div class="callout bug">
+      <div class="callout-title">Como isso vira uma decisão errada</div>
+      <p>Você mede um lote de 10 mil registros, vê 85 KB, conclui que cabem 100 lotes na memória e configura o pipeline assim. O consumo real é 4,5 MB por lote. O processo morre com <code>MemoryError</code> em produção, com uma medição no seu caderno dizendo que não deveria.</p>
+    </div>
+
+    <h2>Para que ele serve, então</h2>
+    <p>Para responder "quanto pesa <em>esta</em> caixa", não "quanto pesa tudo que está dentro dela". É útil em objetos rasos e de tipo fixo — um <code>array</code>, um <code>bytes</code>, um buffer. E é útil para uma coisa específica que a próxima atividade usa:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">g = (x for x in range(10))
+print(sys.getsizeof(g), "bytes")</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>200 bytes</div>
+    </div>
+
+    <p>200 bytes, e esse número <strong>não muda</strong> se você trocar o <code>range(10)</code> por <code>range(10**12)</code>. Aqui <code>getsizeof</code> é honesto porque não há nada dentro: o generator guarda um frame suspenso, não os valores. É a mesma constatação dos 56 bytes do <code>Countdown</code> na aula 01, agora com o nome certo.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">A regra</div>
+      <p>Use <code>getsizeof</code> para inspecionar <strong>um objeto</strong>. Para responder "quanto o meu programa está consumindo", use <code>tracemalloc</code> — que é a próxima atividade e é a ferramenta que você vai usar no resto do curso.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="tracemalloc: current, peak e por que só o pico importa" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 05 &middot; Atividade 03</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">tracemalloc</code>: current, peak, e por que só o pico importa</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">A ferramenta certa. Está na biblioteca padrão, não precisa instalar nada, e mede o que realmente interessa.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— o padrão de uso</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">import tracemalloc
+
+tracemalloc.start()
+resultado = faz_o_trabalho()
+current, peak = tracemalloc.get_traced_memory()
+tracemalloc.stop()
+
+print(f"current {current / 1024**2:.1f} MB   peak {peak / 1024**2:.1f} MB")</code></pre>
+    </div>
+
+    <p>Dois números, e a diferença entre eles é a aula inteira:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>O que é</th><th>Responde</th></tr></thead>
+        <tbody>
+          <tr><td><code>current</code></td><td>o que está alocado <em>agora</em>, no instante da chamada</td><td>"sobrou lixo?"</td></tr>
+          <tr><td><code>peak</code></td><td>o máximo que esteve alocado em <em>qualquer</em> instante desde o <code>start()</code></td><td>"cabe na máquina?"</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>O pico é o número que decide se o processo morre.</strong> Se o seu pipeline chegou a 6 GB por um décimo de segundo no meio do processamento, um contêiner com limite de 4 GB é morto ali — e o <code>current</code> no fim, quando tudo já foi liberado, vai mostrar 3 MB e não vai explicar nada.</p>
+
+    <p>Percorra o passo a passo abaixo: é exatamente esse descolamento entre os dois números, num programa de cinco linhas.</p>
+
+    <div class="trace" id="trace">
+      <script type="application/json">
+      {
+        "lines": [
+          "tracemalloc.start()",
+          "rows = list(read_jsonl(path))   # 200.000 registros",
+          "total = sum(r[\"amount\"] for r in rows)",
+          "del rows",
+          "current, peak = tracemalloc.get_traced_memory()"
+        ],
+        "steps": [
+          { "l": 0, "it": "0,0 MB", "item": "0,0 MB", "out": "nada", "stop": false,
+            "note": "O contador zera. A partir daqui todo malloc do interpretador é contabilizado." },
+          { "l": 1, "it": "80,2 MB", "item": "80,2 MB", "out": "a lista rows, com 200.000 dicts", "stop": false,
+            "note": "A lista materializou o arquivo inteiro. current subiu, e peak subiu junto — ainda são o mesmo número." },
+          { "l": 2, "it": "80,2 MB", "item": "80,2 MB", "out": "rows + um float acumulador", "stop": false,
+            "note": "A soma é O(1): ela percorre a lista que já existe e guarda um acumulador. Nada novo de tamanho relevante." },
+          { "l": 3, "it": "0,1 MB", "item": "80,2 MB", "out": "só o total", "stop": true,
+            "note": "AQUI os dois se separam. O del liberou a lista e current despencou — mas peak lembra dos 80,2 MB. É esse valor que o contêiner viu." },
+          { "l": 4, "it": "0,1 MB", "item": "80,2 MB", "out": "só o total", "stop": true,
+            "note": "Se você reportasse só o current, o relatório diria 0,1 MB e estaria mentindo sobre o que o processo exigiu da máquina." }
+        ]
+      }
+      </script>
+      <div class="trace-head">
+        <h3>Execução passo a passo &mdash; <code>current</code> contra <code>peak</code></h3>
+        <div class="trace-ctl">
+          <button class="btn btn-ghost btn-sm" id="tPrev">Anterior</button>
+          <button class="btn btn-primary btn-sm" id="tNext">Próximo passo</button>
+          <button class="btn btn-ghost btn-sm" id="tReset">Reiniciar</button>
+        </div>
+      </div>
+      <div class="trace-body">
+        <div class="trace-code" id="tCode"></div>
+        <div class="trace-state">
+          <div class="tstate-row"><span class="tstate-k">current</span><span class="tstate-v acc" id="tIter">—</span></div>
+          <div class="tstate-row"><span class="tstate-k">peak</span><span class="tstate-v" id="tItem">—</span></div>
+          <div class="tstate-row"><span class="tstate-k">vivo na memória</span><span class="tstate-v" id="tOut">nada</span></div>
+        </div>
+      </div>
+      <div class="trace-note" id="tNote">Passo 1 de 5 &middot; clique em “Próximo passo”.</div>
+    </div>
+
+    <h2>A medição de verdade</h2>
+    <p>O mesmo trabalho — somar o campo <code>amount</code> de um milhão de registros — das duas formas:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def source(n):
+    for i in range(n):
+        yield {"id": i, "amount": i * 1.5}
+
+# lazy
+tracemalloc.start()
+total = sum(r["amount"] for r in source(1_000_000))
+_, peak = tracemalloc.get_traced_memory(); tracemalloc.stop()
+
+# materializado
+tracemalloc.start()
+rows = [r for r in source(1_000_000)]
+total = sum(r["amount"] for r in rows)
+_, peak = tracemalloc.get_traced_memory(); tracemalloc.stop()</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>generator : current   0.000 MB   peak   0.001 MB
+list      : current 236.9   MB   peak 236.9   MB</div>
+    </div>
+
+    <p>1 KB contra 237 MB, para o mesmo resultado numérico. Esse é o valor que as quatro aulas anteriores vinham prometendo — agora medido.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Duas armadilhas do <code>tracemalloc</code></div>
+      <p>Ele só conta alocações feitas pelo <strong>interpretador Python</strong>. Um <code>DataFrame</code> do pandas ou um <code>ndarray</code> do NumPy alocam em C, e boa parte do consumo deles não aparece — para esses, o número honesto vem do RSS do processo (<code>psutil</code>) ou do <code>df.memory_usage(deep=True)</code>.</p>
+      <p>E ele custa caro: ligado, o programa fica visivelmente mais lento. É ferramenta de investigação, não de produção.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="lab" data-title="Mão na massa: prever o pico" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 05 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Prever o pico</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Três trechos que fazem o mesmo trabalho sobre 200 mil registros de um arquivo de 8,4 MB. Ordene do menor para o maior pico antes de ver a resposta.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python"># A — três agregações, relendo o arquivo em cada uma
+n     = sum(1 for _ in read_jsonl(path))
+total = sum(r["amount"] for r in read_jsonl(path))
+mx    = max(r["amount"] for r in read_jsonl(path))
+
+# B — materializa uma vez, agrega três vezes sobre a lista
+rows  = list(read_jsonl(path))
+n, total, mx = len(rows), sum(r["amount"] for r in rows), max(r["amount"] for r in rows)
+
+# C — uma passada, três acumuladores
+n = 0; total = 0; mx = float("-inf")
+for r in read_jsonl(path):
+    n += 1; total += r["amount"]; mx = max(mx, r["amount"])</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="Ordene A, B e C por pico de memória. E por tempo — a ordem é a mesma?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a medição</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div class="code has-out" style="margin-top:18px">
+          <div class="code-head"><span class="code-file"><b>tracemalloc + perf_counter</b> <span style="color:var(--ink-3)">— 200.000 registros</span></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-python">A  3 passadas lazy    : 2.86 s    pico   0.14 MB
+B  materializa 1 vez  : 2.05 s    pico  80.19 MB
+C  1 passada, 3 acum. : 0.93 s    pico   0.14 MB</code></pre>
+        </div>
+        <p style="margin-top:16px">A ordem de memória é <strong>A = C &lt; B</strong>, e a de tempo é <strong>C &lt; B &lt; A</strong>. Elas não coincidem — e é por isso que a pergunta tinha duas partes.</p>
+        <p><strong>A</strong> economiza memória e paga com tempo: relê e reparseia o arquivo três vezes. <strong>B</strong> paga 80 MB para parsear uma vez só, e ainda assim é mais lento que C. <strong>C</strong> ganha nos dois: uma passada, e nada guardado.</p>
+        <div class="callout tip">
+          <div class="callout-title">O que a opção C revela</div>
+          <p>C é 3× mais rápido que A e usa 559× menos memória que B. Ela não é um meio-termo — é melhor que as duas nas duas dimensões. Quando existe uma opção assim, é sinal de que a pergunta "lazy ou eager?" era a pergunta errada desde o começo. A atividade 08 volta a isso.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="video" data-title="Provando O(1): a mesma medição em três escalas" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 05 &middot; Atividade 05</span></div>
+  <h1 class="act-title">Provando O(1): a mesma medição em três escalas</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Uma medição isolada diz "usou pouco". Só uma <strong>série</strong> de medições diz "usa a mesma coisa independente do tamanho" — e é essa a afirmação que interessa.</p>
+
+    <p>A diferença importa. "Usou 40 MB" é um fato sobre a entrada que você testou. "É O(1)" é uma previsão sobre todas as entradas que você <em>não</em> testou — e é por isso que só se prova variando a escala:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">for n in (10_000, 100_000, 1_000_000):
+    tracemalloc.start()
+    sum(r["amount"] for r in source(n))
+    _, pico_lazy = tracemalloc.get_traced_memory(); tracemalloc.stop()
+
+    tracemalloc.start()
+    rows = list(source(n)); sum(r["amount"] for r in rows)
+    _, pico_eager = tracemalloc.get_traced_memory(); del rows; tracemalloc.stop()
+
+    print(f"{n:>10,} | {pico_lazy/1024:>9.1f} KB | {pico_eager/1024**2:>9.1f} MB")</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>         n |    generator |        lista
+    10,000 |       0.6 KB |       2.4 MB
+   100,000 |       0.6 KB |      23.6 MB
+ 1,000,000 |       0.6 KB |     236.9 MB</div>
+    </div>
+
+    <p>Leia a tabela por coluna, não por linha. A coluna do generator é uma <strong>reta horizontal</strong>: 0,6 KB, 0,6 KB, 0,6 KB. A da lista multiplica por dez toda vez que a entrada multiplica por dez. Isso é O(1) contra O(n), demonstrado — não afirmado.</p>
+
+    <h2>O protocolo mínimo para provar uma complexidade</h2>
+    <div class="traps">
+      <div class="trap">
+        <h3>Três escalas, separadas por 10×</h3>
+        <p>Duas escalas não distinguem O(1) de O(log n) nem O(n) de O(n log n). Três pontos separados por uma ordem de grandeza mostram a forma. Se o número dobra quando a entrada decuplica, você tem algo logarítmico; se decuplica, linear; se fica parado, constante.</p>
+      </div>
+      <div class="trap">
+        <h3>Meça o pico, não o final</h3>
+        <p>Um pipeline que aloca 2 GB e libera antes de terminar tem <code>current</code> pequeno e <code>peak</code> fatal. É o <code>peak</code> que precisa ser plano.</p>
+      </div>
+      <div class="trap">
+        <h3>Desconfie de plano demais</h3>
+        <p>Se o número não muda <em>nada</em> entre escalas, confirme que o trabalho está mesmo acontecendo. Um generator que ninguém consome custa 200 bytes e faz zero — e o gráfico fica lindo.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O mesmo raciocínio na fase 2</div>
+      <p>É assim que se lê o plano de execução de uma query ou de um job Spark: não "quantos MB este estágio usou", mas "como este estágio cresce quando a partição cresce". Um estágio O(1) por partição escala horizontalmente; um O(n) tem um teto, e você vai encontrá-lo.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="Quando lazy é a escolha errada" data-min="9" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 05 &middot; Atividade 06</span></div>
+  <h1 class="act-title">Quando lazy é a escolha errada</h1>
+  <div class="act-meta">09 min &middot; o núcleo da aula</div>
+  <div class="prose">
+    <p class="lead">Quatro situações em que insistir em generator produz código mais lento, mais complicado ou simplesmente errado. Todas comuns.</p>
+
+    <h2>1. Você precisa de mais de uma passada</h2>
+    <p>É o caso medido na atividade 04. Três agregações relendo o arquivo custaram 2,86 s contra 2,05 s materializando — <strong>lazy foi 1,4× mais lento</strong>, porque parsear JSON três vezes custa mais do que guardar o resultado.</p>
+
+    <p>Se o dado cabe na memória e você precisa de N passadas, materializar é a decisão certa. O erro é fazê-la por reflexo: a pergunta é se cabe, e "cabe" tem que ser um número, não uma esperança.</p>
+
+    <h2>2. Você precisa de acesso aleatório, tamanho ou ordem</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— nada disso funciona em iterador</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">len(records)          # TypeError: object of type 'generator' has no len()
+records[42]           # TypeError: 'generator' object is not subscriptable
+records[-1]           # idem — e "o último" exige chegar ao fim
+sorted(records)       # funciona, mas materializa tudo por dentro</code></pre>
+    </div>
+
+    <p>O <code>sorted</code> é o mais traiçoeiro dos quatro, porque <em>funciona</em>. Ele aceita o generator, roda, devolve a lista certa — e por dentro construiu a lista completa, porque não existe como ordenar sem ver todos os elementos. Você escreveu código lazy e obteve consumo eager, sem nenhum aviso.</p>
+
+    <p>A mesma coisa vale para mediana e percentis:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">tracemalloc.start()
+med = statistics.median(r["amount"] for r in read_jsonl(path))
+_, peak = tracemalloc.get_traced_memory(); tracemalloc.stop()
+print(f"mediana {med}  pico {peak/1024**2:.1f} MB")</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>mediana 499.5  pico 6.3 MB</div>
+    </div>
+
+    <p>Passar um generator para <code>median()</code> não economizou nada: ele materializa internamente porque precisa ordenar. Os 6,3 MB são os 200 mil valores — menos que os 80 MB dos dicts completos, mas O(n) do mesmo jeito. <strong>Média é O(1); mediana é O(n).</strong> Não há truque que mude isso.</p>
+
+    <h2>3. O dado é pequeno</h2>
+    <p>Laziness tem custo fixo por item: cada <code>next()</code> é uma retomada de frame, e isso não é de graça.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>timeit</b> <span style="color:var(--ink-3)">— 100 itens, média de 10.000 execuções</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">sum(lista)               0.59 µs
+sum(x for x in lista)    2.41 µs</code></pre>
+    </div>
+
+    <p>4× mais lento, para economizar uma lista de 100 itens que ocupa menos de 1 KB. Numa função chamada milhões de vezes, esse fator 4 é a diferença entre um job de 10 minutos e um de 40.</p>
+
+    <h2>4. A complexidade não paga</h2>
+    <p>Um pipeline de generators exige cuidado com esgotamento, com arquivos que ficam abertos, com <code>tee</code> e seu buffer, com iteradores consumidos por engano. Toda a aula 01 e metade da 04 são sobre esses riscos.</p>
+
+    <p>Se a entrada é um CSV de 3 MB que sempre vai ser um CSV de 3 MB, <code>rows = list(read_csv(path))</code> é uma linha, não tem nenhuma dessas armadilhas, e o revisor entende em dois segundos. Escolher generator ali é pagar risco por uma economia que ninguém vai notar.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">A pergunta que decide</div>
+      <p><strong>"O tamanho da entrada é controlado por mim ou por outra pessoa?"</strong></p>
+      <p>Um arquivo de configuração que você mesmo escreve: materialize à vontade. Um upload de cliente, um dump de tabela que cresce, um tópico Kafka, o resultado de uma query sem <code>LIMIT</code>: streaming, sempre — porque o dia em que a entrada decuplicar não vai ser avisado.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Resumo em uma tabela</div>
+      <div class="table-wrap" style="margin-top:14px">
+        <table>
+          <thead><tr><th>Situação</th><th>Escolha</th></tr></thead>
+          <tbody>
+            <tr><td>Entrada de tamanho desconhecido ou crescente</td><td>streaming</td></tr>
+            <tr><td>Uma passada, uma agregação O(1)</td><td>streaming</td></tr>
+            <tr><td>N passadas e o dado cabe</td><td>materializar</td></tr>
+            <tr><td>Precisa de <code>len</code>, índice, ordem, mediana</td><td>materializar (o Python vai fazer isso de qualquer jeito)</td></tr>
+            <tr><td>Dado pequeno e fixo</td><td>materializar — é mais simples e mais rápido</td></tr>
+            <tr><td>N passadas e o dado <em>não</em> cabe</td><td>uma passada com N acumuladores, ou dois estágios em disco</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="note" data-title="Para saber mais: o preço de tempo do lazy" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 05 &middot; Atividade 07</span></div>
+  <h1 class="act-title">O preço de tempo do lazy</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">A memória a gente já mediu. Vale medir o outro eixo, porque a conversa sobre generators quase sempre ignora que existe um preço.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>timeit</b> <span style="color:var(--ink-3)">— somar 1.000.000 de inteiros, melhor de 5</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">sum(xs)                        5.9 ms
+sum([x for x in xs])          18.7 ms
+sum(x for x in xs)            22.8 ms
+sum(map(lambda v: v, xs))     41.6 ms</code></pre>
+    </div>
+
+    <p>Quatro formas de somar a mesma lista, com um fator 7 entre a primeira e a última. Três coisas para tirar daí:</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>A camada mais rápida é não ter camada</h3>
+        <p><code>sum(xs)</code> percorre a lista em C. Qualquer coisa que você coloque no meio — genexp, list comp, <code>map</code> — devolve o controle ao interpretador Python a cada item, e é aí que o tempo vai.</p>
+      </div>
+      <div class="trap">
+        <h3>A list comp é mais rápida que a genexp</h3>
+        <p>18,7 contra 22,8 ms, apesar de alocar uma lista de um milhão de itens. Materializar tem um custo <em>uma vez</em>; suspender e retomar um frame tem um custo <em>por item</em>. Em volumes pequenos, o segundo perde.</p>
+      </div>
+      <div class="trap">
+        <h3><code>map</code> com <code>lambda</code> é o pior dos mundos</h3>
+        <p>41,6 ms: você paga a laziness <em>e</em> uma chamada de função Python por item. <code>map</code> só compensa quando a função é builtin em C — <code>map(int, linhas)</code> é rápido, <code>map(lambda x: int(x), linhas)</code> não.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Como isso muda a decisão — e como não muda</div>
+      <p>Não muda nada quando a entrada é grande e desconhecida: 22,8 ms contra 5,9 ms é irrelevante se a alternativa é o processo morrer. Muda tudo em código quente sobre dado pequeno.</p>
+      <p>E repare no que a atividade 04 já tinha mostrado: a opção C, com uma passada e três acumuladores, foi ao mesmo tempo a mais rápida e a de menor pico. O trade-off entre tempo e memória é real, mas nem sempre você está de fato nele — às vezes está só numa implementação ruim.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="video" data-title="A pergunta certa não é lazy ou eager" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 05 &middot; Atividade 08</span></div>
+  <h1 class="act-title">A pergunta certa não é "lazy ou eager"</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">É <strong>quantas passadas o seu pipeline faz sobre os dados</strong>. Quase todo problema de memória em ETL é, no fundo, um problema de contagem de passadas.</p>
+
+    <p>Volte à medição da atividade 04. Três agregações sobre 200 mil registros:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>Passadas</th><th>Tempo</th><th>Pico</th></tr></thead>
+        <tbody>
+          <tr><td>A — relê a cada agregação</td><td class="num">3</td><td class="num">2,86 s</td><td class="num">0,14 MB</td></tr>
+          <tr><td>B — materializa e agrega</td><td class="num">1 + 3 em memória</td><td class="num">2,05 s</td><td class="num">80,19 MB</td></tr>
+          <tr><td>C — uma passada, três acumuladores</td><td class="num">1</td><td class="num">0,93 s</td><td class="num">0,14 MB</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>A e B são as duas respostas que a discussão "lazy ou eager" produz, e as duas são piores que C. C não é um meio-termo entre elas — é uma implementação diferente, que sai da discussão.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— o padrão do acumulador único</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def summarize(records: Iterable[dict]) -&gt; dict:
+    """Compute every statistic in a single pass over `records`."""
+    count = 0
+    total = 0.0
+    largest = float("-inf")
+    by_city: defaultdict[str, float] = defaultdict(float)
+
+    for record in records:
+        amount = record["amount"]
+        count += 1
+        total += amount
+        largest = max(largest, amount)
+        by_city[record["city"]] += amount
+
+    return {"count": count, "total": total, "max": largest,
+            "mean": total / count if count else 0.0, "by_city": dict(by_city)}</code></pre>
+    </div>
+
+    <p>Cinco estatísticas, uma passada, e o consumo é O(1) em tudo menos o <code>by_city</code> — que é O(cidades distintas), não O(registros). Saber apontar exatamente <em>qual</em> termo é que cresce, e com o quê, é a diferença entre dizer "usa pouca memória" e saber onde está o teto.</p>
+
+    <h2>Quando você realmente precisa de duas passadas</h2>
+    <p>Existe o caso legítimo: normalizar por um valor que só se conhece no fim (dividir pelo total, calcular z-score, deduplicar mantendo o último). Aí a resposta não é escolher entre A e B — é <strong>escolher onde a materialização acontece</strong>:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Estratégia</th><th>Custo</th><th>Quando</th></tr></thead>
+        <tbody>
+          <tr><td>Materializar em RAM</td><td>O(n) de memória</td><td>o dado cabe, e você mediu que cabe</td></tr>
+          <tr><td>Duas passadas no arquivo</td><td>2× de I/O</td><td>a fonte é relegível e barata (disco local)</td></tr>
+          <tr><td>Passada 1 grava intermediário</td><td>disco temporário</td><td>a fonte é cara ou não relegível (API, socket)</td></tr>
+          <tr><td>Acumulador aproximado</td><td>erro controlado</td><td>HyperLogLog para distinct, t-digest para percentil</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">A fonte é relegível?</div>
+      <p>Um arquivo local, sim. Um <code>stdin</code>, um socket, um cursor de banco já consumido, uma resposta HTTP: <strong>não</strong>. Essa propriedade decide entre a linha 2 e a linha 3 da tabela, e é a primeira coisa a perguntar quando alguém propõe "é só ler de novo".</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="video" data-title="Medindo em produção" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 05 &middot; Atividade 09</span></div>
+  <h1 class="act-title">Medindo em produção</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead"><code>tracemalloc</code> é caro demais para ficar ligado. O que se instrumenta num job de verdade é outra coisa.</p>
+
+    <h2>Um teste que falha quando o pipeline deixa de ser O(1)</h2>
+    <p>É a forma mais barata de não regredir, e cabe na sua suíte:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def test_pipeline_memory_is_flat():
+    """The peak must not grow with the input size."""
+    peaks = []
+    for n in (10_000, 100_000):
+        tracemalloc.start()
+        consume(pipeline(source(n)))
+        peaks.append(tracemalloc.get_traced_memory()[1])
+        tracemalloc.stop()
+
+    # 10x a entrada nao pode dobrar o pico
+    assert peaks[1] &lt; peaks[0] * 2, f"memoria cresceu com a entrada: {peaks}"</code></pre>
+    </div>
+
+    <p>Repare na folga do <code>* 2</code>: o teste não exige igualdade, porque ruído de alocação existe. Ele exige que a curva seja <em>plana o bastante</em> — e falha alto no dia em que alguém acrescentar um <code>list()</code> no meio do pipeline.</p>
+
+    <h2>O que realmente monitorar no job</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Métrica</th><th>Como</th><th>Diz o quê</th></tr></thead>
+        <tbody>
+          <tr><td>RSS do processo</td><td><code>psutil.Process().memory_info().rss</code></td><td>o número que o contêiner usa para te matar</td></tr>
+          <tr><td>Registros por lote</td><td>log a cada N lotes</td><td>se o batching está do tamanho que você configurou</td></tr>
+          <tr><td>Registros processados</td><td>contador</td><td>detecta o iterador consumido por engano da aula 01</td></tr>
+          <tr><td>Duração por estágio</td><td><code>perf_counter</code> por etapa</td><td>onde o tempo vai, antes de otimizar no lugar errado</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">RSS não é o mesmo que <code>tracemalloc</code></div>
+      <p>O <code>tracemalloc</code> conta o que o Python alocou; o RSS conta o que o sistema operacional entregou ao processo — e o Python <strong>não devolve tudo</strong> ao SO quando libera. É normal ver RSS alto e <code>current</code> baixo. Para "cabe no contêiner?", o RSS é a fonte da verdade; para "quem alocou isso?", o <code>tracemalloc</code>.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Achando o culpado</div>
+      <p>Quando o pico está alto e você não sabe por quê, <code>tracemalloc.take_snapshot().statistics("lineno")</code> devolve as alocações agrupadas <strong>por linha de código</strong>, ordenadas. Costuma resolver em um minuto o que meia hora de leitura não resolve.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="lab" data-title="Hora da prática: 5.1 a 5.4" data-min="60" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 05 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Exercícios 5.1 a 5.4</h1>
+  <div class="act-meta">60 min &middot; arquivo <code>exercises/python/lesson05.py</code></div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">5.1</span><h2>Um <code>measure</code> reutilizável</h2><span class="ex-kind">ferramenta</span></div>
+      <p>Escreva um context manager <code>measure(label)</code> que reporte <strong>tempo e pico</strong> juntos, e use-o no resto do arquivo. Você já escreveu metade dele no 4.7 — aproveite o <code>measure_peak</code> e acrescente o <code>perf_counter</code>.</p>
+      <div class="callout tip">
+        <div class="callout-title">Detalhe que importa</div>
+        <p>Chame <code>tracemalloc.stop()</code> num <code>finally</code>. Se o bloco medido levantar exceção e o tracemalloc ficar ligado, todas as medições seguintes saem contaminadas e mais lentas — e você vai perder tempo caçando um fantasma.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">5.2</span><h2><code>getsizeof</code> contra a realidade</h2><span class="ex-kind">medição</span></div>
+      <p>Escreva <code>deep_sizeof(obj)</code> que soma recursivamente o tamanho de listas, dicts, tuplas e sets, <strong>sem contar o mesmo objeto duas vezes</strong> (guarde os <code>id()</code> já visitados). Compare com <code>sys.getsizeof</code> numa lista de 10 mil dicts e reporte o fator de erro.</p>
+      <div class="callout warn">
+        <div class="callout-title">Por que o conjunto de <code>id()</code> visitados não é opcional</div>
+        <p>Strings iguais em Python costumam ser o <em>mesmo</em> objeto. Somar 10 mil vezes a chave <code>"id"</code> infla o resultado tanto quanto o <code>getsizeof</code> o deflaciona — você trocaria um número errado por outro. E sem o controle de visitados, uma estrutura com ciclo faz a função recursar até estourar a pilha.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">5.3</span><h2>Provando O(1) em três escalas</h2><span class="ex-kind">medição</span></div>
+      <p>Pegue o <code>read_jsonl</code> e o <code>chunked</code> do seu <code>lesson04.py</code>. Gere arquivos JSONL de 10 mil, 100 mil e 1 milhão de linhas e produza a tabela da atividade 05: pico do streaming contra pico do <code>list()</code>, nas três escalas.</p>
+      <p>Depois responda por escrito: o pico do <code>chunked(records, k)</code> depende de <code>n</code>, de <code>k</code>, ou dos dois? Prove variando <code>k</code> em 10, 1.000 e 100.000 com <code>n</code> fixo.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">5.4</span><h2>Ache o vazamento</h2><span class="ex-kind">depuração</span></div>
+      <p>Este pipeline deveria ser O(1) e não é. Meça, descubra por quê, conserte, e meça de novo para provar:</p>
+      <div class="code bare" style="margin-top:14px">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">def process(records):
+    """Normalize records and report how many were rejected."""
+    seen_ids = set()
+    rejected = []
+
+    for record in records:
+        if record["id"] in seen_ids:
+            rejected.append(record)
+            continue
+        seen_ids.add(record["id"])
+        yield {**record, "amount": round(record["amount"], 2)}
+
+    log.info("rejected %d duplicates", len(rejected))</code></pre>
+      </div>
+      <p>Há <strong>dois</strong> termos que crescem com a entrada aqui, e eles não são igualmente evitáveis. Diga qual dá para eliminar sem mudar o comportamento observável, qual não dá, e o que você faria com o que não dá.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="lab" data-title="Hora da prática: 5.5 a 5.7 e entrega" data-min="60" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 05 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Exercícios 5.5 a 5.7 e entrega</h1>
+  <div class="act-meta">60 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">5.5</span><h2>As três estratégias</h2><span class="ex-kind">medição</span></div>
+      <p>Implemente as opções A, B e C da atividade 04 sobre um arquivo seu de 200 mil linhas e reproduza a tabela: tempo e pico das três. Comente por que C ganha nas duas dimensões, e em que situação C <em>não</em> seria possível.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">5.6</span><h2>O caso em que lazy é errado</h2><span class="ex-kind">análise</span></div>
+      <p>Escreva um caso realista — não artificial — em que <strong>materializar é a resposta certa</strong>, e prove com medição. Justifique com uma das quatro situações da atividade 06 e diga qual.</p>
+      <div class="callout warn">
+        <div class="callout-title">O que não vale</div>
+        <p>Não vale "uma lista de 3 itens". Vale um caso que você escreveria num pipeline de verdade, em que a versão lazy é pior por um motivo que o número mostra. Este exercício existe para você não sair da fase 1 achando que generator é sempre a resposta.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">5.7</span><h2>Desafio: orçamento de memória</h2><span class="ex-kind">desafio</span></div>
+      <p>Escreva um pipeline que leia um arquivo de 1 milhão de linhas, agrupe por cidade, calcule soma e média por cidade, e grave o resultado — <strong>com pico abaixo de 10 MB</strong>, verificado por <code>assert</code> no próprio código.</p>
+      <p>Depois escreva um teste no formato da atividade 09: rode em duas escalas e falhe se o pico crescer mais que 2×.</p>
+      <div class="callout tip">
+        <div class="callout-title">O termo que você não consegue eliminar</div>
+        <p>O agrupamento por cidade é O(cidades distintas), e isso é irredutível se a fonte não vier ordenada — é exatamente a conclusão do exercício 4.4. Declare esse termo no comentário em vez de fingir que o pipeline é O(1): "O(1) nos registros, O(k) nas cidades distintas" é a descrição honesta.</p>
+      </div>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>lesson05.py</code> com as tabelas de medição nos comentários. Toda afirmação sobre memória neste arquivo precisa ter um número ao lado — é o assunto da aula.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de commitar</div>
+      <ul>
+        <li>Toda função definida é <strong>chamada</strong> em algum lugar do <code>main()</code>?</li>
+        <li>Você <strong>leu</strong> cada saída e conferiu contra o que esperava?</li>
+        <li>Toda afirmação de complexidade tem <strong>três escalas</strong> medidas por trás?</li>
+        <li>O <code>tracemalloc.stop()</code> está num <code>finally</code>?</li>
+        <li>Sobrou algum <code>import</code> não usado?</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 06: Git e o repositório</div>
+      <p>A última da fase 1, e a que faz o resto valer alguma coisa. O que o git realmente guarda, por que a área de staging existe, commits que contam uma história — e por que aquele CSV de 4,7 MB que você commitou continua no repositório mesmo depois de apagado.</p>
+    </div>
+
+  </div>
+</article>
+
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/11</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 05</div>
+          <div class="lh-n">Memória na prática</div>
+        </div>
+      </div>
+      <ul class="acts" id="actList"></ul>
+      <div class="locked">
+        <a class="locked-item" href="04-itertools-e-batching.html"><div><div class="lk-n">Aula 04</div><div class="lk-t">itertools e batching</div></div><span class="lk-c">publicada</span></a>
+        <a class="locked-item" href="06-git-e-o-repositorio.html"><div><div class="lk-n">Aula 06</div><div class="lk-t">Git e o repositório</div></div><span class="lk-c">publicada</span></a>
+      </div>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/python/lesson05.py<span class="rs">o arquivo que você entrega</span></span></li>
+        <li><a href="../reviews/04-revisao.html">Revisão da aula 04<span class="rs">as quatro medições que motivaram esta aula</span></a></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://docs.python.org/3/library/tracemalloc.html" target="_blank" rel="noopener">tracemalloc<span class="rs">docs.python.org</span></a></li>
+        <li><a href="https://docs.python.org/3/library/tracemalloc.html#tracemalloc.Snapshot.statistics" target="_blank" rel="noopener">Snapshot.statistics<span class="rs">alocações agrupadas por linha</span></a></li>
+        <li><a href="https://docs.python.org/3/library/sys.html#sys.getsizeof" target="_blank" rel="noopener">sys.getsizeof<span class="rs">leia a nota sobre conteúdo referenciado</span></a></li>
+        <li><a href="https://docs.python.org/3/library/timeit.html" target="_blank" rel="noopener">timeit<span class="rs">medir tempo sem se enganar</span></a></li>
+        <li><a href="https://psutil.readthedocs.io/en/latest/#psutil.Process.memory_info" target="_blank" rel="noopener">psutil — memory_info<span class="rs">RSS, o número que o contêiner enxerga</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">High Performance Python, 2ª ed. — cap. 11<span class="rs">Gorelick &amp; Ozsvald · perfil de memória</span></span></li>
+        <li><span class="res-static">Fluent Python, 2ª ed. — cap. 17<span class="rs">Ramalho · o custo real de um generator</span></span></li>
+      </ul>
+      <h3>Próximo passo</h3>
+      <ul>
+        <li><a href="06-git-e-o-repositorio.html">Aula 06 — Git e o repositório<span class="rs">a última da fase 1</span></a></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>

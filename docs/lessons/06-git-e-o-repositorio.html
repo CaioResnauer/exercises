@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Git e o repositório</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="06">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Trilha DE</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+    <div class="rail-track">
+      <div class="bar"><i id="barFill"></i></div>
+      <span class="pct" id="barPct">0%</span>
+    </div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 06 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; última aula da fase 1</div>
+  <div class="prose">
+    <p class="lead">Você já usa git. Faz <code>add</code>, <code>commit</code>, <code>push</code>, e funciona. Esta aula não é sobre os comandos — é sobre o modelo de dados por baixo deles, que é surpreendentemente simples e que transforma o git de sequência de rituais em ferramenta previsível.</p>
+
+    <p>A estrutura é a mesma da aula 01: em vez de decorar o que <code>git reset --hard</code> faz, você vai entender as três áreas que ele mexe, e a partir daí deduzir o comportamento de qualquer comando — inclusive os que você ainda não conhece.</p>
+
+    <h2>O que você vai entender</h2>
+    <ul>
+      <li>Que o git guarda <strong>conteúdo endereçado por hash</strong>, não arquivos nem diffs — e o que isso implica;</li>
+      <li>Por que a área de staging existe, e por que ela é a causa do "commitei e faltou um arquivo";</li>
+      <li>Como escrever um histórico que serve de documentação, com Conventional Commits;</li>
+      <li>Por que aquele CSV que você commitou continua no repositório <strong>depois de apagado</strong> — medido.</li>
+    </ul>
+
+    <div class="callout tip">
+      <div class="callout-title">Por que esta aula fecha a fase 1</div>
+      <p>As cinco aulas anteriores produziram código. Esta é sobre o que faz esse código sobreviver: um repositório que outra pessoa — inclusive você daqui a seis meses — consegue abrir e entender. Um pipeline brilhante num repo ilegível é um pipeline que vai ser reescrito.</p>
+    </div>
+
+    <h2>Tempo estimado</h2>
+    <p>45 min de leitura, 1 h 20 de exercícios. Todos os comandos e saídas desta aula foram executados num repositório de teste.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="O que o git realmente guarda" data-min="8" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 06 &middot; Atividade 02</span></div>
+  <h1 class="act-title">O que o git realmente guarda</h1>
+  <div class="act-meta">08 min</div>
+  <div class="prose">
+    <p class="lead">A intuição comum é que o git guarda uma sequência de <em>diffs</em>: o commit 2 é "o commit 1 mais estas mudanças". Está errada, e o erro atrapalha.</p>
+
+    <p>O git guarda <strong>snapshots completos</strong>, endereçados pelo hash do próprio conteúdo. Um objeto no git é o par <code>(sha1 do conteúdo, conteúdo)</code> — e é só isso.</p>
+
+    <h2>O hash é do conteúdo, não do arquivo</h2>
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">printf 'def take(it, n):\n    return islice(it, n)\n' &gt; pipeline.py
+cp pipeline.py outro_nome.py
+
+git hash-object pipeline.py
+git hash-object outro_nome.py</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>634d1a045449cef3bd36baaac640f329f7204ec5
+634d1a045449cef3bd36baaac640f329f7204ec5</div>
+    </div>
+
+    <p>Mesmo hash. O nome do arquivo não entra na conta — só os bytes. Três consequências que explicam comportamentos que parecem mágicos:</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Renomear é de graça</h3>
+        <p>O git não guarda "renomeado de X para Y". Ele guarda uma árvore nova apontando para o <em>mesmo</em> blob com outro nome. Quando o <code>git log</code> te mostra um rename, ele <strong>deduziu</strong> comparando conteúdos — não estava anotado em lugar nenhum.</p>
+      </div>
+      <div class="trap">
+        <h3>Conteúdo duplicado é armazenado uma vez</h3>
+        <p>Dez arquivos idênticos em dez pastas viram um blob e dez entradas de árvore. Um arquivo que não mudou entre dois commits é literalmente o mesmo objeto, referenciado duas vezes.</p>
+      </div>
+      <div class="trap">
+        <h3>O histórico é imutável por construção</h3>
+        <p>Mudar qualquer byte de um commit antigo muda o hash dele, o que muda o hash de todos os commits seguintes. É por isso que <code>rebase</code> "reescreve" o histórico em vez de editá-lo: ele cria commits novos e abandona os antigos.</p>
+      </div>
+    </div>
+
+    <h2>Os três tipos de objeto</h2>
+    <p>Depois de um <code>add</code> e um <code>commit</code>, o banco tem exatamente três objetos:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">git add pipeline.py &amp;&amp; git commit -m "feat(pipeline): add take"
+git cat-file --batch-all-objects --batch-check</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>634d1a04...  blob     42
+206f3a6f...  tree     39
+92262120...  commit  175</div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Objeto</th><th>Guarda</th><th>Aponta para</th></tr></thead>
+        <tbody>
+          <tr><td><code>blob</code></td><td>o conteúdo de um arquivo, sem nome</td><td>nada</td></tr>
+          <tr><td><code>tree</code></td><td>nomes, permissões e um diretório</td><td>blobs e outras trees</td></tr>
+          <tr><td><code>commit</code></td><td>autor, data, mensagem</td><td>uma tree e o(s) commit(s) pai</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Abra o commit e a árvore e veja que não há nada de misterioso:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">git cat-file -p HEAD
+git cat-file -p HEAD^{tree}</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>tree 206f3a6f4a7dc708fe630a6068cc7301caada49f
+author Caio &lt;caio3322@gmail.com&gt; 1788655520 -0300
+committer Caio &lt;caio3322@gmail.com&gt; 1788655520 -0300
+
+feat(pipeline): add take
+
+100644 blob 634d1a04...    pipeline.py</div>
+    </div>
+
+    <p>O commit é um arquivo de texto de 175 bytes apontando para uma árvore. A árvore é uma lista de nomes apontando para blobs. Não existe diff guardado em lugar nenhum — o <code>git diff</code> <strong>calcula</strong> a diferença entre duas árvores na hora em que você pede.</p>
+
+    <h2>E o blob que não mudou?</h2>
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">printf 'def drop(it, n):\n    return islice(it, n, None)\n' &gt; helpers.py
+git add helpers.py &amp;&amp; git commit -m "feat(pipeline): add drop"
+git cat-file -p HEAD^{tree}</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>100644 blob fde93444...    helpers.py
+100644 blob 634d1a04...    pipeline.py</div>
+    </div>
+
+    <p>O blob do <code>pipeline.py</code> é o mesmo <code>634d1a04</code> do primeiro commit. A árvore nova aponta para o objeto velho. É por isso que um repositório com mil commits de um projeto pequeno continua pequeno — cada commit é um snapshot completo, mas quase todos os objetos são compartilhados.</p>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="lab" data-title="Mão na massa: encontre o blob" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 06 &middot; Atividade 03</span></div>
+  <h1 class="act-title">Encontre o blob</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Um teste rápido do modelo. O comando abaixo roda num repositório recém-criado, <strong>antes</strong> de qualquer <code>git add</code>:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">printf 'def take(it, n):\n    return islice(it, n)\n' &gt; pipeline.py
+
+git hash-object pipeline.py
+git cat-file -t $(git hash-object pipeline.py)</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="As duas linhas funcionam? Se alguma falha, qual e por quê?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a saída</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div class="code has-out" style="margin-top:18px">
+          <div class="code-head"><span class="code-file"><b>saída real</b></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-bash">634d1a045449cef3bd36baaac640f329f7204ec5
+fatal: git cat-file: could not get object info</code></pre>
+        </div>
+        <p style="margin-top:16px">A primeira funciona, a segunda falha. E a diferença entre elas é a definição de <code>git add</code>.</p>
+        <p><code>git hash-object</code> <strong>calcula</strong> o hash — é uma função pura sobre os bytes, não precisa que nada exista. <code>git cat-file</code> <strong>lê do banco de objetos</strong>, e ali ainda não há nada.</p>
+        <p>Depois de <code>git add pipeline.py</code>, a mesma linha funciona:</p>
+        <div class="code has-out">
+          <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-bash">git add pipeline.py
+git cat-file -t $(git hash-object pipeline.py)
+git cat-file -p $(git hash-object pipeline.py)</code></pre>
+          <div class="out"><span class="out-label">Saída real</span>blob
+def take(it, n):
+    return islice(it, n)</div>
+        </div>
+        <p style="margin-top:16px"><strong>É isso que <code>git add</code> faz:</strong> grava um blob permanente no banco de objetos e anota o hash no index. Não é "marcar para commitar depois" — o conteúdo já está salvo, agora, antes de qualquer commit.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Uma consequência prática</div>
+      <p>Se você fez <code>git add</code> e depois estragou o arquivo, o conteúdo bom <strong>ainda existe</strong> no banco de objetos. <code>git checkout -- arquivo</code> traz de volta a versão do index. E mesmo depois de um <code>reset</code>, o blob continua lá até o <code>gc</code> passar — <code>git fsck --lost-found</code> acha.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="As três áreas e por que o staging existe" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 06 &middot; Atividade 04</span></div>
+  <h1 class="act-title">As três áreas e por que o staging existe</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Quase todo comando de git é uma movimentação entre três lugares. Quem tem esse mapa na cabeça deduz o comportamento de qualquer comando; quem não tem, decora receitas.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Área</th><th>Onde vive</th><th>O que é</th></tr></thead>
+        <tbody>
+          <tr><td><strong>working tree</strong></td><td>seus arquivos</td><td>o que o editor mostra</td></tr>
+          <tr><td><strong>index</strong> (staging)</td><td><code>.git/index</code></td><td>a foto do <em>próximo</em> commit</td></tr>
+          <tr><td><strong>HEAD</strong></td><td><code>.git/objects</code></td><td>o último commit</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>O index é o que confunde — parece burocracia entre você e o commit. Ele existe para permitir uma coisa específica: <strong>commitar parte do que você mudou</strong>. Você mexeu em cinco arquivos resolvendo duas coisas diferentes; o index deixa você fazer dois commits coerentes em vez de um commit bagunçado.</p>
+
+    <p>E ele tem uma propriedade que morde. Percorra o passo a passo:</p>
+
+    <div class="trace" id="trace">
+      <script type="application/json">
+      {
+        "lines": [
+          "git status                      # tudo limpo",
+          "vim pipeline.py                 # acrescenta take()",
+          "git add pipeline.py",
+          "vim pipeline.py                 # acrescenta drop()  <- depois do add",
+          "git commit -m \"feat(pipeline): add take\"",
+          "git status"
+        ],
+        "steps": [
+          { "l": 0, "it": "base", "item": "base", "out": "base", "stop": false,
+            "note": "As três áreas em sincronia. É exatamente isso que \"working tree clean\" significa: index igual a HEAD, e arquivos iguais ao index." },
+          { "l": 1, "it": "base + take()", "item": "base", "out": "base", "stop": false,
+            "note": "Você editou o arquivo. Só a working tree mudou — o git ainda não tem nenhum registro disso." },
+          { "l": 2, "it": "base + take()", "item": "base + take()", "out": "base", "stop": false,
+            "note": "git add grava um blob no banco e copia o hash para o index. Repare: é uma FOTO do conteúdo naquele instante, não um link para o arquivo." },
+          { "l": 3, "it": "base + take() + drop()", "item": "base + take()", "out": "base", "stop": false,
+            "note": "Aqui está o ponto da atividade. Você editou de novo, e o index continua com a foto antiga — ele não acompanha o arquivo." },
+          { "l": 4, "it": "base + take() + drop()", "item": "base + take()", "out": "base + take()", "stop": true,
+            "note": "O commit grava o INDEX, nunca a working tree. O drop() ficou de fora, e o git não avisou nada: do ponto de vista dele, você commitou exatamente o que pediu." },
+          { "l": 5, "it": "base + take() + drop()", "item": "base + take()", "out": "base + take()", "stop": true,
+            "note": "git status agora mostra pipeline.py como modificado. Essa linha é a única pista de que o drop() não entrou — e é por isso que se lê o status antes de dar push." }
+        ]
+      }
+      </script>
+      <div class="trace-head">
+        <h3>Execução passo a passo &mdash; o que o commit realmente grava</h3>
+        <div class="trace-ctl">
+          <button class="btn btn-ghost btn-sm" id="tPrev">Anterior</button>
+          <button class="btn btn-primary btn-sm" id="tNext">Próximo passo</button>
+          <button class="btn btn-ghost btn-sm" id="tReset">Reiniciar</button>
+        </div>
+      </div>
+      <div class="trace-body">
+        <div class="trace-code" id="tCode"></div>
+        <div class="trace-state">
+          <div class="tstate-row"><span class="tstate-k">working tree</span><span class="tstate-v acc" id="tIter">—</span></div>
+          <div class="tstate-row"><span class="tstate-k">index</span><span class="tstate-v" id="tItem">—</span></div>
+          <div class="tstate-row"><span class="tstate-k">HEAD</span><span class="tstate-v" id="tOut">—</span></div>
+        </div>
+      </div>
+      <div class="trace-note" id="tNote">Passo 1 de 6 &middot; clique em “Próximo passo”.</div>
+    </div>
+
+    <h2>O mapa dos comandos</h2>
+    <p>Com as três áreas na cabeça, os comandos param de precisar de decoreba:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Comando</th><th>Move o quê</th></tr></thead>
+        <tbody>
+          <tr><td><code>git add &lt;f&gt;</code></td><td>working tree &rarr; index</td></tr>
+          <tr><td><code>git commit</code></td><td>index &rarr; HEAD</td></tr>
+          <tr><td><code>git restore --staged &lt;f&gt;</code></td><td>HEAD &rarr; index (desfaz o add)</td></tr>
+          <tr><td><code>git restore &lt;f&gt;</code></td><td>index &rarr; working tree (<strong>perde sua edição</strong>)</td></tr>
+          <tr><td><code>git reset --soft &lt;c&gt;</code></td><td>move só o HEAD; index e arquivos intactos</td></tr>
+          <tr><td><code>git reset --mixed &lt;c&gt;</code></td><td>HEAD e index; arquivos intactos <em>(padrão)</em></td></tr>
+          <tr><td><code>git reset --hard &lt;c&gt;</code></td><td>as três &mdash; <strong>o único que apaga trabalho</strong></td></tr>
+          <tr><td><code>git diff</code></td><td>compara working tree com index</td></tr>
+          <tr><td><code>git diff --staged</code></td><td>compara index com HEAD &mdash; <em>o que você está prestes a commitar</em></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">As duas linhas que evitam quase todo acidente</div>
+      <p><code>git diff --staged</code> antes de todo commit: mostra exatamente o que vai entrar, que é a informação que o trace acima mostrou faltar. E <code>git status</code> antes de todo push.</p>
+      <p>Dos comandos da tabela, só o <code>--hard</code> e o <code>git restore &lt;f&gt;</code> destroem trabalho não commitado. Todo o resto é reversível — inclusive commits "perdidos", que o <code>git reflog</code> acha.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="video" data-title="Commits que contam uma história" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 06 &middot; Atividade 05</span></div>
+  <h1 class="act-title">Commits que contam uma história</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">O histórico é a única documentação que nunca fica desatualizada — porque é gerada pelo próprio ato de mudar o código. Vale escrevê-lo como se alguém fosse ler, porque alguém vai.</p>
+
+    <p>Comece pelo caso real. O histórico deste repositório, antes desta aula:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>bash</b> <span style="color:var(--danger)">— o que estava lá</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">012e669 updating lesson04
+69cbce6 udpdating lesson04
+ff39593 adding lesson04.py
+f0fd420 Adding lesson03.py
+81c7ae3 updating lesson01, assing lesson02
+a05e45e add README</code></pre>
+    </div>
+
+    <p>Três problemas, e o terceiro é o que dói. As mensagens dizem <em>o que foi tocado</em>, nunca <em>o que mudou</em>. Há um typo (<code>udpdating</code>) e uma mensagem com duas coisas (<code>updating lesson01, assing lesson02</code>). E <code>012e669</code> contra <code>69cbce6</code>: se um bug aparecer, nada distingue esses dois commits — você vai ter que abrir os dois.</p>
+
+    <h2>Conventional Commits</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>texto</b> <span style="color:var(--ink-3)">— o formato</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">&lt;tipo&gt;(&lt;escopo&gt;): &lt;resumo no imperativo, minúsculo, sem ponto&gt;
+
+&lt;corpo: POR QUE, não o quê. O diff já mostra o quê.&gt;</code></pre>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tipo</th><th>Quando</th></tr></thead>
+        <tbody>
+          <tr><td><code>feat</code></td><td>capacidade nova, visível para quem usa</td></tr>
+          <tr><td><code>fix</code></td><td>corrige comportamento errado</td></tr>
+          <tr><td><code>refactor</code></td><td>muda a forma, não o comportamento</td></tr>
+          <tr><td><code>perf</code></td><td>refactor cujo objetivo é desempenho — traga o número</td></tr>
+          <tr><td><code>test</code></td><td>só testes</td></tr>
+          <tr><td><code>docs</code></td><td>só documentação</td></tr>
+          <tr><td><code>chore</code></td><td>tooling, configuração, dependências</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>O mesmo trabalho, escrito assim:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>bash</b> <span style="color:var(--ok)">— o que dá para ler daqui a seis meses</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">fix(lesson04): stop manual_batched from looping forever
+
+The while guard tested an islice object, which is always truthy, so the
+loop kept yielding empty tuples after the source was exhausted. Move the
+tuple() inside the condition and add the assertions that catch it.</code></pre>
+    </div>
+
+    <p>O resumo cabe num <code>--oneline</code> e já diz o suficiente para alguém decidir se este é o commit que procura. O corpo explica <strong>por que</strong> — a causa, não a mudança. O diff mostra a mudança melhor do que qualquer prosa.</p>
+
+    <h2>Um commit, uma ideia</h2>
+    <p>É a regra que mais melhora um histórico, e a mais ignorada. Se a sua mensagem precisa de "e" ou de uma vírgula listando coisas, são dois commits.</p>
+
+    <p>Não é estética. Um commit atômico é o que torna possível:</p>
+    <ul>
+      <li><code>git revert</code> de uma mudança sem levar junto três não relacionadas;</li>
+      <li><code>git bisect</code> apontar a linha culpada em vez de um commit com 40 arquivos;</li>
+      <li>um review que cabe na cabeça de quem revisa.</li>
+    </ul>
+
+    <p>Se você já misturou tudo na working tree, o index resolve — é para isso que ele existe:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">git add -p            # escolhe HUNK por hunk o que entra neste commit
+git diff --staged     # confere
+git commit -m "fix(reader): close the file when the consumer breaks early"
+git add -p            # o resto
+git commit -m "test(reader): cover the early-break path"</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Escreva a mensagem antes do código</div>
+      <p>Se você não consegue escrever o resumo de uma linha antes de começar, provavelmente você não sabe ainda o que vai fazer — ou vai fazer duas coisas. É um teste de escopo que custa dez segundos.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="note" data-title="Para saber mais: o que não versionar" data-min="6" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 06 &middot; Atividade 06</span></div>
+  <h1 class="act-title">O que não versionar</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Em engenharia de dados esse assunto é mais grave que na média, porque a nossa pasta de trabalho está cheia de arquivos grandes que parecem parte do projeto.</p>
+
+    <h2>A medição</h2>
+    <p>Um CSV de 4,7 MB, commitado, regerado, e depois "removido":</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">git add sales.csv &amp;&amp; git commit -m "chore: add data"
+du -sh .git
+
+# regenera o csv (mesmas 300k linhas, valores diferentes) e commita
+git add sales.csv &amp;&amp; git commit -m "chore: regenerate data"
+du -sh .git
+
+# "remove" o arquivo do versionamento e limpa
+git rm --cached sales.csv &amp;&amp; echo "sales.csv" &gt; .gitignore
+git add .gitignore &amp;&amp; git commit -m "chore: stop tracking data"
+git gc --aggressive --prune=now
+du -sh .git</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>sales.csv: 4.7M
+
+.git depois de 1 commit do csv:  2.2M
+.git depois de REGERAR o csv:    4.2M
+.git depois de "remover" + gc:   3.7M</div>
+    </div>
+
+    <p>Três coisas para tirar daí.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Compressão não salva você</h3>
+        <p>4,7 MB de CSV viraram 2,2 MB no <code>.git</code>. Bom, mas é um fator 2 — não uma ordem de grandeza. Um dataset de 500 MB não vai virar 5 MB.</p>
+      </div>
+      <div class="trap">
+        <h3>Cada versão é um objeto novo, inteiro</h3>
+        <p>Regerar o CSV quase dobrou o <code>.git</code>. O git não guarda o diff de um arquivo binário-ish: guarda o snapshot completo. Um CSV regenerado toda semana custa o tamanho dele por semana, para sempre.</p>
+      </div>
+      <div class="trap">
+        <h3>"Remover" não remove</h3>
+        <p>Depois do <code>git rm --cached</code>, do <code>.gitignore</code> e de um <code>gc --aggressive --prune=now</code>, o <code>.git</code> ainda tem <strong>3,7 MB</strong>. Os blobs continuam lá porque commits antigos ainda apontam para eles — e apagar de verdade exige reescrever o histórico inteiro (<code>git filter-repo</code>) e forçar todo mundo a reclonar.</p>
+      </div>
+    </div>
+
+    <div class="callout bug">
+      <div class="callout-title">O caso que não é sobre tamanho</div>
+      <p>Um <code>.env</code> com credencial commitado por engano tem exatamente a mesma propriedade: <strong>remover no commit seguinte não remove</strong>. O segredo continua acessível no histórico, e se o repo foi pushado, a única resposta correta é <em>rotacionar a credencial</em>. Reescrever o histórico ajuda, mas você não sabe quem já clonou.</p>
+    </div>
+
+    <h2>Um <code>.gitignore</code> para pipeline de dados</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>.gitignore</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash"># Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Segredos — nunca versionar
+.env
+*.pem
+credentials.json
+
+# Dados e saídas
+data/raw/
+data/processed/
+out/
+*.parquet
+*.db
+
+# Amostras pequenas para os testes SÃO versionadas
+!data/samples/*.jsonl</code></pre>
+    </div>
+
+    <p>A última linha é a que vale a discussão. Dados de produção ficam de fora, mas uma <strong>amostra pequena e fixa</strong> deve entrar: é ela que faz os testes rodarem em qualquer máquina, e o repositório deixar de depender de um bucket que talvez você nem tenha acesso.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">A regra de bolso</div>
+      <p>Versione o que é <strong>fonte</strong>: código, configuração, schema, migração, amostra pequena. Não versione o que é <strong>derivado</strong> (saída de pipeline, cache, build) nem o que é <strong>secreto</strong>. Se um arquivo pode ser regerado pelo código do repositório, ele não pertence ao repositório.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="video" data-title="Branches e o histórico legível" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 06 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Branches e o histórico legível</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Depois do modelo de objetos, branch fica quase decepcionante de tão simples.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">cat .git/refs/heads/main</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>92262120418ccc20e6843c60a58f22b3de04d3ac</div>
+    </div>
+
+    <p>Um branch é <strong>um arquivo de texto com 40 caracteres</strong>: o hash de um commit. Criar um branch escreve um arquivo desses; trocar de branch reescreve o <code>HEAD</code> e ajusta os arquivos. Nada é copiado. É por isso que <code>git branch</code> é instantâneo mesmo num repositório enorme.</p>
+
+    <p>E como cada commit aponta para o pai, o "histórico do branch" é só seguir os ponteiros a partir daquele hash.</p>
+
+    <h2>Merge ou rebase</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th><code>merge</code></th><th><code>rebase</code></th></tr></thead>
+        <tbody>
+          <tr><td>O que faz</td><td>cria um commit com dois pais</td><td>reescreve seus commits em cima da nova base</td></tr>
+          <tr><td>Histórico</td><td>preserva o que aconteceu de fato</td><td>linear, mais fácil de ler</td></tr>
+          <tr><td>Hashes</td><td>preservados</td><td><strong>todos novos</strong></td></tr>
+          <tr><td>Seguro em branch compartilhado</td><td>sim</td><td class="num" style="color:var(--danger)">não</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>A regra que evita 90% dos acidentes: <strong>rebase só em commits que ainda não foram pushados.</strong> Rebasear algo que outra pessoa já puxou reescreve o passado dela, e a reconciliação é feia.</p>
+
+    <p>O fluxo saudável para trabalho solo, que é o seu caso aqui:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">git switch -c feat/lesson05-memory     # branch a partir de main
+# ... commits pequenos, um por ideia ...
+git switch main
+git pull --rebase                       # traz o remoto sem commit de merge
+git merge --no-ff feat/lesson05-memory  # preserva o agrupamento do trabalho
+git branch -d feat/lesson05-memory</code></pre>
+    </div>
+
+    <p>O <code>--no-ff</code> força um commit de merge mesmo quando o fast-forward seria possível. Custa um commit e ganha uma coisa: fica registrado no histórico <em>quais commits formavam uma unidade de trabalho</em>.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Os dois comandos que salvam</div>
+      <p><code>git reflog</code> lista todo lugar onde o HEAD já esteve, incluindo commits que nenhum branch alcança mais. Quase tudo que parece perdido está lá, e volta com <code>git reset --hard &lt;hash&gt;</code>. Ele guarda 90 dias por padrão.</p>
+      <p><code>git log --oneline --graph --all</code> desenha a topologia real dos branches. Quando o estado do repositório não faz sentido, é a primeira coisa a rodar.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="video" data-title="O repositório de um engenheiro de dados" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 06 &middot; Atividade 08</span></div>
+  <h1 class="act-title">O repositório de um engenheiro de dados</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">O que um revisor — ou um entrevistador — procura nos primeiros dois minutos.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>estrutura</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">pipeline-de-vendas/
+├── README.md              # o que é, como rodar, como testar
+├── pyproject.toml         # dependências com versão travada
+├── .gitignore
+├── .env.example           # os NOMES das variáveis, nunca os valores
+├── src/
+│   └── sales_pipeline/
+│       ├── extract.py
+│       ├── transform.py
+│       └── load.py
+├── tests/
+│   └── test_transform.py
+└── data/
+    └── samples/           # amostra pequena, versionada, para os testes
+        └── sales.jsonl</code></pre>
+    </div>
+
+    <p>Quatro coisas fazem a diferença entre um repositório que passa e um que impressiona:</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Um README que responde três perguntas</h3>
+        <p>O que este projeto faz, como eu rodo, como eu rodo os testes. Nessa ordem, nas primeiras vinte linhas. Um README que começa com a arquitetura antes de dizer o comando para rodar é um README que ninguém lê até o fim.</p>
+      </div>
+      <div class="trap">
+        <h3>Dá para rodar sem te perguntar nada</h3>
+        <p>Clonou, instalou, rodou os testes, passou. Se for preciso um bucket, uma credencial ou um arquivo que não está no repo, os testes precisam funcionar com a amostra versionada. Este é o critério que mais reprova repositório de portfólio.</p>
+      </div>
+      <div class="trap">
+        <h3>Segredo nenhum, nem no histórico</h3>
+        <p>Um <code>.env.example</code> com os nomes das variáveis e valores fictícios. Se algum dia um segredo real entrou, rotacione — a atividade 06 explicou por quê.</p>
+      </div>
+      <div class="trap">
+        <h3>O histórico é legível</h3>
+        <p>Um <code>git log --oneline</code> que conta a construção do projeto vale mais que um parágrafo de README, porque não dá para falsificar depois.</p>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Estudo e portfólio são repositórios diferentes</div>
+      <p>Este repositório aqui é o seu caderno: exercícios, tentativas, código que existe para aprender. Um repositório de portfólio é um produto: um pipeline que resolve um problema, com README, testes e histórico limpo. Misturar os dois prejudica os dois — o caderno fica engessado e o portfólio fica cheio de exercício.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="lab" data-title="Hora da prática: 6.1 a 6.4" data-min="50" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 06 &middot; Atividade 09</span></div>
+  <h1 class="act-title">Exercícios 6.1 a 6.4</h1>
+  <div class="act-meta">50 min &middot; num repositório de teste, não no seu</div>
+  <div class="prose">
+
+    <div class="callout warn">
+      <div class="callout-title">Faça isto num repositório descartável</div>
+      <p><code>mkdir /tmp/git-lab &amp;&amp; cd /tmp/git-lab &amp;&amp; git init</code>. Os exercícios 6.2 e 6.3 usam <code>reset --hard</code> e reescrita de histórico — não é lugar para praticar no repositório que você usa.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">6.1</span><h2>Um commit à mão, sem <code>git commit</code></h2><span class="ex-kind">plumbing</span></div>
+      <p>Crie um commit usando só os comandos de baixo nível: <code>git hash-object -w</code>, <code>git update-index --add --cacheinfo</code>, <code>git write-tree</code>, <code>git commit-tree</code>, <code>git update-ref</code>. Confirme com <code>git log</code> que o commit apareceu normalmente.</p>
+      <p>Escreva depois, com suas palavras, o que cada um dos cinco comandos criou ou moveu, usando o vocabulário das três áreas.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">6.2</span><h2>As três áreas, na prática</h2><span class="ex-kind">experimento</span></div>
+      <p>Reproduza o trace da atividade 04: edite, <code>add</code>, edite de novo, <code>commit</code>. Depois responda com evidência de comando:</p>
+      <ul>
+        <li>O que <code>git diff</code> mostra nesse instante? E <code>git diff --staged</code>?</li>
+        <li>O que <code>git show HEAD:pipeline.py</code> devolve, e por que é diferente do arquivo em disco?</li>
+        <li>Depois de <code>git reset --soft HEAD~1</code>, o que aconteceu com cada uma das três áreas? Repita com <code>--mixed</code> e <code>--hard</code> e monte uma tabela 3×3.</li>
+      </ul>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">6.3</span><h2>O dado que não sai</h2><span class="ex-kind">medição</span></div>
+      <p>Reproduza a medição da atividade 06 com um arquivo seu de alguns MB: commite, regenere, commite de novo, remova com <code>git rm --cached</code>, adicione ao <code>.gitignore</code>, rode <code>git gc --aggressive --prune=now</code> e meça o <code>.git</code> nos quatro momentos.</p>
+      <p>Depois encontre os blobs órfãos: <code>git rev-list --objects --all | grep sales</code>. Eles ainda estão lá?</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">6.4</span><h2>Separando um commit bagunçado</h2><span class="ex-kind">refactor</span></div>
+      <p>Num arquivo, faça duas mudanças não relacionadas ao mesmo tempo — uma correção de bug e um ajuste de formatação. Depois use <code>git add -p</code> para transformá-las em dois commits atômicos, com mensagens em Conventional Commits.</p>
+      <div class="callout tip">
+        <div class="callout-title">Se os hunks estiverem grudados</div>
+        <p><code>s</code> divide um hunk em pedaços menores dentro do <code>add -p</code>; <code>e</code> abre o hunk para você editar linha a linha. É a saída quando as duas mudanças estão a três linhas de distância.</p>
+      </div>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="lab" data-title="Entrega e fechamento da fase 1" data-min="30" hidden>
+  <div class="kicker"><span class="tag is-lab">Entrega</span><span class="dot"></span><span>Aula 06 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Entrega e fechamento da fase 1</h1>
+  <div class="act-meta">30 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">6.5</span><h2>Arrume este repositório</h2><span class="ex-kind">entrega</span></div>
+      <p>Aplique a aula ao repositório <code>exercises</code>:</p>
+      <ul>
+        <li>Escreva um <code>.gitignore</code> de verdade — o <code>__pycache__/</code> já apareceu aqui uma vez;</li>
+        <li>Reescreva o <code>README.md</code> respondendo às três perguntas da atividade 08;</li>
+        <li>Confira se há algum arquivo versionado que é derivado ou secreto;</li>
+        <li>Daqui para frente, Conventional Commits em tudo.</li>
+      </ul>
+      <div class="callout warn">
+        <div class="callout-title">Não reescreva o histórico antigo</div>
+        <p>É tentador rodar um <code>rebase -i</code> e renomear os seis commits iniciais. Não faça: o histórico feio é o registro honesto de como você começou, e a melhora fica visível justamente no contraste. Reescrever histórico já pushado é para remover segredo ou arquivo grande — não para embelezar.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">6.6</span><h2>Um <code>lesson03.py</code> que existe</h2><span class="ex-kind">pendência</span></div>
+      <p>O <code>lesson03.py</code> está commitado com <strong>0 bytes</strong> desde <code>f0fd420</code>. Recupere o trabalho da aula 03, commite, e use isso como exemplo do que a atividade 04 explicou: um arquivo criado e nunca adicionado com conteúdo é exatamente o caso do index desatualizado.</p>
+    </div>
+
+    <hr>
+
+    <h2>Fase 1 encerrada</h2>
+    <p>Seis aulas, e o fio condutor foi um só: <strong>o Python percorre dados de um jeito específico, e conhecer esse jeito é o que separa código que escala de código que funciona no seu notebook.</strong></p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Aula</th><th>O que ficou</th></tr></thead>
+        <tbody>
+          <tr><td>01</td><td><code>iter()</code>, <code>next()</code>, <code>StopIteration</code> — e iterable ≠ iterator</td></tr>
+          <tr><td>02</td><td><code>yield</code> como açúcar para o que você escreveu à mão</td></tr>
+          <tr><td>03</td><td>estágios que se compõem sem materializar nada no meio</td></tr>
+          <tr><td>04</td><td><code>itertools</code>, batching, e o custo escondido do <code>tee</code></td></tr>
+          <tr><td>05</td><td>medir em vez de supor — e os casos em que lazy é errado</td></tr>
+          <tr><td>06</td><td>um repositório que sobrevive a você</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O que se leva para a fase 2</div>
+      <p>Quase tudo tem tradução direta. <code>df.collect()</code> no Spark é o <code>list(iterator)</code> da aula 01, com um custo muito maior de errar. Partição é o lote da aula 04. Shuffle é a agregação O(n) da aula 05 — as O(1) resolvem dentro da partição, as O(n) obrigam a mover dados. Você não vai aprender esses conceitos do zero; vai reconhecê-los.</p>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Antes de começar a fase 2</div>
+      <p>Entregue o <code>lesson05.py</code> e o <code>lesson06.py</code>, e feche as pendências da revisão da aula 04 — os itens 1 e 2 eram obrigatórios. A fase 2 assume que o modelo de iteração está firme; se ainda houver dúvida em iterable × iterator, ela vai reaparecer em Spark, mais cara.</p>
+    </div>
+
+  </div>
+</article>
+
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/10</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 06</div>
+          <div class="lh-n">Git e o repositório</div>
+        </div>
+      </div>
+      <ul class="acts" id="actList"></ul>
+      <div class="locked">
+        <a class="locked-item" href="04-itertools-e-batching.html"><div><div class="lk-n">Aula 04</div><div class="lk-t">itertools e batching</div></div><span class="lk-c">publicada</span></a>
+        <a class="locked-item" href="05-memoria-na-pratica.html"><div><div class="lk-n">Aula 05</div><div class="lk-t">Memória na prática</div></div><span class="lk-c">publicada</span></a>
+      </div>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/python/lesson06.py<span class="rs">e o repositório arrumado</span></span></li>
+        <li><a href="../index.html">Índice do curso<span class="rs">as seis aulas da fase 1</span></a></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://git-scm.com/book/en/v2/Git-Internals-Git-Objects" target="_blank" rel="noopener">Pro Git — Git Objects<span class="rs">blobs, trees e commits por dentro</span></a></li>
+        <li><a href="https://git-scm.com/book/en/v2/Git-Tools-Reset-Demystified" target="_blank" rel="noopener">Reset Demystified<span class="rs">a tabela 3×3 do exercício 6.2</span></a></li>
+        <li><a href="https://www.conventionalcommits.org/pt-br/v1.0.0/" target="_blank" rel="noopener">Conventional Commits<span class="rs">a especificação, em português</span></a></li>
+        <li><a href="https://git-scm.com/docs/git-reflog" target="_blank" rel="noopener">git reflog<span class="rs">onde o HEAD já esteve</span></a></li>
+        <li><a href="https://github.com/newren/git-filter-repo" target="_blank" rel="noopener">git-filter-repo<span class="rs">remover de verdade do histórico</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">Pro Git, 2ª ed. — caps. 2, 3 e 10<span class="rs">Chacon &amp; Straub · gratuito em git-scm.com</span></span></li>
+      </ul>
+      <h3>Próximo passo</h3>
+      <ul>
+        <li><span class="res-static">Fase 2 — dados distribuídos<span class="rs">liberada depois das entregas da fase 1</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
