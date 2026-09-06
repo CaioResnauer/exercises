@@ -72,6 +72,16 @@ window.COURSE = {
       id: "10", title: "Testes com pytest",
       slug: "lessons/10-testes-com-pytest.html",
       acts: 12, published: true, delivery: "pending"
+    },
+    {
+      id: "11", title: "Ambiente e dependências",
+      slug: "lessons/11-ambiente-e-dependencias.html",
+      acts: 9, published: true, delivery: "pending"
+    },
+    {
+      id: "12", title: "Logging estruturado",
+      slug: "lessons/12-logging-estruturado.html",
+      acts: 10, published: true, delivery: "pending"
     }
   ],
 

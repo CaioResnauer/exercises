@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Logging estruturado</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="12" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 12 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aulas 01 a 11</div>
+  <div class="prose">
+    <p class="lead">Um pipeline em produção roda sem ninguém olhando. O log é a única coisa que sobra quando alguém pergunta o que aconteceu às três da manhã — e <code>print</code> não serve para isso.</p>
+
+    <p>A revisão da aula 04 já tinha encostado nesse assunto: um <code>except</code> que engole linha malformada em silêncio é o pior formato de falha. Esta aula é sobre a metade positiva — o que registrar, em que nível, e num formato que uma máquina consiga filtrar.</p>
+
+    <h2>O que a aula responde</h2>
+    <ul>
+      <li>O que exatamente o <code>print</code> não tem;</li>
+      <li>Por que <code>log.info("%s", x)</code> é diferente de <code>log.info(f"{x}")</code> — medido;</li>
+      <li>Como sair de texto para JSON sem instalar nada;</li>
+      <li>O que registrar em cada nível, e o que <strong>nunca</strong> registrar.</li>
+    </ul>
+
+    <div class="callout warn">
+      <div class="callout-title">A regra que a aula 09 já preparou</div>
+      <p>O <code>@dataclass</code> de configuração tem <code>__repr__</code> automático. Um <code>log.info("config: %s", config)</code> despeja o token no log estruturado, de onde ele vai para o agregador e fica indexado. A atividade 08 é inteira sobre isso.</p>
+    </div>
+
+    <h2>Tempo estimado</h2>
+    <p>40 min de leitura, 1 h 30 de exercícios.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="O que o print não tem" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 12 &middot; Atividade 02</span></div>
+  <h1 class="act-title">O que o <code style="font-size:.82em">print</code> não tem</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">A mesma informação, das duas formas. A diferença não é estética.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">print("extracted 4821 records")
+
+log = logging.getLogger("pipeline.extract")
+log.info("extracted %d records", 4821)
+log.warning("skipped %d malformed lines", 3)</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>   extracted 4821 records
+02:05:14 INFO    pipeline.extract extracted 4821 records
+02:05:14 WARNING pipeline.extract skipped 3 malformed lines</div>
+    </div>
+
+    <p>Cinco coisas que a segunda tem e a primeira não:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tem</th><th>Serve para</th></tr></thead>
+        <tbody>
+          <tr><td><strong>hora</strong></td><td>correlacionar com o pico de CPU e com o deploy</td></tr>
+          <tr><td><strong>nível</strong></td><td>filtrar: mostre só WARNING para cima</td></tr>
+          <tr><td><strong>origem</strong></td><td>saber qual estágio falou, sem grep no código</td></tr>
+          <tr><td><strong>destino configurável</strong></td><td>arquivo, stderr, syslog — decidido fora do código</td></tr>
+          <tr><td><strong>desligável</strong></td><td>baixar o nível sem editar nada</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>E uma sexta, que só aparece quando dói: <code>print</code> escreve em <strong>stdout</strong>. Num pipeline cuja saída é dados — <code>python extract.py &gt; orders.jsonl</code> — cada <code>print</code> de diagnóstico entra no arquivo de dados. O <code>logging</code> escreve em stderr por padrão, justamente por isso.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">A configuração mínima</div>
+      <div class="code bare" style="margin-top:12px">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-7s %(name)s %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger(__name__)</code></pre>
+      </div>
+      <p>Duas linhas, e o <code>__name__</code> faz o logger herdar o nome do módulo — é o que produz <code>pipeline.extract</code> na saída sem você escrever isso em lugar nenhum.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title"><code>basicConfig</code> só em um lugar</div>
+      <p>Ele configura o logger <em>raiz</em> e só tem efeito na primeira chamada — as seguintes são ignoradas em silêncio (a menos que você passe <code>force=True</code>). Chame no <code>main()</code>, nunca em módulo importado: uma biblioteca que chama <code>basicConfig</code> sequestra a configuração de quem a importa.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="Os cinco níveis, e o que vai em cada" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 12 &middot; Atividade 03</span></div>
+  <h1 class="act-title">Os cinco níveis</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">A parte mecânica é trivial. A difícil é decidir o nível — e é o que separa um log que ajuda de um que ninguém lê.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nível</th><th>Significa</th><th>Num pipeline</th></tr></thead>
+        <tbody>
+          <tr><td><code>DEBUG</code></td><td>detalhe para investigar</td><td>a query montada, o payload da página 3</td></tr>
+          <tr><td><code>INFO</code></td><td>o curso normal das coisas</td><td>estágio começou, 1.000 linhas gravadas, job terminou</td></tr>
+          <tr><td><code>WARNING</code></td><td>anormal, mas seguimos</td><td>3 linhas malformadas puladas, retry na página 7</td></tr>
+          <tr><td><code>ERROR</code></td><td>uma operação falhou</td><td>o lote 12 não gravou; o job continua nos outros</td></tr>
+          <tr><td><code>CRITICAL</code></td><td>o programa não continua</td><td>não conectou no banco, configuração inválida</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>A pergunta que decide o nível</h2>
+    <p><strong>"Quem precisa acordar por causa disto?"</strong></p>
+    <ul>
+      <li>Ninguém, mas quero ver depois se investigar &rarr; <code>DEBUG</code></li>
+      <li>Ninguém, mas é o registro de que funcionou &rarr; <code>INFO</code></li>
+      <li>Alguém deveria olhar amanhã &rarr; <code>WARNING</code></li>
+      <li>Alguém deveria olhar hoje &rarr; <code>ERROR</code></li>
+      <li>Alguém precisa olhar agora &rarr; <code>CRITICAL</code></li>
+    </ul>
+
+    <div class="callout bug">
+      <div class="callout-title">Os dois erros que matam a utilidade do log</div>
+      <p><strong>Tudo em INFO.</strong> Se cada registro processado gera uma linha, um job de um milhão de linhas produz um milhão de linhas de log. Ninguém lê, o disco enche, e o <code>WARNING</code> que importava fica soterrado. Registre <em>por lote</em>, não por registro.</p>
+      <p><strong>Erro em WARNING.</strong> "Falhou mas eu continuei" com nível WARNING faz o alerta nunca disparar. Se um lote não gravou, é <code>ERROR</code> — mesmo que o job siga.</p>
+    </div>
+
+    <h2>Níveis por módulo</h2>
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">logging.getLogger("urllib3").setLevel(logging.WARNING)   # cala a biblioteca
+logging.getLogger("pipeline").setLevel(logging.DEBUG)    # abre o seu código</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>urllib3.connectionpool     nível efetivo = WARNING
+pipeline.extract           nível efetivo = DEBUG
+pipeline                   nível efetivo = DEBUG</div>
+    </div>
+
+    <p>Loggers formam uma árvore pelo ponto no nome. Configurar <code>pipeline</code> alcança <code>pipeline.extract</code> e <code>pipeline.load</code> sem citá-los — e é por isso que <code>getLogger(__name__)</code> vale a pena: ele te dá essa árvore de graça.</p>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="lab" data-title="Mão na massa: a vírgula que muda tudo" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 12 &middot; Atividade 04</span></div>
+  <h1 class="act-title">A vírgula que muda tudo</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Duas linhas de log que parecem idênticas. O nível <code>DEBUG</code> está <strong>desligado</strong> nas duas.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class Caro:
+    def __init__(self): self.n = 0
+    def __str__(self):
+        self.n += 1
+        return "resultado caro"
+
+c1, c2 = Caro(), Caro()
+logging.getLogger().setLevel(logging.INFO)   # DEBUG desligado
+
+log.debug("f-string: %s", f"{c1}")
+log.debug("lazy: %s", c2)</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="Quantas vezes o __str__ de cada objeto é chamado?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a saída</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div class="code" style="margin-top:18px">
+          <div class="code-head"><span class="code-file"><b>saída real</b></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-python">com f-string, __str__ chamado 1x  |  com %s lazy, 0x  (nível DEBUG desligado)</code></pre>
+        </div>
+        <p style="margin-top:16px">A f-string é avaliada <strong>antes</strong> de <code>log.debug</code> ser chamado — o Python monta a string, e só depois o logging decide jogá-la fora. Com <code>%s</code> e o argumento separado por vírgula, a formatação só acontece se algum handler for de fato emitir.</p>
+        <p>Num laço quente, isso é a diferença entre pagar a formatação um milhão de vezes por nada e não pagar.</p>
+        <div class="code has-out">
+          <div class="code-head"><span class="code-file"><b>timeit</b> <span style="color:var(--ink-3)">— nível desligado, 100.000 chamadas</span></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-python">log.debug("row %s ok", x)      221 ns
+log.debug(f"row {x} ok")       273 ns   -> 1.2x</code></pre>
+        </div>
+        <p style="margin-top:16px">Aqui o objeto é um inteiro, então a diferença é modesta — 1,2×. Ela explode quando o argumento é caro: um <code>json.dumps(payload)</code>, um <code>repr</code> de DataFrame, uma consulta. Com <code>%s</code>, nada disso roda.</p>
+        <div class="callout tip">
+          <div class="callout-title">A regra, e a saída de emergência</div>
+          <p>Use sempre <code>log.debug("msg %s", valor)</code>. Quando o argumento for realmente caro de produzir, proteja também a produção dele: <code>if log.isEnabledFor(logging.DEBUG):</code>.</p>
+        </div>
+        <div class="callout warn">
+          <div class="callout-title">O efeito colateral escondido</div>
+          <p>Repare no que este exemplo mostra de passagem: a f-string chamou <code>__str__</code>, que <strong>incrementou um contador</strong>. Se o seu <code>__repr__</code> tem efeito colateral — conta acesso, consome um iterador, faz lazy load —, o log muda o comportamento do programa dependendo do nível. É um bug que só existe em produção.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="video" data-title="Do texto para o JSON" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 12 &middot; Atividade 05</span></div>
+  <h1 class="act-title">Do texto para o JSON</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Log em texto é legível por gente e péssimo para máquina. "Quantos lotes falharam ontem, por tabela?" vira uma expressão regular frágil.</p>
+
+    <p>Log estruturado resolve isso: cada linha é um objeto com campos. E não precisa de biblioteca — um <code>Formatter</code> de vinte linhas basta:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class JsonFormatter(logging.Formatter):
+    """Render each record as one JSON object per line."""
+
+    def format(self, record: logging.LogRecord) -&gt; str:
+        payload = {
+            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+        }
+        payload.update(getattr(record, "context", {}))
+        if record.exc_info:
+            payload["error"] = self.formatException(record.exc_info).splitlines()[-1]
+        return json.dumps(payload, ensure_ascii=False)</code></pre>
+    </div>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">log.info("batch loaded", extra={"context": {"batch": 7, "rows": 1000,
+                                            "table": "orders", "ms": 41.2}})
+try:
+    1 / 0
+except ZeroDivisionError:
+    log.error("batch failed", exc_info=True, extra={"context": {"batch": 8, "rows": 1000}})</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>{"ts": "2026-09-06T02:05:14", "level": "INFO", "logger": "pipeline.load", "msg": "batch loaded", "batch": 7, "rows": 1000, "table": "orders", "ms": 41.2}
+{"ts": "2026-09-06T02:05:14", "level": "ERROR", "logger": "pipeline.load", "msg": "batch failed", "batch": 8, "rows": 1000, "error": "ZeroDivisionError: division by zero"}</div>
+    </div>
+
+    <p>Agora a pergunta do começo é uma linha de <code>jq</code>:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">jq -r 'select(.level=="ERROR") | .table' pipeline.log | sort | uniq -c</code></pre>
+    </div>
+
+    <h2>Os dois detalhes que fazem funcionar</h2>
+    <div class="traps">
+      <div class="trap">
+        <h3><code>extra=</code> com um dicionário aninhado</h3>
+        <p>O <code>extra</code> do <code>logging</code> cola cada chave <em>direto</em> no <code>LogRecord</code>, e colidir com um atributo existente (<code>message</code>, <code>name</code>, <code>args</code>) levanta <code>KeyError</code>. Passar tudo dentro de uma chave só — <code>extra={"context": {...}}</code> — elimina a classe inteira de colisão.</p>
+      </div>
+      <div class="trap">
+        <h3>A mensagem continua estável</h3>
+        <p><code>"batch loaded"</code> é sempre a mesma string; o que varia vai nos campos. Isso é o que permite agrupar por mensagem no agregador. Uma mensagem que embute o número — <code>f"batch {n} loaded"</code> — produz um grupo por lote e nenhuma contagem útil.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Quando usar <code>structlog</code></div>
+      <p>Quando você quiser <em>contexto acumulado</em>: amarrar um <code>run_id</code> no início e ele aparecer em toda linha do job sem ser repassado de função em função. Dá para fazer com <code>logging.LoggerAdapter</code> e <code>contextvars</code>, mas o <code>structlog</code> já resolve. Para começar, o Formatter acima basta.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="Configuração fora do código" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 12 &middot; Atividade 06</span></div>
+  <h1 class="act-title">Configuração fora do código</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Texto colorido no seu terminal, JSON no servidor, e nada disso decidido dentro dos módulos.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "human": {"format": "%(asctime)s %(levelname)-7s %(name)s %(message)s",
+                  "datefmt": "%H:%M:%S"},
+        "json": {"()": "pipeline.logging_setup.JsonFormatter"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "stream": "ext://sys.stderr",
+                    "formatter": os.getenv("LOG_FORMAT", "human")},
+    },
+    "loggers": {
+        "pipeline": {"level": os.getenv("LOG_LEVEL", "INFO"), "handlers": ["console"]},
+        "urllib3": {"level": "WARNING", "handlers": ["console"]},
+    },
+    "root": {"level": "WARNING", "handlers": ["console"]},
+}
+
+logging.config.dictConfig(LOGGING)</code></pre>
+    </div>
+
+    <p>Uma estrutura de dados, aplicada uma vez no <code>main()</code>. <code>LOG_LEVEL=DEBUG</code> na variável de ambiente abre o detalhe sem alterar código nem fazer deploy; <code>LOG_FORMAT=json</code> troca o formato inteiro.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Peça</th><th>Responde</th></tr></thead>
+        <tbody>
+          <tr><td><code>Logger</code></td><td>quem falou, e a partir de que nível</td></tr>
+          <tr><td><code>Handler</code></td><td>para onde vai — stderr, arquivo, syslog</td></tr>
+          <tr><td><code>Formatter</code></td><td>com que cara sai</td></tr>
+          <tr><td><code>Filter</code></td><td>o que descartar ou enriquecer antes de sair</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Em contêiner, escreva em stdout/stderr e pare</div>
+      <p>Nada de <code>RotatingFileHandler</code> num contêiner: o orquestrador já coleta a saída padrão, e um arquivo dentro do contêiner some no próximo deploy. Escrever em arquivo é para processo que roda numa máquina que você administra.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Bibliotecas não configuram logging</div>
+      <p>Se você escrever um pacote, use <code>getLogger(__name__)</code> e mais nada — sem <code>basicConfig</code>, sem handler. Quem importa decide. A convenção para não emitir aviso de "no handlers" é <code>logging.getLogger(__name__).addHandler(logging.NullHandler())</code> no <code>__init__.py</code>.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="video" data-title="O que registrar num pipeline" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 12 &middot; Atividade 07</span></div>
+  <h1 class="act-title">O que registrar num pipeline</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Um log útil responde três perguntas sem que ninguém precise abrir o código: <em>rodou?</em>, <em>processou quanto?</em>, <em>deu algum problema?</em></p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— o esqueleto</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def run(config: Config) -&gt; None:
+    run_id = uuid4().hex[:8]
+    log.info("job started", extra={"context": {"run_id": run_id, "since": config.since}})
+
+    with measure("extract"):
+        records = source.read(since=config.since)
+
+    report = Loader(sink, batch_size=config.batch_size).run(stages(records))
+
+    log.info("job finished", extra={"context": {
+        "run_id": run_id, "rows_in": report.seen, "rows_out": report.inserted,
+        "rejected": report.rejected, "seconds": round(report.seconds, 1)}})</code></pre>
+    </div>
+
+    <p>Duas linhas de log por execução, e elas bastam para responder as três perguntas. O resto entra por exceção — <code>WARNING</code> para o que foi pulado, <code>ERROR</code> para o lote que não gravou.</p>
+
+    <h2>Contadores, não eventos</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Em vez de</th><th>Registre</th></tr></thead>
+        <tbody>
+          <tr><td>uma linha por registro processado</td><td>o total no fim, e um progresso a cada 100 mil</td></tr>
+          <tr><td>uma linha por linha malformada</td><td>as 5 primeiras, e o total no fim</td></tr>
+          <tr><td>o payload inteiro da resposta</td><td>o tamanho, o status e a URL</td></tr>
+          <tr><td>"conectando..." a cada tentativa</td><td>só as que falharam, com o número da tentativa</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout bug">
+      <div class="callout-title">O log que mente, da aula 04</div>
+      <div class="code bare" style="margin-top:14px">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">log.info("extracted %d records", sum(1 for _ in records))   # consumiu o iterador
+for record in records:                                       # zero iterações
+    warehouse.insert(record)</code></pre>
+      </div>
+      <p>O log diz <code>extracted 4821 records</code> e a tabela recebe zero linhas. O registro que deveria ajudar a diagnosticar <strong>é a causa</strong> do problema, e ainda aponta na direção errada. Toda métrica de contagem tem que sair de um contador que o próprio laço incrementa — nunca de uma passada extra sobre um iterador.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Log é a primeira métrica</div>
+      <p><code>rows_in</code>, <code>rows_out</code> e <code>rejected</code> numa linha JSON por execução já dão o gráfico de volume ao longo do tempo, e o alerta de "hoje entrou metade do normal". Isso responde a maioria das perguntas de operação antes de existir qualquer ferramenta de métricas.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="note" data-title="O que nunca registrar" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Atenção</span><span class="dot"></span><span>Aula 12 &middot; Atividade 08</span></div>
+  <h1 class="act-title">O que nunca registrar</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Log vai para disco, para o agregador, para o backup do agregador, e frequentemente para um serviço de terceiros. O que entra ali é muito difícil de tirar.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Credenciais</h3>
+        <p>Token, senha, chave de API, string de conexão com senha embutida. E o caminho mais comum não é você escrever <code>log.info(token)</code> — é o <code>__repr__</code> automático de uma <code>@dataclass</code> de configuração, como a aula 09 avisou. Use <code>field(repr=False)</code>.</p>
+      </div>
+      <div class="trap">
+        <h3>Dado pessoal</h3>
+        <p>CPF, e-mail, endereço, cartão. Um log com CPF é um banco de dados de CPFs sem controle de acesso. Registre o <em>id interno</em>, que não identifica ninguém fora do seu sistema, ou um hash.</p>
+      </div>
+      <div class="trap">
+        <h3>O registro inteiro</h3>
+        <p><code>log.debug("record: %s", record)</code> parece inofensivo em desenvolvimento. Em produção com <code>LOG_LEVEL=DEBUG</code> ligado para investigar, ele despeja o dataset inteiro no agregador — com tudo que houver dentro.</p>
+      </div>
+      <div class="trap">
+        <h3>Segredo dentro de exceção</h3>
+        <p><code>exc_info=True</code> imprime o traceback com os valores locais em algumas configurações, e a URL com token no query string aparece na mensagem de erro do cliente HTTP. Higienize a URL antes de registrar.</p>
+      </div>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— duas defesas simples</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@dataclass(frozen=True, slots=True)
+class ApiConfig:
+    base_url: str
+    token: str = field(repr=False)        # fora do repr, fora do log
+
+
+class RedactFilter(logging.Filter):
+    """Blank anything that looks like a token in the rendered message."""
+    PATTERN = re.compile(r"(token|password|api[_-]?key)=([^&amp;\s]+)", re.I)
+
+    def filter(self, record: logging.LogRecord) -&gt; bool:
+        record.msg = self.PATTERN.sub(r"\1=***", str(record.msg))
+        return True</code></pre>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">O filtro é a segunda linha de defesa</div>
+      <p>Uma regex nunca vai pegar tudo. A defesa de verdade é não colocar o segredo perto do log: <code>repr=False</code>, URL sem credencial, e revisar o que vai em <code>extra</code>. O filtro existe para o que escapar.</p>
+    </div>
+
+    <p>E vale a mesma frase da aula 06: se um segredo vazou para o log e o log foi enviado, <strong>rotacione a credencial</strong>. Apagar a linha não desfaz nada.</p>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="lab" data-title="Hora da prática: 12.1 a 12.4" data-min="50" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 12 &middot; Atividade 09</span></div>
+  <h1 class="act-title">Exercícios 12.1 a 12.4</h1>
+  <div class="act-meta">50 min &middot; arquivo <code>exercises/python/lesson12.py</code></div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">12.1</span><h2>Meça a f-string</h2><span class="ex-kind">medição</span></div>
+      <p>Reproduza a medição da atividade 04 com um argumento <strong>caro</strong> — um objeto cujo <code>__str__</code> faça <code>json.dumps</code> de um dicionário de mil chaves. Meça as duas formas com o nível desligado e reporte a razão.</p>
+      <p>Depois some: num laço de um milhão de iterações, quantos segundos a f-string custa a mais para não registrar nada?</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">12.2</span><h2>O <code>JsonFormatter</code></h2><span class="ex-kind">implementação</span></div>
+      <p>Implemente o formatter da atividade 05 e escreva um teste com <code>caplog</code> (aula 10) que verifique: que o campo <code>level</code> sai certo, que os campos do <code>context</code> aparecem no topo do objeto, e que o <code>error</code> aparece quando há <code>exc_info</code>.</p>
+      <div class="callout tip">
+        <div class="callout-title">Para testar o formatter, não o logger</div>
+        <p>Aponte o handler para um <code>io.StringIO</code> e leia o que saiu. É mais direto que o <code>caplog</code>, que captura o <code>LogRecord</code> antes da formatação — os dois testes são úteis e testam coisas diferentes.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">12.3</span><h2>Troque os <code>print</code> das aulas anteriores</h2><span class="ex-kind">refactor</span></div>
+      <p>Pegue o seu <code>lesson04.py</code> — ele é todo <code>print</code> — e troque por logging com níveis. O <code>opening {f}</code> do exercício 4.5 vira <code>DEBUG</code>; as medições de 4.3 e 4.7 viram <code>INFO</code> com os números em <code>extra</code>.</p>
+      <p>Depois rode com <code>LOG_LEVEL=WARNING</code> e mostre que a saída fica vazia — que é o comportamento certo para um job que deu tudo certo.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">12.4</span><h2>O <code>dictConfig</code> versionado</h2><span class="ex-kind">implementação</span></div>
+      <p>Escreva um <code>logging_setup.py</code> com o <code>dictConfig</code> da atividade 06, lendo nível e formato do ambiente. Prove que <code>LOG_FORMAT=json LOG_LEVEL=DEBUG python lesson12.py</code> e <code>python lesson12.py</code> produzem saídas diferentes sem nenhuma alteração no código.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="lab" data-title="Hora da prática: 12.5 a 12.6 e entrega" data-min="40" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 12 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Exercícios 12.5 a 12.6 e entrega</h1>
+  <div class="act-meta">40 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">12.5</span><h2>O log que mente</h2><span class="ex-kind">análise</span></div>
+      <p>Reproduza o bug da atividade 07: um <code>log.info</code> com <code>sum(1 for _ in records)</code> antes do laço de carregamento. Mostre o log dizendo um número e a contagem final dizendo zero.</p>
+      <p>Depois conserte de duas formas — materializando e contando dentro do laço — e diga qual você usaria, com o argumento de memória da aula 05.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">12.6</span><h2>Desafio: o segredo que vaza</h2><span class="ex-kind">desafio</span></div>
+      <p>Monte uma <code>@dataclass</code> de configuração com um token e registre-a com <code>log.info("config: %s", config)</code>. Mostre o token no log.</p>
+      <p>Depois aplique as duas defesas — <code>field(repr=False)</code> e o <code>RedactFilter</code> — e prove com testes que:</p>
+      <ul>
+        <li>o token não aparece mais no <code>repr</code>;</li>
+        <li>uma URL com <code>?token=abc123</code> na mensagem sai higienizada;</li>
+        <li>o filtro <strong>não</strong> pega um token que apareça em <code>extra</code> — e diga por quê.</li>
+      </ul>
+      <div class="callout warn">
+        <div class="callout-title">O terceiro item é o ponto do exercício</div>
+        <p>O filtro mexe em <code>record.msg</code>. Nada que você passe em <code>extra</code> passa por ali. Descobrir esse limite medindo vale mais que qualquer aviso — é o que te faz não confiar no filtro como única defesa.</p>
+      </div>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>lesson12.py</code>, o <code>logging_setup.py</code> e o <code>lesson04.py</code> refatorado, com exemplos das duas saídas (humana e JSON) nos comentários.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de commitar</div>
+      <ul>
+        <li>Sobrou algum <code>print</code> de diagnóstico?</li>
+        <li>Alguma chamada de log usa f-string em vez de <code>%s</code> com vírgula?</li>
+        <li>Algum log dispara por registro em vez de por lote?</li>
+        <li>Alguma credencial ou dado pessoal pode chegar ao log?</li>
+        <li><code>basicConfig</code> ou <code>dictConfig</code> aparece só no <code>main()</code>?</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 13: SQL, window functions a fundo</div>
+      <p>Muda o assunto. Três aulas de SQL avançado, medidas com o mesmo rigor: janelas, CTEs recursivas e planos de execução. Começando pela construção que responde "qual a posição desta linha dentro do grupo dela" sem perder as outras linhas.</p>
+    </div>
+
+  </div>
+</article>
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/10</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 12</div>
+          <div class="lh-n">Logging estruturado</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/python/lesson12.py<span class="rs">o arquivo que você entrega</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://docs.python.org/3/howto/logging.html" target="_blank" rel="noopener">Logging HOWTO<span class="rs">o guia oficial, curto</span></a></li>
+        <li><a href="https://docs.python.org/3/library/logging.html#logrecord-attributes" target="_blank" rel="noopener">LogRecord attributes<span class="rs">tudo que dá para pôr no formato</span></a></li>
+        <li><a href="https://docs.python.org/3/library/logging.config.html" target="_blank" rel="noopener">logging.config<span class="rs">dictConfig, a forma que se versiona</span></a></li>
+        <li><a href="https://docs.python.org/3/howto/logging-cookbook.html" target="_blank" rel="noopener">Logging Cookbook<span class="rs">receitas para casos reais</span></a></li>
+        <li><a href="https://www.structlog.org/en/stable/" target="_blank" rel="noopener">structlog<span class="rs">quando o JSON à mão deixa de bastar</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">Site Reliability Engineering — cap. 6<span class="rs">Google · monitoramento e os quatro sinais</span></span></li>
+        <li><span class="res-static">Effective Python, 3ª ed. — item 76<span class="rs">Slatkin · diagnosticar em produção</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
