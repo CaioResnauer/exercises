@@ -97,7 +97,10 @@ h1.act-title{font:300 34px/1.22 var(--ui);margin:0 0 10px;letter-spacing:-.015em
 /* código inline */
 .prose code{
   font-family:var(--mono);font-size:.855em;background:var(--panel-2);
-  color:#EAF0FF;padding:2px 6px;border-radius:6px;border:1px solid var(--line-soft)
+  color:#EAF0FF;padding:2px 6px;border-radius:6px;border:1px solid var(--line-soft);
+  /* nomes longos sem espaco (tracemalloc.take_snapshot().statistics("lineno"))
+     nao tem onde quebrar e estouram a coluna no mobile */
+  overflow-wrap:break-word
 }
 .prose a code{color:var(--accent-ink)}
 
@@ -352,7 +355,9 @@ a.locked-item .lk-c{color:var(--accent-ink)}
 
 /* ============================ responsivo ============================ */
 @media (max-width:1140px){
-  .app{grid-template-columns:1fr}
+  /* precisa bater a especificidade de .app:has(> .rail), senao a coluna do
+     rail sobrevive no mobile e esmaga a coluna de leitura */
+  .app,.app:has(> .rail){grid-template-columns:1fr}
   .stage{padding:44px 28px 88px}
   .reader{margin-left:0;margin-right:auto}
   .rail{
