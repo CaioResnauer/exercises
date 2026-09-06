@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POO para pipelines</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="09" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 09 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aulas 01 a 08</div>
+  <div class="prose">
+    <p class="lead">Oito aulas escrevendo funções. Esta é sobre o momento em que uma função deixa de bastar — e sobre a armadilha de achar que esse momento chegou antes da hora.</p>
+
+    <p>A pergunta não é "usar classe ou função?". É <strong>"isto tem estado e configuração que várias operações compartilham?"</strong>. Um conector de banco tem: credencial, conexão aberta, tamanho de lote. Uma função de arredondar não tem nada.</p>
+
+    <h2>O que a aula constrói</h2>
+    <ul>
+      <li>Um <strong>conector</strong> como classe: o que ele guarda e por quê;</li>
+      <li>Um <strong>contrato</strong> explícito com <code>Protocol</code>, e quando <code>ABC</code> é melhor;</li>
+      <li><strong>Composição</strong> de estágios em vez de hierarquia de classes;</li>
+      <li><strong>Injeção de dependência</strong> — a única razão pela qual o seu pipeline vai ser testável na aula 10.</li>
+    </ul>
+
+    <div class="callout warn">
+      <div class="callout-title">O aviso que abre a aula</div>
+      <p>Metade do código orientado a objetos que se vê em pipelines existe porque alguém achou que "profissional" significa "tem classe". A atividade 10 é a régua do contrário: quando a classe está sobrando, e como reconhecer.</p>
+    </div>
+
+    <h2>Tempo estimado</h2>
+    <p>45 min de leitura, 1 h 30 de exercícios.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="Quando a função deixa de bastar" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 09 &middot; Atividade 02</span></div>
+  <h1 class="act-title">Quando a função deixa de bastar</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">O sintoma é sempre o mesmo: a lista de parâmetros cresce, e os mesmos valores são repassados de função em função.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— o sintoma</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def fetch_page(base_url, token, timeout, retries, page): ...
+def fetch_all(base_url, token, timeout, retries): ...
+def extract(base_url, token, timeout, retries, since): ...
+
+rows = extract("https://api.x", token, 30, 3, "2026-01-01")</code></pre>
+    </div>
+
+    <p>Quatro parâmetros que nunca mudam durante a execução, escritos em toda assinatura e repassados em toda chamada. Na quinta função alguém troca a ordem de <code>timeout</code> e <code>retries</code> e o bug só aparece sob carga.</p>
+
+    <p>Esses quatro valores são <strong>uma coisa só</strong>: a configuração de um conector. Dar um nome a essa coisa é o que a classe faz.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— o mesmo, com o estado nomeado</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@dataclass(frozen=True, slots=True)
+class ApiConfig:
+    base_url: str
+    token: str
+    timeout: float = 30.0
+    retries: int = 3
+
+
+class OrdersApi:
+    """Read-only connector for the orders endpoint."""
+
+    def __init__(self, config: ApiConfig, session) -&gt; None:
+        self._config = config
+        self._session = session
+
+    def fetch_page(self, page: int) -&gt; dict: ...
+
+    def read(self, since: str) -&gt; Iterator[dict]:
+        page = 1
+        while True:
+            payload = self.fetch_page(page)
+            yield from payload["items"]
+            if not payload["has_next"]:
+                return
+            page += 1</code></pre>
+    </div>
+
+    <p>Repare no que mudou de verdade: as assinaturas ficaram curtas, o <code>read()</code> devolve um generator (aulas 02 e 05 continuam valendo), e a configuração virou um objeto imutável — <code>frozen=True</code> garante que ninguém altere o timeout no meio do pipeline.</p>
+
+    <h2>O teste que decide</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Pergunta</th><th>Sim</th><th>Não</th></tr></thead>
+        <tbody>
+          <tr><td>Há estado que sobrevive entre chamadas?</td><td>classe</td><td>função</td></tr>
+          <tr><td>Os mesmos parâmetros aparecem em 3+ funções?</td><td>classe</td><td>função</td></tr>
+          <tr><td>Há um recurso a abrir e fechar?</td><td>classe (com <code>__enter__</code>)</td><td>função</td></tr>
+          <tr><td>Vão existir várias implementações do mesmo papel?</td><td><code>Protocol</code></td><td>função</td></tr>
+          <tr><td>É uma transformação sem memória?</td><td>função</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Um caso que engana</div>
+      <p>"Preciso agrupar funções relacionadas" <strong>não</strong> é motivo para classe. Isso é um módulo. Uma classe só com <code>@staticmethod</code> é um módulo com sintaxe pior.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="O contrato: Protocol e ABC" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 09 &middot; Atividade 03</span></div>
+  <h1 class="act-title">O contrato: <code style="font-size:.82em">Protocol</code> e <code style="font-size:.82em">ABC</code></h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Um pipeline vai ter mais de uma fonte: API, CSV, banco, um dublê nos testes. Escrever o que todas precisam saber fazer é o que impede o resto do código de se importar com qual delas é.</p>
+
+    <h2><code>ABC</code>: o contrato por herança</h2>
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from abc import ABC, abstractmethod
+
+class Source(ABC):
+    @abstractmethod
+    def read(self) -&gt; Iterator[dict]: ...
+
+class Incompleta(Source):
+    pass
+
+Incompleta()</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>TypeError: Can't instantiate abstract class Incompleta without an
+implementation for abstract method 'read'</div>
+    </div>
+
+    <p>O erro chega cedo — na construção, não na primeira chamada. Bom. Mas exige <strong>herdar</strong>, e isso significa que uma classe de terceiros nunca vai satisfazer o seu contrato.</p>
+
+    <h2><code>Protocol</code>: o contrato por formato</h2>
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from typing import Protocol, runtime_checkable
+
+@runtime_checkable
+class Readable(Protocol):
+    def read(self) -&gt; Iterator[dict]: ...
+
+class CsvSource:                 # não herda de nada
+    def read(self): return iter([{"id": 1}])
+
+class Barulhenta:
+    def leia(self): return iter([])
+
+isinstance(CsvSource(), Readable), isinstance(Barulhenta(), Readable)</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>CsvSource    isinstance(_, Readable) = True
+Barulhenta   isinstance(_, Readable) = False</div>
+    </div>
+
+    <p>Isto é <em>duck typing verificável</em>: o <code>CsvSource</code> satisfaz o contrato por ter o método certo, sem saber que <code>Readable</code> existe. E o <code>mypy</code> cobra o contrato em tempo de checagem, então o erro continua chegando antes de rodar.</p>
+
+    <div class="callout bug">
+      <div class="callout-title">O limite do <code>runtime_checkable</code></div>
+      <div class="code bare" style="margin-top:14px">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">class Mentirosa:
+    read = 42        # nem função é
+
+isinstance(Mentirosa(), Readable)</code></pre>
+      </div>
+      <div class="code bare has-out" style="margin-top:0">
+        <div class="out"><span class="out-label">Saída real</span>True</div>
+      </div>
+      <p>O <code>isinstance</code> sobre um Protocol só confere <strong>se o atributo existe</strong> — não o tipo, não a assinatura, não o retorno. Ele serve para uma triagem barata; a verificação de verdade é o <code>mypy</code>, que compara a assinatura inteira.</p>
+    </div>
+
+    <h2>Qual dos dois</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Use</th><th>Quando</th></tr></thead>
+        <tbody>
+          <tr><td><code>Protocol</code></td><td>o contrato descreve <em>o que o consumidor precisa</em>; as implementações podem ser de fora</td></tr>
+          <tr><td><code>ABC</code></td><td>há comportamento compartilhado de verdade para herdar, e você controla todas as implementações</td></tr>
+          <tr><td>nenhum dos dois</td><td>existe uma implementação só, e não há previsão de outra</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">A regra de bolso</div>
+      <p>Defina o Protocol <strong>do lado de quem consome</strong>, não do lado de quem implementa. Quem escreve o <code>Loader</code> declara o que ele precisa de uma fonte; quem escreve o <code>CsvSource</code> não precisa nem saber que o Loader existe. É a mesma inversão do protocolo de iteração da aula 01: o <code>for</code> declara o que precisa, e qualquer objeto que atenda funciona.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="lab" data-title="Mão na massa: qual contrato quebra" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 09 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Qual contrato quebra</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Um <code>Protocol</code> declarado, quatro classes candidatas. Decida quais passam no <code>isinstance</code> e quais passam no <code>mypy</code> — as respostas são diferentes.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@runtime_checkable
+class Sink(Protocol):
+    def write(self, rows: list[dict]) -&gt; int: ...
+
+class A:
+    def write(self, rows): return len(rows)
+
+class B:
+    def write(self, rows: list[dict], flush: bool) -&gt; int: return 0
+
+class C:
+    write = None
+
+class D:
+    def __init__(self): self.write = lambda rows: 0</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="Para cada uma: passa no isinstance? passa no mypy? por quê?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a resposta</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div class="table-wrap" style="margin-top:18px">
+          <table>
+            <thead><tr><th></th><th><code>isinstance</code></th><th><code>mypy</code></th><th>Por quê</th></tr></thead>
+            <tbody>
+              <tr><td><strong>A</strong></td><td class="num" style="color:var(--ok)">passa</td><td class="num" style="color:var(--ok)">passa</td><td>sem anotação, o mypy assume compatível</td></tr>
+              <tr><td><strong>B</strong></td><td class="num" style="color:var(--ok)">passa</td><td class="num" style="color:var(--danger)">falha</td><td>exige um argumento que o contrato não prevê</td></tr>
+              <tr><td><strong>C</strong></td><td class="num" style="color:var(--ok)">passa</td><td class="num" style="color:var(--danger)">falha</td><td><code>None</code> não é chamável — o <code>isinstance</code> só viu o nome</td></tr>
+              <tr><td><strong>D</strong></td><td class="num" style="color:var(--ok)">passa</td><td class="num" style="color:var(--danger)">falha</td><td>atributo de instância, não método de classe</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="margin-top:16px">Três das quatro passam no <code>isinstance</code> e quebrariam na primeira chamada. Esse é o ponto: <strong><code>runtime_checkable</code> não é validação</strong>, é uma triagem por nome de atributo.</p>
+        <p>O <strong>B</strong> é o mais perigoso dos três, porque parece razoável. Uma implementação que <em>exige</em> um parâmetro a mais não é substituível pela original — quem chama pelo contrato vai passar só <code>rows</code> e receber <code>TypeError</code>. O contrário é permitido: um parâmetro <em>opcional</em> a mais está tudo bem.</p>
+        <div class="callout tip">
+          <div class="callout-title">Como pegar isso de verdade</div>
+          <p>Uma linha no código de produção resolve a checagem estática inteira:</p>
+          <div class="code bare" style="margin-top:12px">
+            <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-python">_: Sink = B()   # o mypy reclama aqui, no arquivo certo, antes de rodar</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="video" data-title="Injeção de dependência" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 09 &middot; Atividade 05</span></div>
+  <h1 class="act-title">Injeção de dependência</h1>
+  <div class="act-meta">07 min &middot; o núcleo da aula</div>
+  <div class="prose">
+    <p class="lead">O nome é pomposo e a ideia cabe numa frase: <strong>um objeto recebe o que precisa em vez de construir por conta própria.</strong> É a diferença entre um pipeline testável e um que só roda em produção.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— constrói a própria dependência</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class Loader:
+    def __init__(self):
+        self._warehouse = Warehouse(os.environ["DB_URL"])   # decidiu sozinho</code></pre>
+    </div>
+
+    <p>Para testar essa classe você precisa de um banco de verdade, da variável de ambiente certa e de limpar a tabela depois. Na prática, ninguém testa — e o teste que existe é lento e intermitente.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— recebe a dependência</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class Loader:
+    """Load records in fixed-size batches into any warehouse-shaped sink."""
+
+    def __init__(self, warehouse: Sink, batch_size: int = 1000) -&gt; None:
+        self._warehouse = warehouse
+        self._batch_size = batch_size
+
+    def run(self, records: Iterable[dict]) -&gt; LoadReport: ...</code></pre>
+    </div>
+
+    <p>Quem decide qual armazém é <em>quem monta o pipeline</em>, num lugar só, geralmente no <code>main()</code>. E o teste passa outro:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class FakeWarehouse:
+    def __init__(self): self.rows = []
+    def insert_many(self, rows): self.rows.extend(rows)
+
+fake = FakeWarehouse()
+print(Loader(fake, batch_size=2).run([{"id": i} for i in range(5)]),
+      "| gravadas no dublê:", len(fake.rows))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>LoadReport(inserted=5) | gravadas no dublê: 5
+sem injeção, o teste bateria no banco: iria falar com o banco de verdade</div>
+    </div>
+
+    <p>Sem rede, sem credencial, em microssegundos — e o dublê ainda deixa você <strong>inspecionar</strong> o que foi gravado, que é a metade do teste que um banco de verdade dificulta.</p>
+
+    <h2>O que injetar</h2>
+    <div class="traps">
+      <div class="trap">
+        <h3>Tudo que fala com o mundo</h3>
+        <p>Banco, HTTP, sistema de arquivos, fila. São as fronteiras — e são exatamente o que um teste precisa substituir.</p>
+      </div>
+      <div class="trap">
+        <h3>Tudo que é não-determinístico</h3>
+        <p><code>datetime.now</code>, <code>random</code>, <code>uuid4</code>. Injete como parâmetro com valor padrão: <code>def __init__(self, now=datetime.now)</code>. Um teste que depende do relógio falha sozinho às 23:59.</p>
+      </div>
+      <div class="trap">
+        <h3>Configuração</h3>
+        <p>Ler <code>os.environ</code> no meio de uma classe amarra o objeto ao ambiente. Leia uma vez, na borda, monte um <code>@dataclass(frozen=True)</code> e passe adiante.</p>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">O que não injetar</div>
+      <p>Não injete o que é puro e determinístico. Um <code>round()</code>, um parser de JSON, uma função de validação — passar isso como parâmetro só acrescenta indireção. A régua é a mesma da aula 08: se substituir aquilo não muda nada num teste, não precisa ser injetável.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Não precisa de framework</div>
+      <p>Em Python, injeção de dependência é passar argumento no <code>__init__</code>. Contêiner de DI é solução para linguagens onde isso é caro. Se você se pegar instalando uma biblioteca para isto, releia esta atividade.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="Composição em vez de hierarquia" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 09 &middot; Atividade 06</span></div>
+  <h1 class="act-title">Composição em vez de hierarquia</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">A tentação de modelar transformações como uma árvore de classes é forte, e quase sempre errada. Transformação não tem estado — é função.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— a hierarquia que não precisa existir</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class Transformer(ABC):
+    @abstractmethod
+    def transform(self, records): ...
+
+class FilterTransformer(Transformer): ...
+class RoundingTransformer(FilterTransformer): ...
+class RoundingAndCityTransformer(RoundingTransformer): ...</code></pre>
+    </div>
+
+    <p>Na quarta classe você já não sabe qual <code>transform</code> roda sem abrir as quatro. E o dia em que precisar de "arredondar sem filtrar" não existe nessa árvore — é preciso reorganizar tudo.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— estágios que se compõem</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def only_valid(records):  return (r for r in records if r.get("amount", 0) &gt; 0)
+def round_amount(records): return ({**r, "amount": round(r["amount"], 2)} for r in records)
+def add_city(records):     return ({**r, "city": r.get("city", "?").lower()} for r in records)
+
+def pipeline(*stages):
+    """Compose stages left to right; nothing runs until you consume it."""
+    def run(records):
+        for stage in stages:
+            records = stage(records)
+        return records
+    return run
+
+dados = [{"amount": 10.005, "city": "SP"}, {"amount": -1}, {"amount": 3.14159, "city": "RJ"}]
+print(list(pipeline(only_valid, round_amount, add_city)(dados)))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>[{'amount': 10.01, 'city': 'sp'}, {'amount': 3.14, 'city': 'rj'}]</div>
+    </div>
+
+    <p>Cada estágio é testável isolado, a ordem é visível numa linha, e acrescentar um é acrescentar uma função. É o pipeline de generators da aula 03, agora com o nome do padrão.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Repare que continua lazy</div>
+      <p>Cada estágio devolve um generator expression, então <code>pipeline(...)(dados)</code> não faz trabalho nenhum até alguém consumir. As três transformações acontecem <strong>por registro</strong>, numa passada só, com memória O(1) — exatamente o que a aula 05 mediu.</p>
+    </div>
+
+    <h2>E quando o estágio tem estado?</h2>
+    <p>Aí ele vira uma classe — mas uma classe que se comporta como função:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class Dedupe:
+    """Drop repeats of `key`, keeping the first. Stateful, so it is a class."""
+
+    def __init__(self, key) -&gt; None:
+        self._key = key
+        self._seen: set = set()
+
+    def __call__(self, records):
+        for record in records:
+            k = self._key(record)
+            if k in self._seen:
+                continue
+            self._seen.add(k)
+            yield record
+
+
+pipeline(only_valid, Dedupe(key=lambda r: r["id"]), round_amount)</code></pre>
+    </div>
+
+    <p>O <code>__call__</code> é o que deixa a classe entrar na mesma composição das funções. Quem monta o pipeline não precisa saber quais estágios têm estado — e o <code>set</code> ali é o da aula 07, com o custo O(1) que ele tem.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Estado no estágio tem preço</div>
+      <p>O <code>Dedupe</code> é O(chaves distintas) de memória e <strong>não é reutilizável</strong>: o segundo <code>for</code> sobre o mesmo objeto já vem com o <code>_seen</code> cheio. É o anti-padrão da aula 01 de novo. Se precisar reutilizar, o contrato é criar um objeto novo por execução — e isso vai no docstring.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="video" data-title="O conector como context manager" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 09 &middot; Atividade 07</span></div>
+  <h1 class="act-title">O conector como context manager</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Um conector abre alguma coisa. Junte o que a aula 08 ensinou e ele fecha sozinho.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class SqliteSink:
+    """Batch-insert rows, committing once per batch."""
+
+    def __init__(self, path: str, batch_size: int = 1000) -&gt; None:
+        self._path = path
+        self._batch_size = batch_size
+        self._connection = None
+
+    def __enter__(self) -&gt; "SqliteSink":
+        self._connection = sqlite3.connect(self._path)
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -&gt; bool:
+        try:
+            if exc_type is None:
+                self._connection.commit()
+            else:
+                self._connection.rollback()
+        finally:
+            self._connection.close()
+        return False
+
+    def write(self, rows: list[dict]) -&gt; int:
+        self._connection.executemany(INSERT, [tuple(r.values()) for r in rows])
+        return len(rows)</code></pre>
+    </div>
+
+    <p>Três coisas que valem reparar:</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>O <code>close()</code> está num <code>finally</code></h3>
+        <p>Se o <code>commit()</code> levantar — disco cheio, constraint violada —, a conexão ainda fecha. Sem o <code>finally</code>, o erro no commit vaza a conexão, e é o vazamento de descritores da aula 08 com outra roupa.</p>
+      </div>
+      <div class="trap">
+        <h3>A conexão nasce no <code>__enter__</code>, não no <code>__init__</code></h3>
+        <p>Construir o objeto passa a ser barato e sem efeito colateral. Você pode montar o pipeline inteiro, ler a configuração, validar — e só então abrir conexões. Um <code>__init__</code> que conecta torna a classe impossível de instanciar num teste.</p>
+      </div>
+      <div class="trap">
+        <h3><code>return False</code> no <code>__exit__</code></h3>
+        <p>Faz o rollback e <strong>deixa a exceção subir</strong>. Devolver <code>True</code> ali desfaz a transação e engole o erro: o job termina com código de saída zero, sem dados, e o log não menciona nada.</p>
+      </div>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— montando tudo num lugar só</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def main() -&gt; None:
+    config = ApiConfig(base_url=os.environ["API_URL"], token=os.environ["API_TOKEN"])
+    stages = pipeline(only_valid, Dedupe(key=itemgetter("id")), round_amount)
+
+    with SqliteSink("warehouse.db") as sink:
+        source = OrdersApi(config, session=requests.Session())
+        report = Loader(sink, batch_size=1000).run(stages(source.read(since="2026-01-01")))
+    log.info("carregadas %d linhas", report.inserted)</code></pre>
+    </div>
+
+    <p>Essa função é a única do programa que sabe que existe uma API, um SQLite e variáveis de ambiente. Todo o resto recebe o que precisa — e é por isso que todo o resto é testável.</p>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="note" data-title="Para saber mais: dataclass para configuração" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 09 &middot; Atividade 08</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">dataclass</code> para configuração</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Configuração em <code>dict</code> é o jeito mais rápido de adiar um erro para o pior momento possível.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— erra tarde</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">config = {"base_url": ..., "timeout": "30", "retires": 3}   # typo, e timeout é str
+...
+time.sleep(config["retries"])    # KeyError, três horas depois</code></pre>
+    </div>
+
+    <p>O typo em <code>retires</code> não é apontado por nada. O <code>timeout</code> string funciona em alguns lugares e falha em outros. E o <code>KeyError</code> chega no meio do carregamento, não no início.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— erra na borda</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@dataclass(frozen=True, slots=True)
+class ApiConfig:
+    base_url: str
+    token: str
+    timeout: float = 30.0
+    retries: int = 3
+
+    def __post_init__(self) -&gt; None:
+        if not self.base_url.startswith("https://"):
+            raise ValueError(f"base_url must be https, got {self.base_url!r}")
+        if self.retries &lt; 0:
+            raise ValueError("retries must be >= 0")</code></pre>
+    </div>
+
+    <p>Agora o typo vira <code>TypeError: unexpected keyword argument 'retires'</code> na construção, o <code>__post_init__</code> valida as regras que o tipo não expressa, e o <code>frozen=True</code> garante que ninguém mude a configuração no meio da execução.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Argumento</th><th>O que dá</th></tr></thead>
+        <tbody>
+          <tr><td><code>frozen=True</code></td><td>imutável, e <em>hasheável</em> — pode ser chave de cache</td></tr>
+          <tr><td><code>slots=True</code></td><td>a economia de memória da aula 07, e typo em atributo vira erro</td></tr>
+          <tr><td><code>kw_only=True</code></td><td>obriga nomear os argumentos: acaba a troca de posição</td></tr>
+          <tr><td><code>field(repr=False)</code></td><td>mantém o token fora do <code>repr()</code> — e fora dos logs</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">O segredo que vaza pelo log</div>
+      <p>Um <code>@dataclass</code> gera um <code>__repr__</code> com todos os campos. Um <code>log.info("config: %s", config)</code> despeja o token inteiro no log estruturado — e de lá para o agregador de logs, onde fica indexado e pesquisável. Use <code>field(repr=False)</code> em tudo que for credencial. É a mesma lição do <code>.env</code> na aula 06: o segredo vazado não volta.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="note" data-title="Quando a classe está sobrando" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Critério</span><span class="dot"></span><span>Aula 09 &middot; Atividade 09</span></div>
+  <h1 class="act-title">Quando a classe está sobrando</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">A régua do contrário, prometida na apresentação. Quatro sinais de que aquilo devia ser uma função.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Só tem <code>__init__</code> e um método</h3>
+        <p><code>Validator(config).validate(rows)</code> é <code>validate(rows, config)</code> com passos a mais. Se a classe é construída, usada uma vez e descartada, ela é uma chamada de função escrita em duas linhas.</p>
+      </div>
+      <div class="trap">
+        <h3>Todos os métodos são <code>@staticmethod</code></h3>
+        <p>Isso é um módulo. <code>Utils.parse_date(x)</code> não é melhor que <code>from dates import parse_date</code> — é pior, porque não dá para importar só o que se usa.</p>
+      </div>
+      <div class="trap">
+        <h3>O estado nunca muda depois do <code>__init__</code></h3>
+        <p>Se os atributos são só configuração lida, o que você tem é uma <code>@dataclass(frozen=True)</code> mais funções que a recebem. A classe com métodos só esconde de onde os valores vêm.</p>
+      </div>
+      <div class="trap">
+        <h3>A herança existe para reaproveitar duas linhas</h3>
+        <p>Herdar para não repetir um <code>self.log = ...</code> amarra as duas classes para sempre. Composição — receber o logger — custa um parâmetro e não cria hierarquia.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">A pergunta que decide, de novo</div>
+      <p><strong>"O que este objeto lembra entre uma chamada e a próxima?"</strong> Se a resposta for "nada", é função. Se for "a conexão", "o que já vi", "o lote acumulado", é classe — e o que ele lembra é a razão de existir.</p>
+    </div>
+
+    <p>Vale dizer o outro lado com a mesma clareza: quando há estado de verdade, resistir à classe também é erro. Um <code>Dedupe</code> implementado como função com <code>set</code> global é pior que a classe — o estado continua existindo, só que escondido e compartilhado por todo mundo.</p>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="lab" data-title="Hora da prática: 9.1 a 9.4" data-min="50" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 09 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Exercícios 9.1 a 9.4</h1>
+  <div class="act-meta">50 min &middot; arquivo <code>exercises/python/lesson09.py</code></div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">9.1</span><h2>Da função solta ao conector</h2><span class="ex-kind">refactor</span></div>
+      <p>Pegue o <code>read_partitioned</code> da aula 04 e transforme num conector: uma <code>@dataclass(frozen=True)</code> de configuração (diretório, padrão, encoding) e uma classe <code>JsonlSource</code> com <code>read() -&gt; Iterator[dict]</code>. Mantenha a laziness — <code>read()</code> continua devolvendo generator.</p>
+      <p>Depois responda: o que a classe ganhou em relação à função? Se a resposta for "nada", diga isso — é uma resposta legítima e o exercício aceita.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">9.2</span><h2>O contrato e três implementações</h2><span class="ex-kind">implementação</span></div>
+      <p>Declare <code>Source</code> como <code>Protocol</code> com <code>read() -&gt; Iterator[dict]</code> e escreva três classes que o satisfazem: <code>JsonlSource</code>, <code>CsvSource</code> e <code>InMemorySource</code> (lista fixa, para testes). Nenhuma delas herda do Protocol.</p>
+      <p>Escreva uma função <code>summarize(source: Source) -&gt; dict</code> que funcione com as três sem saber qual é.</p>
+      <div class="callout tip">
+        <div class="callout-title">Instale o mypy e rode</div>
+        <p><code>pip install mypy &amp;&amp; mypy lesson09.py</code>. Depois quebre uma das implementações de propósito — mude o nome do método, troque o tipo de retorno — e mostre a mensagem que ele dá. É a checagem que o <code>isinstance</code> não faz.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">9.3</span><h2>Injeção de dependência, na marra</h2><span class="ex-kind">refactor</span></div>
+      <p>Escreva <code>Loader</code> que recebe um <code>Sink</code> e um <code>batch_size</code>, e acumula em lotes usando o <code>batched</code> da aula 04. Escreva também um <code>FakeSink</code> que só guarda o que recebeu.</p>
+      <p>Prove três coisas com o dublê, sem banco nenhum: que o número de lotes é <code>ceil(n / batch_size)</code>, que o último lote pode ser menor, e que uma fonte vazia não chama o sink nenhuma vez.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">9.4</span><h2>O relógio injetado</h2><span class="ex-kind">implementação</span></div>
+      <p>Escreva um estágio que carimba cada registro com <code>ingested_at</code>. Faça-o receber a função de relógio como parâmetro com padrão (<code>now=datetime.now</code>) e mostre um teste que verifica o carimbo <strong>exato</strong> passando um relógio fixo.</p>
+      <p>Depois escreva a versão que chama <code>datetime.now()</code> direto e explique, em uma frase, por que ela não tem teste possível.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="lab" data-title="Hora da prática: 9.5 a 9.7 e entrega" data-min="40" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 09 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Exercícios 9.5 a 9.7 e entrega</h1>
+  <div class="act-meta">40 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">9.5</span><h2>Estágios compostos</h2><span class="ex-kind">implementação</span></div>
+      <p>Implemente o <code>pipeline(*stages)</code> da atividade 06 e monte um fluxo com pelo menos quatro estágios, sendo um deles o <code>Dedupe</code> com <code>__call__</code>. Prove com <code>tracemalloc</code> que o pipeline inteiro é O(chaves distintas) — e não O(n).</p>
+      <p>Depois mostre o bug de reuso: rode o mesmo objeto <code>Dedupe</code> duas vezes e explique a saída usando o vocabulário da aula 01.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">9.6</span><h2>O sink transacional</h2><span class="ex-kind">implementação</span></div>
+      <p>Escreva <code>SqliteSink</code> como context manager sobre um banco em arquivo temporário: commit no sucesso, rollback no erro, close no <code>finally</code>. Prove com <code>SELECT COUNT(*)</code> que uma exceção no meio do carregamento não deixa linhas parciais.</p>
+      <p>Depois quebre de propósito: tire o <code>finally</code> e faça o <code>commit</code> levantar. Mostre que a conexão vazou.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">9.7</span><h2>Desafio: a classe que devia ser função</h2><span class="ex-kind">desafio</span></div>
+      <p>Este código é de verdade — variações dele aparecem em muito repositório. Reescreva eliminando o que sobra, e justifique cada remoção com um dos quatro sinais da atividade 09:</p>
+      <div class="code bare" style="margin-top:14px">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">class BaseProcessor:
+    def __init__(self, config):
+        self.config = config
+        self.logger = logging.getLogger(__name__)
+
+class DateUtils:
+    @staticmethod
+    def parse(s): return datetime.fromisoformat(s)
+    @staticmethod
+    def format(d): return d.isoformat()
+
+class RecordProcessor(BaseProcessor):
+    def __init__(self, config):
+        super().__init__(config)
+        self.processed = 0
+
+    def process(self, records):
+        out = []
+        for r in records:
+            r["date"] = DateUtils.parse(r["date"])
+            out.append(r)
+            self.processed += 1
+        return out</code></pre>
+      </div>
+      <p>São pelo menos quatro problemas, e um deles não está na lista da atividade 09 — tem a ver com laziness e com o fato de <code>process</code> alterar os registros que recebeu. Ache os dois também.</p>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>lesson09.py</code> rodando com <code>mypy</code> limpo, e a saída do mypy quebrado do 9.2 nos comentários.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de commitar</div>
+      <ul>
+        <li>Alguma classe sua constrói a própria dependência em vez de recebê-la?</li>
+        <li>Algum <code>__init__</code> abre conexão, lê arquivo ou toca a rede?</li>
+        <li>Alguma classe tem só <code>__init__</code> e um método?</li>
+        <li>Alguma credencial aparece no <code>repr()</code> de uma dataclass?</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 10: Testes com pytest</div>
+      <p>Todo o trabalho desta aula existia para permitir a próxima. Os dublês que você escreveu à mão viram fixtures, o relógio injetado vira um teste determinístico, e você vai descobrir que <code>round(10.005, 2)</code> não é 10.00 — porque um teste vai dizer isso na sua cara.</p>
+    </div>
+
+  </div>
+</article>
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/11</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 09</div>
+          <div class="lh-n">POO para pipelines</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/python/lesson09.py<span class="rs">o arquivo que você entrega</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://docs.python.org/3/library/typing.html#typing.Protocol" target="_blank" rel="noopener">typing.Protocol<span class="rs">contrato sem herança</span></a></li>
+        <li><a href="https://docs.python.org/3/library/abc.html" target="_blank" rel="noopener">abc<span class="rs">quando a herança é o que você quer</span></a></li>
+        <li><a href="https://docs.python.org/3/library/dataclasses.html" target="_blank" rel="noopener">dataclasses<span class="rs">configuração como objeto</span></a></li>
+        <li><a href="https://peps.python.org/pep-0544/" target="_blank" rel="noopener">PEP 544 — Protocols<span class="rs">a proposta do duck typing estático</span></a></li>
+        <li><a href="https://mypy.readthedocs.io/en/stable/protocols.html" target="_blank" rel="noopener">mypy — Protocols<span class="rs">como o checker cobra o contrato</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">Fluent Python, 2ª ed. — caps. 13 e 14<span class="rs">Ramalho · interfaces, protocolos e herança</span></span></li>
+        <li><span class="res-static">Architecture Patterns with Python<span class="rs">Percival & Gregory · dependências e portas/adaptadores</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
