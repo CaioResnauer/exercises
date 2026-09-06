@@ -383,6 +383,13 @@ a.lnav:hover{border-color:#33373E;background:var(--panel-2)}
 .lnav.home{align-items:center;text-align:center}
 a.lnav:hover .lnav-t{color:var(--ink)}
 
+/* dica de atalhos */
+.kbdhint{margin:18px 0 0;font:400 12px/1.6 var(--ui);color:var(--ink-3);text-align:center}
+.kbdhint kbd{
+  font:500 11px/1 var(--mono);color:var(--ink-2);background:var(--panel-2);
+  border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;
+  padding:3px 5px;margin:0 2px
+}
 
 .res{padding:24px}
 .res h3{font:500 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:0 0 16px}

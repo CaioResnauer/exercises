@@ -381,6 +381,16 @@
     footnav.parentNode.insertBefore(nav, footnav.nextSibling);
   }
 
+  /* ---------- dica de atalhos ---------- */
+  if (footnav) {
+    const hint = document.createElement("p");
+    hint.className = "kbdhint";
+    hint.innerHTML =
+      '<kbd>&larr;</kbd><kbd>&rarr;</kbd> ou <kbd>j</kbd><kbd>k</kbd> trocam de atividade' +
+      ' &middot; <kbd>c</kbd> marca como concluída';
+    footnav.parentNode.appendChild(hint);
+  }
+
   /* ---------- deep link ----------
      Permite que a navegação entre aulas chegue numa atividade específica:
      #a3 abre aquela atividade, #last abre a última (usado pelo "Anterior"). */
@@ -392,6 +402,38 @@
   }
   applyHash();
   window.addEventListener("hashchange", () => { applyHash(); render(); persist(); });
+
+  /* ---------- teclado ----------
+     Setas ou j/k trocam de atividade, "c" marca como concluída. Nada dispara
+     enquanto o foco está num campo de texto: as caixas de "prever antes de
+     rodar" são textarea e o usuário está digitando nelas. */
+  const isTyping = (el) => !!el && (
+    el.tagName === "TEXTAREA" || el.tagName === "INPUT" ||
+    el.tagName === "SELECT" || el.isContentEditable);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (isTyping(event.target)) return;
+
+    const i = acts.findIndex((a) => a.id === state.current);
+    switch (event.key) {
+      case "ArrowRight": case "j": case "J":
+        if (i < TOTAL - 1) { event.preventDefault(); goTo(acts[i + 1].id); }
+        else if (NEXT_LESSON) { event.preventDefault(); location.href = COURSE.href(NEXT_LESSON.slug); }
+        break;
+      case "ArrowLeft": case "k": case "K":
+        if (i > 0) { event.preventDefault(); goTo(acts[i - 1].id); }
+        else if (PREV_LESSON) { event.preventDefault(); location.href = COURSE.href(PREV_LESSON.slug) + "#last"; }
+        break;
+      case "c": case "C":
+        event.preventDefault();
+        if (state.done[state.current]) delete state.done[state.current];
+        else state.done[state.current] = true;
+        render(); persist();
+        break;
+      default: break;
+    }
+  });
 
   /* ---------- start ---------- */
   render();
