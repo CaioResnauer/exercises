@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Decorators e context managers</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="08" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 08 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aulas 01 a 07</div>
+  <div class="prose">
+    <p class="lead">Duas construções que <strong>envolvem</strong> o seu código em vez de alterá-lo. Uma acrescenta comportamento a uma função sem tocar no corpo dela; a outra garante que a limpeza aconteça mesmo quando dá errado.</p>
+
+    <p>Você já usou as duas sem chamá-las pelo nome. <code>@dataclass</code>, da aula 07, é um decorator. <code>with open(...)</code> é um context manager. E o <code>@contextmanager</code> que você escreveu no <code>measure_peak</code> da aula 04 é os dois assuntos ao mesmo tempo.</p>
+
+    <h2>Por que isso importa num pipeline</h2>
+    <p>Porque quase todo requisito não-funcional de ETL é transversal: medir tempo, tentar de novo, registrar em log, abrir e fechar conexão, controlar transação. Escrever isso dentro de cada função significa repetir e esquecer. Decorator e context manager são as duas formas do Python de escrever uma vez e aplicar em muitos lugares.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">O risco de gostar demais</div>
+      <p>Decorator é fácil de abusar. Um empilhamento de cinco decorators torna impossível saber o que a função faz sem ler os cinco. A aula termina com a régua de quando <strong>não</strong> usar — porque o custo real deles não é desempenho, é rastreabilidade.</p>
+    </div>
+
+    <h2>Tempo estimado</h2>
+    <p>50 min de leitura, 1 h 30 de exercícios. Todas as saídas foram executadas.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="Função é objeto: closures" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 08 &middot; Atividade 02</span></div>
+  <h1 class="act-title">Função é objeto, e por isso existe decorator</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Antes da sintaxe com <code>@</code>, o fato que a torna possível: em Python, uma função é um valor como qualquer outro. Pode ser guardada, passada, devolvida.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def extract(path):
+    return f"lendo {path}"
+
+f = extract                 # sem parênteses: o objeto função, não a chamada
+print(f, f("orders.jsonl"))
+print(extract.__name__, extract.__doc__)</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>&lt;function extract at 0x7f...&gt; lendo orders.jsonl
+extract None</div>
+    </div>
+
+    <h2>Uma função que devolve outra</h2>
+    <p>Aqui está a peça que falta. Uma função interna pode <strong>lembrar</strong> das variáveis onde foi criada, mesmo depois que a externa terminou:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def prefixer(prefix):
+    def add(text):
+        return prefix + text     # `prefix` vem de fora, e sobrevive
+    return add
+
+warn = prefixer("[WARN] ")
+print(warn("linha 12 malformada"))
+print(warn.__closure__[0].cell_contents)</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>[WARN] linha 12 malformada
+[WARN] </div>
+    </div>
+
+    <p>Isso é uma <strong>closure</strong>: a função <code>add</code> carrega consigo uma célula com o valor de <code>prefix</code>. O <code>__closure__</code> mostra que não é mágica — é um atributo do objeto função.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Você já viu isso na aula 01</div>
+      <p>Um generator também é um objeto que carrega estado entre chamadas. Closure e generator resolvem o mesmo problema — "lembrar de algo entre invocações" — por caminhos diferentes: a closure lembra de <em>variáveis</em>, o generator lembra de <em>onde parou</em>.</p>
+    </div>
+
+    <h2>Do padrão à sintaxe</h2>
+    <p>Um decorator é exatamente isso: uma função que recebe uma função e devolve outra. A sintaxe com <code>@</code> é açúcar puro:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def logged(fn):
+    def wrapper(*args, **kwargs):
+        print(f"chamando {fn.__name__}")
+        return fn(*args, **kwargs)
+    return wrapper
+
+# estas duas formas são a MESMA coisa
+@logged
+def extract(path): ...
+
+def extract(path): ...
+extract = logged(extract)</code></pre>
+    </div>
+
+    <p>Guarde a segunda forma. Quando um decorator se comportar de um jeito estranho, reescrevê-lo assim costuma tornar o problema óbvio — porque o <code>@</code> esconde que <strong>o nome <code>extract</code> passou a apontar para outra função</strong>.</p>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="O decorator que apaga a função" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 08 &middot; Atividade 03</span></div>
+  <h1 class="act-title">O decorator que apaga a função</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Aquela última frase tem consequência. Se o nome agora aponta para o <code>wrapper</code>, tudo que descrevia a função original se perdeu.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@timing_sem_wraps
+def extract_orders(path: str) -> list:
+    """Read every order from `path`."""
+    return []
+
+print(extract_orders.__name__, extract_orders.__doc__, inspect.signature(extract_orders))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>sem @wraps: __name__='wrapper'  __doc__=None  sig=(*a, **k)
+com @wraps: __name__='extract_orders_ok'  __doc__='Read every order from `path`.'  sig=(path: str) -&gt; list</div>
+    </div>
+
+    <p>Sem <code>@wraps</code>, a função virou <code>wrapper</code>: perdeu o nome, a docstring e a assinatura. Isso não é cosmético. Quebra, em ordem de dor crescente:</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>O traceback</h3>
+        <p>Todo erro passa a apontar para <code>wrapper</code>. Com três funções decoradas, os três tracebacks ficam idênticos e não dizem qual estágio do pipeline falhou.</p>
+      </div>
+      <div class="trap">
+        <h3>O <code>help()</code> e o editor</h3>
+        <p>A docstring some e o autocomplete passa a sugerir <code>(*a, **k)</code>. Quem usa a função perde a única documentação que existia.</p>
+      </div>
+      <div class="trap">
+        <h3>Qualquer coisa que leia a assinatura</h3>
+        <p>Frameworks que fazem injeção por tipo, o <code>pytest</code> resolvendo fixtures por nome de parâmetro, <code>dataclasses</code>, serializadores. Todos leem <code>inspect.signature</code>, e todos passam a ver <code>(*a, **k)</code>.</p>
+      </div>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— a correção é uma linha</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">import functools
+
+def timing(fn):
+    @functools.wraps(fn)          # copia __name__, __doc__, __wrapped__, __module__...
+    def wrapper(*args, **kwargs):
+        return fn(*args, **kwargs)
+    return wrapper</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O atributo que salva depois</div>
+      <p><code>@wraps</code> também grava <code>wrapper.__wrapped__ = fn</code>. É por ele que <code>inspect.signature</code> consegue devolver a assinatura verdadeira, e é como você chega na função original quando precisa testá-la sem o decorator: <code>extract_orders.__wrapped__(path)</code>.</p>
+    </div>
+
+    <h2>Quanto custa a camada</h2>
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>timeit</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">função pura        157 ns
+com 1 decorator    471 ns   -> +314 ns por chamada (3.0x)</code></pre>
+    </div>
+
+    <p>Três vezes parece muito e quase nunca é: 314 ns só importa se a função for chamada milhões de vezes e ela própria custar pouco. Decorar <code>read_jsonl</code>, que faz I/O, é irrelevante. Decorar uma função de validação chamada por registro, num pipeline de dez milhões de linhas, são três segundos que ninguém pediu.</p>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="Decorator com argumentos" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 08 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Decorator com argumentos</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">O <code>@retry(times=3)</code> tem uma camada a mais que o <code>@logged</code>, e essa camada confunde todo mundo na primeira vez. Vale abrir devagar.</p>
+
+    <p>Quando você escreve <code>@retry(times=3)</code>, o Python primeiro <strong>chama</strong> <code>retry(times=3)</code> e usa o resultado como decorator. Ou seja: <code>retry</code> não é o decorator — é uma função que <em>fabrica</em> um.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def retry(times: int, delay: float = 0):
+    """Retry `fn` up to `times` times, re-raising the last error."""
+    def deco(fn):                                  # 2. isto é o decorator
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):              # 3. isto substitui a função
+            last = None
+            for attempt in range(1, times + 1):
+                try:
+                    return fn(*args, **kwargs)
+                except Exception as error:
+                    last = error
+                    log.warning("tentativa %d/%d falhou: %s", attempt, times, error)
+                    time.sleep(delay)
+            raise last
+        return wrapper
+    return deco                                    # 1. retry() devolve deco</code></pre>
+    </div>
+
+    <p>Três níveis, três papéis: <code>retry</code> guarda a configuração, <code>deco</code> recebe a função, <code>wrapper</code> roda no lugar dela. As desdobradas ajudam:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@retry(times=3)
+def fetch_page(url): ...
+
+# é exatamente
+def fetch_page(url): ...
+fetch_page = retry(times=3)(fetch_page)</code></pre>
+    </div>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@retry(times=3)
+def fetch_page(url):
+    tentativas["n"] += 1
+    if tentativas["n"] &lt; 3:
+        raise ConnectionError("502 Bad Gateway")
+    return {"url": url, "rows": 120}
+
+print(fetch_page("https://api.exemplo/orders?page=1"))</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>tentativa 1/3 falhou: 502 Bad Gateway
+tentativa 2/3 falhou: 502 Bad Gateway
+{'url': 'https://api.exemplo/orders?page=1', 'rows': 120}</div>
+    </div>
+
+    <div class="callout bug">
+      <div class="callout-title">Três erros clássicos de retry</div>
+      <p><strong>Capturar <code>Exception</code>.</strong> Você vai repetir um <code>KeyError</code> no seu próprio código três vezes antes de falhar. Capture o que é de fato transitório: <code>ConnectionError</code>, <code>TimeoutError</code>, HTTP 5xx.</p>
+      <p><strong>Não ter backoff.</strong> Três tentativas imediatas contra um serviço sobrecarregado só somam carga. O padrão é exponencial com <em>jitter</em>: <code>delay * 2**attempt + random()</code>.</p>
+      <p><strong>Repetir operação não idempotente.</strong> Se o <code>INSERT</code> chegou ao banco e a resposta é que se perdeu, tentar de novo duplica a linha. Retry só é seguro sobre operações idempotentes — ou com chave de deduplicação.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O decorator que já existe</div>
+      <p><code>functools.lru_cache</code> é o decorator com argumentos mais útil da biblioteca padrão: <code>@lru_cache(maxsize=1024)</code> memoiza a função por argumentos. Num pipeline, ele resolve o "consultar a mesma tabela de-para mil vezes" — mas exige argumentos <em>hasheáveis</em>, o que exclui <code>dict</code> e <code>list</code>, exatamente como o <code>set</code> da aula 07.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="lab" data-title="Mão na massa: a ordem da pilha" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 08 &middot; Atividade 05</span></div>
+  <h1 class="act-title">A ordem da pilha</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Dois decorators empilhados. A ordem em que rodam não é a que a maioria chuta.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def um(fn):
+    @functools.wraps(fn)
+    def wrapper(*a, **k):
+        print("um: antes"); r = fn(*a, **k); print("um: depois"); return r
+    return wrapper
+
+def dois(fn):
+    @functools.wraps(fn)
+    def wrapper(*a, **k):
+        print("dois: antes"); r = fn(*a, **k); print("dois: depois"); return r
+    return wrapper
+
+@um
+@dois
+def trabalho():
+    print("  trabalho")
+
+trabalho()</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="Em que ordem as seis linhas são impressas?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a saída</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div class="code" style="margin-top:18px">
+          <div class="code-head"><span class="code-file"><b>saída real</b></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-python">um: antes
+dois: antes
+  trabalho
+dois: depois
+um: depois</code></pre>
+        </div>
+        <p style="margin-top:16px">A <strong>aplicação</strong> é de baixo para cima; a <strong>execução</strong> é de cima para baixo. Desdobrando, fica evidente:</p>
+        <div class="code">
+          <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-python">trabalho = um(dois(trabalho))</code></pre>
+        </div>
+        <p style="margin-top:16px">O <code>dois</code> é aplicado primeiro, então fica <em>mais perto</em> da função original. O <code>um</code> envolve o resultado, então é o primeiro a rodar. É uma cebola: quem foi aplicado por último é a casca de fora.</p>
+        <div class="callout warn">
+          <div class="callout-title">Onde isso muda o comportamento</div>
+          <p><code>@retry</code> acima de <code>@timing</code> mede cada tentativa separadamente. <code>@timing</code> acima de <code>@retry</code> mede o total das três. As duas leituras são úteis — mas você precisa saber qual escreveu. O mesmo vale para <code>@cache</code> e <code>@retry</code>: cache por fora nunca chega a tentar de novo em um acerto.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="O with e o arquivo que fica aberto" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 08 &middot; Atividade 06</span></div>
+  <h1 class="act-title">O <code style="font-size:.82em">with</code> e o arquivo que fica aberto</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Segunda metade da aula. Um context manager garante que a saída aconteça — pela porta da frente ou pela exceção.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def parse_sem(path):
+    fh = open(path)
+    fh.read()
+    raise ValueError("linha 12 malformada")     # o close() nunca roda
+
+def parse_com(path):
+    with open(path) as fh:
+        fh.read()
+        raise ValueError("linha 12 malformada")</code></pre>
+    </div>
+
+    <p>Num pipeline real, o erro por arquivo é capturado e guardado para o relatório — e é aí que a diferença aparece:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">erros = []
+for _ in range(200):
+    try:
+        parse(path)
+    except ValueError as error:
+        erros.append(error)      # guardar o erro é o padrão normal de ETL</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>sem with: 200 arquivos, 200 erros guardados -&gt; <b>200</b> descritores abertos
+com with: 200 arquivos, 200 erros guardados -&gt; <b>0</b> descritores abertos</div>
+    </div>
+
+    <h2>Por que 200, e por que isso engana</h2>
+    <p>O objeto de exceção guarda o <code>__traceback__</code>, que guarda o <em>frame</em> onde o erro nasceu, que guarda a variável local <code>fh</code>. Enquanto a lista de erros existir, os 200 arquivos continuam abertos.</p>
+
+    <p>O que engana é que, sem guardar o erro, o CPython fecha tudo sozinho: quando o frame morre, o contador de referências do arquivo chega a zero e o <code>close()</code> acontece no ato. O bug fica invisível — até alguém acrescentar um <code>erros.append(e)</code>, ou um logger com <code>exc_info=True</code>, ou o código rodar em PyPy, que não usa contagem de referências.</p>
+
+    <div class="callout bug">
+      <div class="callout-title">Como isso quebra em produção</div>
+      <p><code>OSError: [Errno 24] Too many open files</code>, depois de horas rodando, num job que passou em todos os testes. O limite típico de um contêiner é 1.024 descritores — 200 arquivos ruins bastam para chegar perto, e o erro aparece em um lugar que não tem relação nenhuma com a causa.</p>
+    </div>
+
+    <h2>O protocolo</h2>
+    <p><code>with</code> não é sintaxe especial para arquivos. É um protocolo de dois métodos, como o de iteração da aula 01:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— o with sem açúcar sintático</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">gerenciador = open(path)
+recurso = gerenciador.__enter__()          # 1. entra, devolve o que vai para o `as`
+try:
+    ...                                     # 2. o corpo do with
+finally:
+    gerenciador.__exit__(*sys.exc_info())   # 3. sai, SEMPRE</code></pre>
+    </div>
+
+    <p>Dois métodos, e o <code>finally</code> é a garantia inteira. <code>__exit__</code> recebe a exceção que estiver em curso — e, se devolver um valor verdadeiro, <strong>engole</strong> essa exceção. É assim que <code>contextlib.suppress</code> funciona; e é por isso que devolver <code>True</code> por acidente de um <code>__exit__</code> esconde erros.</p>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="video" data-title="Escrevendo um context manager" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 08 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Escrevendo um context manager</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Duas formas: a classe com <code>__enter__</code>/<code>__exit__</code> e o generator decorado com <code>@contextmanager</code>. A segunda é a que você vai escrever quase sempre.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— a forma curta</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from contextlib import contextmanager
+
+@contextmanager
+def stage(name: str):
+    """Time a pipeline stage, reporting even when it fails."""
+    start = time.perf_counter()
+    log.info("-> entra %s", name)
+    try:
+        yield                                  # aqui roda o corpo do with
+    finally:
+        log.info("&lt;- sai %s em %.1f ms", name, (time.perf_counter() - start) * 1000)</code></pre>
+    </div>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">with stage("transform"):
+    time.sleep(0.01)
+    raise RuntimeError("schema inesperado")</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>-&gt; entra transform
+&lt;- sai transform em 10.4 ms
+excecao propagou: schema inesperado</div>
+    </div>
+
+    <p>O <code>finally</code> rodou, o tempo foi reportado, e a exceção seguiu subindo. É o comportamento certo: o context manager <strong>observa</strong> a falha, não a esconde.</p>
+
+    <div class="callout bug">
+      <div class="callout-title">O <code>try/finally</code> não é opcional</div>
+      <p>Sem ele, uma exceção no corpo do <code>with</code> nunca volta ao generator, e o código depois do <code>yield</code> não roda. Um <code>@contextmanager</code> sem <code>try/finally</code> é um context manager que só limpa quando não precisa. É a mesma lição do <code>gen_with_finally</code> da aula 02, agora com outro nome.</p>
+    </div>
+
+    <h2>A forma com classe</h2>
+    <p>Vale quando o gerenciador precisa guardar estado ou ser reusável:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class Transaction:
+    """Commit on success, roll back on any exception."""
+
+    def __init__(self, connection) -&gt; None:
+        self._connection = connection
+
+    def __enter__(self) -&gt; "Transaction":
+        self._connection.execute("BEGIN")
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -&gt; bool:
+        if exc_type is None:
+            self._connection.execute("COMMIT")
+        else:
+            self._connection.execute("ROLLBACK")
+        return False          # False: não engole a exceção</code></pre>
+    </div>
+
+    <p>O <code>return False</code> é o detalhe que mais importa. Devolver <code>True</code> ali faria o <code>ROLLBACK</code> acontecer e a exceção <strong>desaparecer</strong> — o pipeline seguiria como se tivesse dado certo, com a transação desfeita. Silencioso e com evidência apontando para o lado errado, de novo.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Um <code>__exit__</code> sem <code>return</code> está correto</div>
+      <p>Uma função sem <code>return</code> devolve <code>None</code>, que é falso, então a exceção propaga. Escrever <code>return False</code> explícito é para o leitor, não para o interpretador.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="note" data-title="Para saber mais: suppress e ExitStack" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 08 &middot; Atividade 08</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">suppress</code> e <code style="font-size:.82em">ExitStack</code></h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Dois utilitários do <code>contextlib</code> que resolvem problemas específicos de pipeline e quase ninguém conhece.</p>
+
+    <h2><code>suppress</code>: o try/except que cabe numa linha</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from contextlib import suppress
+
+# em vez de
+try:
+    os.remove(temp_path)
+except FileNotFoundError:
+    pass
+
+# escreva
+with suppress(FileNotFoundError):
+    os.remove(temp_path)</code></pre>
+    </div>
+
+    <p>Mesma semântica, e a intenção fica na primeira linha em vez da última. Só use com exceções <strong>nomeadas</strong>: <code>with suppress(Exception)</code> é o mesmo <code>except Exception: pass</code> que a revisão da aula 04 apontou como o pior formato de falha.</p>
+
+    <h2><code>ExitStack</code>: N recursos, quantidade decidida em tempo de execução</h2>
+    <p>O <code>with a, b, c:</code> resolve quando você sabe quantos são. Quando o número vem dos dados — "abra todos os arquivos do diretório" — é o <code>ExitStack</code>:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from contextlib import ExitStack
+
+with ExitStack() as stack:
+    handles = [stack.enter_context(open(p)) for p in paths]
+    print("dentro do bloco, fechados =", [h.closed for h in handles])
+print("depois do bloco, fechados =", [h.closed for h in handles])</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>dentro do bloco, fechados = [False, False, False]
+depois do bloco, fechados = [True, True, True]</div>
+    </div>
+
+    <p>E a propriedade que faz ele valer: se o quinto <code>open</code> falhar, os quatro já abertos são fechados na ordem inversa. Escrever isso à mão com <code>try/finally</code> aninhado é onde os vazamentos moram.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Onde isso aparece</div>
+      <p>Escrever saída particionada — um arquivo por região, com o número de regiões vindo dos dados — é exatamente o caso. Sem <code>ExitStack</code>, ou você abre e fecha a cada linha (lento), ou acumula descritores e torce.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="video" data-title="Os dois juntos: o padrão de instrumentação" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 08 &middot; Atividade 09</span></div>
+  <h1 class="act-title">Os dois juntos</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Um objeto pode ser as duas coisas ao mesmo tempo. O <code>contextlib.ContextDecorator</code> deixa você escrever a lógica uma vez e usá-la como <code>with</code> ou como <code>@</code>.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@contextmanager
+def measure(label: str):
+    """Report wall time and peak allocation for a block or a function."""
+    tracemalloc.start()
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        elapsed = time.perf_counter() - start
+        _, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        log.info("%s: %.2f s, pico %.1f MB", label, elapsed, peak / 1024**2)</code></pre>
+    </div>
+
+    <p>Um <code>@contextmanager</code> já serve como decorator de graça — a implementação dele herda de <code>ContextDecorator</code>:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python"># como bloco
+with measure("transform"):
+    rows = list(transform(read_jsonl(path)))
+
+# e a MESMA função como decorator
+@measure("extract")
+def extract(path):
+    return list(read_jsonl(path))</code></pre>
+    </div>
+
+    <p>É o <code>measure</code> do exercício 5.1, agora com as duas caras. A do bloco é melhor para medir um trecho; a do decorator é melhor para instrumentar um estágio inteiro sem mexer no corpo dele.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Um detalhe do <code>@contextmanager</code> como decorator</div>
+      <p>Cada chamada da função decorada re-executa o generator do começo — é isso que faz funcionar. Mas um <code>@contextmanager</code> usado como <code>with</code> <strong>não pode ser reutilizado</strong>: <code>cm = measure("x")</code> e depois dois <code>with cm:</code> levanta <code>RuntimeError: generator didn't yield</code>. É a mesma propriedade de esgotamento da aula 01, num objeto que não parece um iterador.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="note" data-title="Quando NÃO usar" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Critério</span><span class="dot"></span><span>Aula 08 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Quando não usar</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Decorator é a construção do Python que mais vira vício. Vale ter a régua antes da vontade.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Quando muda o que a função <em>faz</em></h3>
+        <p>Decorator é para o que envolve: medir, tentar de novo, registrar, autorizar, cachear. Se ele altera o resultado — converte tipo, filtra registros, muda a regra de negócio —, esse comportamento tem que estar visível no corpo da função. Ninguém procura regra de negócio numa linha com <code>@</code>.</p>
+      </div>
+      <div class="trap">
+        <h3>Quando é usado uma vez só</h3>
+        <p>Um decorator aplicado a uma única função é uma indireção sem retorno. Escreva o <code>try/finally</code> dentro dela e siga.</p>
+      </div>
+      <div class="trap">
+        <h3>Quando empilha mais de dois</h3>
+        <p>Três ou mais e a ordem passa a importar de formas que ninguém consegue prever lendo. Se você precisa de quatro, provavelmente o que falta é um objeto — que é o assunto da aula 09.</p>
+      </div>
+      <div class="trap">
+        <h3>Quando esconde estado global</h3>
+        <p>Um decorator que lê configuração de módulo, escreve num cache global ou depende de ordem de importação transforma a função em algo intestável. O teste passa a depender de o que mais foi importado antes — e você descobre isso na aula 10.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">A pergunta que decide</div>
+      <p><strong>"Se eu apagar esta linha com <code>@</code>, a função continua fazendo a coisa certa, só que sem a instrumentação?"</strong></p>
+      <p>Se sim, o decorator está no lugar certo. Se não — se apagar quebra o resultado — aquilo não era instrumentação, era o programa, e está escondido.</p>
+    </div>
+
+    <p>Com context manager o risco é menor, porque o <code>with</code> deixa o escopo visível no código. O único abuso comum é engolir exceção no <code>__exit__</code> sem que quem lê perceba.</p>
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="lab" data-title="Hora da prática: 8.1 a 8.4" data-min="50" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 08 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Exercícios 8.1 a 8.4</h1>
+  <div class="act-meta">50 min &middot; arquivo <code>exercises/python/lesson08.py</code></div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">8.1</span><h2>O decorator sem e com <code>@wraps</code></h2><span class="ex-kind">experimento</span></div>
+      <p>Escreva <code>timing</code> duas vezes, com e sem <code>functools.wraps</code>, e aplique numa função com docstring e anotações de tipo. Imprima <code>__name__</code>, <code>__doc__</code> e <code>inspect.signature</code> das duas.</p>
+      <p>Depois provoque uma exceção dentro da função decorada nas duas versões e <strong>compare os tracebacks</strong>. Diga qual linha do traceback muda e por que isso importa num pipeline com cinco estágios decorados.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">8.2</span><h2><code>retry</code> com backoff exponencial</h2><span class="ex-kind">implementação</span></div>
+      <p>Escreva <code>@retry(times, exceptions, base_delay)</code> que só repita as exceções listadas, espere <code>base_delay * 2**tentativa</code> e registre cada tentativa. Teste com uma função que falha duas vezes e acerta na terceira, e com outra que levanta <code>KeyError</code> — esta última <strong>não</strong> pode ser repetida.</p>
+      <div class="callout tip">
+        <div class="callout-title">Para testar sem esperar</div>
+        <p>Passe <code>base_delay=0</code> no teste. Se você precisar do delay real, injete a função de espera como parâmetro (<code>sleep=time.sleep</code>) — isso deixa o teste substituir por um dublê, que é o assunto da aula 10.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">8.3</span><h2>O vazamento de descritores</h2><span class="ex-kind">medição</span></div>
+      <p>Reproduza a medição da atividade 06: 200 arquivos, erro guardado, com e sem <code>with</code>. Conte os descritores abertos com <code>gc.get_objects()</code> ou lendo <code>/proc/self/fd</code>.</p>
+      <p>Depois responda: por que a versão <em>sem</em> <code>with</code> mostra zero descritores se você <strong>não</strong> guardar os erros? O que exatamente estava segurando o arquivo?</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">8.4</span><h2>Escritor particionado com <code>ExitStack</code></h2><span class="ex-kind">implementação</span></div>
+      <p>Escreva <code>write_partitioned(records, directory, key)</code> que grave cada registro num arquivo por valor da chave — <code>out/region=sul.jsonl</code>, <code>out/region=norte.jsonl</code> — abrindo cada arquivo <strong>uma vez só</strong> e fechando todos ao final, inclusive se der erro no meio.</p>
+      <p>Compare com a versão ingênua que faz <code>open(..., "a")</code> por registro: meça o tempo das duas com 100 mil registros em 20 partições.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 12 ==================== -->
+<article class="act" id="a12" data-kind="lab" data-title="Hora da prática: 8.5 a 8.7 e entrega" data-min="40" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 08 &middot; Atividade 12</span></div>
+  <h1 class="act-title">Exercícios 8.5 a 8.7 e entrega</h1>
+  <div class="act-meta">40 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">8.5</span><h2>A ordem da pilha, medida</h2><span class="ex-kind">experimento</span></div>
+      <p>Aplique <code>@retry(times=3)</code> e <code>@measure</code> nas duas ordens possíveis sobre uma função que falha duas vezes. Mostre o log das duas e explique a diferença nos tempos reportados.</p>
+      <p>Diga qual das duas ordens você quer em produção, e por quê.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">8.6</span><h2>O <code>__exit__</code> que engole</h2><span class="ex-kind">análise</span></div>
+      <p>Escreva a classe <code>Transaction</code> da atividade 07 sobre um <code>sqlite3</code> em memória, uma versão com <code>return False</code> e outra com <code>return True</code>. Rode as duas com uma exceção no meio e mostre, com <code>SELECT COUNT(*)</code>, o que aconteceu com os dados — e o que aconteceu com a exceção.</p>
+      <div class="callout warn">
+        <div class="callout-title">O ponto do exercício</div>
+        <p>A versão com <code>return True</code> desfaz a transação <strong>e</strong> deixa o programa seguir achando que deu certo. Escreva no comentário como esse bug apareceria num log de produção.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">8.7</span><h2>Desafio: o <code>measure</code> definitivo</h2><span class="ex-kind">desafio</span></div>
+      <p>Reescreva o <code>measure</code> do exercício 5.1 para funcionar como bloco <strong>e</strong> como decorator, reportando tempo e pico, aninhando corretamente (um <code>measure</code> dentro de outro) e sem quebrar quando o bloco levanta exceção.</p>
+      <p>Cuidado com um detalhe: <code>tracemalloc.start()</code> aninhado. Descubra o que acontece, meça, e decida como tratar.</p>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>lesson08.py</code> com os tracebacks do 8.1 e os tempos do 8.4 e 8.5 nos comentários.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de commitar</div>
+      <ul>
+        <li>Todo decorator que você escreveu usa <code>functools.wraps</code>?</li>
+        <li>Todo <code>@contextmanager</code> tem <code>try/finally</code>?</li>
+        <li>Nenhum <code>__exit__</code> devolve <code>True</code> sem você ter decidido isso?</li>
+        <li>Nenhum <code>except Exception</code> nu sobrou?</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 09: POO para pipelines</div>
+      <p>Quando quatro decorators empilhados viram um objeto. Conectores e transformadores como classes, o contrato explícito com <code>Protocol</code>, e por que injeção de dependência é o que separa código testável de código que só roda em produção.</p>
+    </div>
+
+  </div>
+</article>
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/12</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 08</div>
+          <div class="lh-n">Decorators e context managers</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/python/lesson08.py<span class="rs">o arquivo que você entrega</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://docs.python.org/3/library/functools.html#functools.wraps" target="_blank" rel="noopener">functools.wraps<span class="rs">o que ele copia, e por quê</span></a></li>
+        <li><a href="https://docs.python.org/3/library/functools.html#functools.lru_cache" target="_blank" rel="noopener">lru_cache<span class="rs">memoização pronta</span></a></li>
+        <li><a href="https://docs.python.org/3/library/contextlib.html" target="_blank" rel="noopener">contextlib<span class="rs">contextmanager, suppress, ExitStack</span></a></li>
+        <li><a href="https://docs.python.org/3/reference/datamodel.html#context-managers" target="_blank" rel="noopener">__enter__ e __exit__<span class="rs">o protocolo por baixo do with</span></a></li>
+        <li><a href="https://peps.python.org/pep-0343/" target="_blank" rel="noopener">PEP 343 — the with statement<span class="rs">a proposta original</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">Fluent Python, 2ª ed. — caps. 9 e 18<span class="rs">Ramalho · decorators, closures e context managers</span></span></li>
+        <li><span class="res-static">Effective Python, 3ª ed. — itens 38 e 66<span class="rs">Slatkin · wraps e contextlib no dia a dia</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>

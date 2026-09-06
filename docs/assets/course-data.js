@@ -57,6 +57,11 @@ window.COURSE = {
       id: "07", title: "Estruturas de dados na prática",
       slug: "lessons/07-estruturas-de-dados.html",
       acts: 11, published: true, delivery: "pending"
+    },
+    {
+      id: "08", title: "Decorators e context managers",
+      slug: "lessons/08-decorators-e-context-managers.html",
+      acts: 12, published: true, delivery: "pending"
     }
   ],
 
