@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SQL: EXPLAIN, índices e particionamento</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="15" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 15 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aulas 13 e 14</div>
+  <div class="prose">
+    <p class="lead">As duas aulas anteriores escreveram queries corretas. Esta é sobre descobrir o que o banco realmente faz com elas — e a diferença costuma ser de três ordens de grandeza.</p>
+
+    <p>É a aula 05 outra vez, com outro sujeito. Lá, medir revelou que <code>getsizeof</code> mentia; aqui, o <code>EXPLAIN</code> revela que a query que você achava rápida varre 400 mil linhas.</p>
+
+    <h2>Os números da aula</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Mudança</th><th>Efeito medido</th></tr></thead>
+        <tbody>
+          <tr><td>criar o índice certo</td><td>20,03 ms &rarr; 0,01 ms</td></tr>
+          <tr><td>pôr <code>substr()</code> na coluna filtrada</td><td>1,97 ms &rarr; 31,96 ms</td></tr>
+          <tr><td>índice de cobertura</td><td>0,61 ms &rarr; 0,32 ms</td></tr>
+          <tr><td>dois índices, na escrita</td><td>112,6 ms &rarr; 312,9 ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>A última linha é a que costuma faltar na conversa: índice não é grátis. Toda a aula é sobre esse balanço.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">A tabela de teste</div>
+      <p>400 mil pedidos em <code>sqlite3</code> na memória, com <code>user_id</code>, <code>status</code>, <code>created_at</code> e <code>amount</code>. O <code>bench.py</code> da aula gera e mede. Os conceitos valem para PostgreSQL e MySQL — o que muda é o nome dos operadores no plano.</p>
+    </div>
+
+    <h2>Tempo estimado</h2>
+    <p>50 min de leitura, 2 h de exercícios.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="SCAN contra SEARCH" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 15 &middot; Atividade 02</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">SCAN</code> contra <code style="font-size:.82em">SEARCH</code></h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Duas palavras no plano, e a diferença entre elas é a aula inteira.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b> <span style="color:var(--ink-3)">— 400.000 linhas, sem índice</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">EXPLAIN QUERY PLAN
+SELECT id, amount FROM orders WHERE user_id = 12345;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>SCAN orders
+tempo:   20.03 ms</div>
+    </div>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b> <span style="color:var(--ok)">— depois de um índice</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">CREATE INDEX idx_orders_user ON orders(user_id);
+EXPLAIN QUERY PLAN
+SELECT id, amount FROM orders WHERE user_id = 12345;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>SEARCH orders USING INDEX idx_orders_user (user_id=?)
+tempo:    0.01 ms</div>
+    </div>
+
+    <p><strong>2.000 vezes.</strong> E o motivo está nas duas palavras:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th><code>SCAN</code></th><th><code>SEARCH</code></th></tr></thead>
+        <tbody>
+          <tr><td>Lê</td><td>todas as linhas</td><td>só as que casam</td></tr>
+          <tr><td>Custo</td><td class="num">O(n)</td><td class="num">O(log n)</td></tr>
+          <tr><td>Cresce com a tabela</td><td>sim, linearmente</td><td>quase nada</td></tr>
+          <tr><td>No plano do PostgreSQL</td><td><code>Seq Scan</code></td><td><code>Index Scan</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Um índice é uma árvore B ordenada pela coluna, apontando de volta para a linha. Procurar nela é descer a árvore — o mesmo salto de complexidade do <code>set</code> contra a <code>list</code> na aula 07, e por uma razão parecida: <strong>estrutura de busca em vez de varredura</strong>.</p>
+
+    <div class="callout warn">
+      <div class="callout-title"><code>SCAN</code> nem sempre é problema</div>
+      <p>Numa tabela de 200 linhas, varrer é mais rápido que descer uma árvore e depois buscar cada linha. O planejador sabe disso e escolhe <code>SCAN</code> de propósito. <code>SCAN</code> só é um alerta quando a tabela é grande e o filtro é seletivo — e "grande" e "seletivo" são medidas, não impressões.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Rode <code>ANALYZE</code> antes de acreditar no plano</div>
+      <p>O planejador decide com base em estatísticas sobre a distribuição dos dados. Sem <code>ANALYZE</code>, ele chuta. Um plano ruim que melhora depois de um <code>ANALYZE</code> é sinal de estatística desatualizada, não de índice faltando.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="Índice composto e a ordem das colunas" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 15 &middot; Atividade 03</span></div>
+  <h1 class="act-title">Índice composto e a ordem das colunas</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Um índice sobre duas colunas não é dois índices. A ordem em que você declara decide quais queries ele atende.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">CREATE INDEX idx_status_date ON orders(status, created_at);</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>WHERE status='paid' AND created_at='2026-03-05'
+  SEARCH orders USING COVERING INDEX idx_status_date (status=? AND created_at=?)
+  tempo:  0.00 ms
+
+WHERE status='paid'
+  SEARCH orders USING COVERING INDEX idx_status_date (status=?)
+  tempo:  5.28 ms
+
+WHERE created_at='2026-03-05'
+  SEARCH orders USING COVERING INDEX idx_status_date (ANY(status) AND created_at=?)
+  tempo:  0.00 ms</div>
+    </div>
+
+    <p>Os dois primeiros são o esperado: o índice atende o prefixo da esquerda. Pense numa lista telefônica ordenada por <em>(sobrenome, nome)</em> — dá para achar "todos os Silva" e "Silva, João", mas não "todos os João".</p>
+
+    <h2>O terceiro caso contraria a regra — e vale entender por quê</h2>
+    <p>Filtrar só por <code>created_at</code> não usa o prefixo, e mesmo assim o plano diz <code>ANY(status) AND created_at=?</code>. Isso é um <strong>skip-scan</strong>: como <code>status</code> só tem três valores distintos, o planejador percorre os três e faz uma busca dentro de cada um. Três buscas continuam sendo muito melhor que varrer 400 mil linhas.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Não conte com o skip-scan</div>
+      <p>Ele só compensa quando a coluna da esquerda tem <strong>pouquíssimos valores distintos</strong>. Se <code>status</code> fosse <code>user_id</code>, com 50 mil valores, seriam 50 mil buscas e o planejador voltaria a varrer. A regra do prefixo à esquerda continua sendo a que você usa para projetar; o skip-scan é um bônus que o banco às vezes te dá.</p>
+      <p>E nem todo banco tem: MySQL não faz skip-scan em índice B-tree comum, PostgreSQL passou a fazer só na 18.</p>
+    </div>
+
+    <h2>Como escolher a ordem</h2>
+    <div class="traps">
+      <div class="trap">
+        <h3>Igualdade antes de intervalo</h3>
+        <p><code>WHERE status = 'paid' AND created_at &gt; '2026-01-01'</code> quer <code>(status, created_at)</code>. Com <code>(created_at, status)</code>, o índice consegue posicionar no intervalo mas precisa filtrar <code>status</code> linha a linha dentro dele.</p>
+      </div>
+      <div class="trap">
+        <h3>Mais seletiva primeiro, entre iguais</h3>
+        <p>Se as duas são igualdade, ponha antes a que corta mais linhas. Menos entradas do índice a percorrer.</p>
+      </div>
+      <div class="trap">
+        <h3>A coluna do <code>ORDER BY</code> por último</h3>
+        <p>Um índice <code>(status, created_at)</code> atende <code>WHERE status=? ORDER BY created_at</code> sem ordenar nada — as linhas já saem na ordem. É o <code>SORT</code> que some do plano.</p>
+      </div>
+      <div class="trap">
+        <h3>Um índice composto substitui vários</h3>
+        <p><code>(a, b, c)</code> atende <code>(a)</code>, <code>(a, b)</code> e <code>(a, b, c)</code>. Criar os três separados é pagar três vezes na escrita para ter o que um já dava.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="Índice de cobertura" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 15 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Índice de cobertura</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">A palavra <code>COVERING</code> apareceu nos planos da atividade anterior. Ela significa que o banco respondeu a query <strong>sem tocar na tabela</strong>.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">SELECT user_id, amount FROM orders WHERE user_id BETWEEN 100 AND 200;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>com idx(user_id):
+  SEARCH orders USING INDEX idx_orders_user (user_id&gt;? AND user_id&lt;?)
+  tempo:  0.61 ms
+
+com idx(user_id, amount):
+  SEARCH orders USING COVERING INDEX idx_cover (user_id&gt;? AND user_id&lt;?)
+  tempo:  0.32 ms</div>
+    </div>
+
+    <p>Metade do tempo, e a razão é o que <em>não</em> aconteceu. No primeiro caso o banco encontra as entradas no índice e depois vai buscar cada linha na tabela para pegar o <code>amount</code> — um salto por linha encontrada. No segundo, o <code>amount</code> já está no índice, e a tabela nunca é lida.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Onde isso vale muito mais que 2x</div>
+      <p>Aqui a tabela está em memória. Num banco real, cada salto é uma leitura de página que pode ir ao disco. Uma query que devolve 10 mil linhas faz 10 mil saltos aleatórios — e é a diferença entre milissegundos e minutos. Índice de cobertura é uma das otimizações de maior retorno em relatório.</p>
+    </div>
+
+    <h2>Como projetar um</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">-- a query que você quer cobrir
+SELECT user_id, status, SUM(amount)
+FROM orders
+WHERE created_at &gt;= '2026-01-01'
+GROUP BY user_id, status;
+
+-- o índice: filtro primeiro, depois agrupamento, depois o que é só lido
+CREATE INDEX idx_cover ON orders(created_at, user_id, status, amount);</code></pre>
+    </div>
+
+    <p>A regra é olhar a query e listar <strong>todas</strong> as colunas que aparecem — no <code>WHERE</code>, no <code>GROUP BY</code>, no <code>ORDER BY</code> e no <code>SELECT</code>. Se todas estiverem no índice, ele cobre.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">O limite: <code>SELECT *</code></div>
+      <p>Nenhum índice cobre um <code>SELECT *</code> numa tabela com vinte colunas — você teria que indexar a tabela inteira, e o índice ficaria do tamanho dela. É mais um motivo, além dos óbvios, para listar as colunas que você realmente usa.</p>
+    </div>
+
+    <p>Em PostgreSQL há uma variante melhor: <code>CREATE INDEX ... ON orders(created_at) INCLUDE (amount)</code>. As colunas do <code>INCLUDE</code> ficam só nas folhas, não na estrutura de busca — cobre igual, e o índice fica menor.</p>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="lab" data-title="Mão na massa: o índice que sumiu" data-min="6" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 15 &middot; Atividade 05</span></div>
+  <h1 class="act-title">O índice que sumiu</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Duas queries que fazem a mesma pergunta — quantos pedidos em março — sobre a mesma tabela, com o mesmo índice em <code>created_at</code>.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">-- A
+SELECT COUNT(*) FROM orders
+ WHERE created_at &gt;= '2026-03-01' AND created_at &lt; '2026-04-01';
+
+-- B
+SELECT COUNT(*) FROM orders
+ WHERE substr(created_at, 1, 7) = '2026-03';</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="As duas usam o índice? Qual é mais rápida, e por qual fator?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a medição</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div class="code has-out" style="margin-top:18px">
+          <div class="code-head"><span class="code-file"><b>EXPLAIN QUERY PLAN + tempo</b></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-sql">A  intervalo (sargable)
+     SEARCH orders USING COVERING INDEX idx_status_date (... created_at&gt;? AND created_at&lt;?)
+     tempo:  1.97 ms
+
+B  substr() na coluna
+     SCAN orders USING COVERING INDEX idx_status_date
+     tempo: 31.96 ms</code></pre>
+        </div>
+        <p style="margin-top:16px"><strong>16 vezes</strong>, e repare na palavra que mudou: <code>SEARCH</code> virou <code>SCAN</code>.</p>
+        <p>O índice guarda os valores de <code>created_at</code>, ordenados. Ele não guarda <code>substr(created_at, 1, 7)</code> — e o banco não tem como saber que essa função preserva a ordem. Então ele faz a única coisa possível: percorre tudo, aplicando a função linha a linha.</p>
+        <div class="callout tip">
+          <div class="callout-title">A palavra é <em>sargable</em></div>
+          <p>De <em>Search ARGument ABLE</em>: um predicado é sargable quando o banco consegue traduzi-lo numa busca no índice. A regra é uma só — <strong>deixe a coluna sozinha de um lado da comparação</strong>.</p>
+          <div class="table-wrap" style="margin-top:14px">
+            <table>
+              <thead><tr><th>Não sargable</th><th>Reescreva como</th></tr></thead>
+              <tbody>
+                <tr><td><code>substr(d,1,7) = '2026-03'</code></td><td><code>d &gt;= '2026-03-01' AND d &lt; '2026-04-01'</code></td></tr>
+                <tr><td><code>YEAR(d) = 2026</code></td><td><code>d &gt;= '2026-01-01' AND d &lt; '2027-01-01'</code></td></tr>
+                <tr><td><code>UPPER(city) = 'SP'</code></td><td>guarde normalizado, ou índice sobre <code>UPPER(city)</code></td></tr>
+                <tr><td><code>amount * 1.1 &gt; 100</code></td><td><code>amount &gt; 100 / 1.1</code></td></tr>
+                <tr><td><code>city LIKE '%paulo'</code></td><td>nada resolve — <code>LIKE</code> com curinga à esquerda nunca usa índice B-tree</td></tr>
+                <tr><td><code>d::text = '2026-03-05'</code></td><td>compare no tipo da coluna, sem conversão</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="callout warn">
+          <div class="callout-title">A conversão implícita é a pior delas</div>
+          <p>Comparar uma coluna <code>varchar</code> com um número, ou <code>timestamp</code> com string, faz o banco converter a <em>coluna</em> — e o índice morre sem que nada apareça na query. Você olha e vê uma comparação simples; o plano diz <code>SCAN</code>. Confira o tipo dos dois lados sempre que um índice "não estiver sendo usado".</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="O que um índice custa" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 15 &middot; Atividade 06</span></div>
+  <h1 class="act-title">O que um índice custa</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">A conversa sobre índices costuma parar na leitura. O custo aparece do outro lado — e em ETL, que é escrita em volume, ele domina.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— 200.000 inserts</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">sem índice     :  112.6 ms
+com 2 índices  :  312.9 ms   -> 2.8x</code></pre>
+    </div>
+
+    <p>Cada <code>INSERT</code> passou a fazer três trabalhos: escrever a linha e atualizar duas árvores. Cada <code>UPDATE</code> numa coluna indexada é uma remoção mais uma inserção na árvore. Cada <code>DELETE</code> mexe em todas.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Custo</th><th>Impacto</th></tr></thead>
+        <tbody>
+          <tr><td>Escrita mais lenta</td><td>proporcional ao número de índices</td></tr>
+          <tr><td>Espaço em disco</td><td>um índice grande pode passar da metade da tabela</td></tr>
+          <tr><td>Memória de cache</td><td>índice compete com dados pelo buffer pool</td></tr>
+          <tr><td>Manutenção</td><td>fragmentação, <code>REINDEX</code>, estatísticas</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O padrão de carga em massa</div>
+      <div class="code bare" style="margin-top:12px">
+        <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-sql">DROP INDEX idx_orders_user;
+-- carga em lotes, como no batched da aula 04
+CREATE INDEX idx_orders_user ON orders(user_id);
+ANALYZE;</code></pre>
+      </div>
+      <p>Construir o índice de uma vez no fim é mais rápido que mantê-lo atualizado linha a linha — o banco ordena tudo e monta a árvore em uma passada. Vale quando a carga é grande em relação à tabela; não vale numa carga incremental de mil linhas.</p>
+    </div>
+
+    <h2>Índice parcial: pague só pela fatia que interessa</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">CREATE INDEX idx_pending ON orders(created_at) WHERE status = 'pending';</code></pre>
+    </div>
+
+    <p>Ele indexa 133.385 das 400.000 linhas — um terço do tamanho, um terço do custo de escrita, e atende as queries que filtram por <code>status = 'pending'</code>.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">E ele não foi usado</div>
+      <p>Criei esse índice e rodei a query que ele deveria atender. O plano escolheu outro:</p>
+      <div class="code bare has-out" style="margin-top:12px">
+        <div class="out"><span class="out-label">Saída real</span>SEARCH orders USING COVERING INDEX idx_status_date (status=? AND created_at&gt;?)
+tempo:  3.53 ms</div>
+      </div>
+      <p>O <code>idx_status_date</code> já existente <em>cobria</em> a query — respondia sem tocar na tabela — enquanto o parcial exigiria um salto por linha. O planejador escolheu certo, e o índice novo virou custo puro.</p>
+      <p>A lição: <strong>criar um índice não significa que ele será usado</strong>. Sempre confira com <code>EXPLAIN</code> depois de criar, e apague o que o planejador ignora.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="video" data-title="Particionamento" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 15 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Particionamento</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Índice acelera achar a agulha. Particionamento serve para quando você quer o palheiro inteiro de <em>um</em> mês — e não quer nem tocar nos outros.</p>
+
+    <p>Uma tabela particionada é logicamente uma só, e fisicamente várias. O critério mais comum em dados é a data:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>sql</b> <span style="color:var(--ink-3)">— PostgreSQL</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">CREATE TABLE orders (
+    id bigint, user_id int, status text, created_at date, amount numeric
+) PARTITION BY RANGE (created_at);
+
+CREATE TABLE orders_2026_03 PARTITION OF orders
+    FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');</code></pre>
+    </div>
+
+    <p>O ganho tem nome: <strong>partition pruning</strong>. Um <code>WHERE created_at &gt;= '2026-03-01'</code> faz o planejador descartar as outras partições antes de ler qualquer coisa — e isso aparece no <code>EXPLAIN</code> como partições que simplesmente não estão no plano.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ganho</th><th>Por quê</th></tr></thead>
+        <tbody>
+          <tr><td>Leitura de um período</td><td>as outras partições nem são abertas</td></tr>
+          <tr><td>Apagar dados antigos</td><td><code>DROP TABLE</code> da partição: instantâneo, contra um <code>DELETE</code> de horas</td></tr>
+          <tr><td>Índices menores</td><td>uma árvore por partição, cada uma cabe no cache</td></tr>
+          <tr><td>Manutenção</td><td><code>VACUUM</code> e <code>REINDEX</code> por partição</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Quando ele atrapalha</div>
+      <p>Se a query <strong>não</strong> filtra pela chave de partição, o banco lê todas — e agora com o overhead de coordenar cem tabelas. Particionar por <code>created_at</code> uma tabela cujas consultas filtram por <code>user_id</code> deixa tudo mais lento. A chave de partição tem que ser a coluna que o filtro usa.</p>
+      <p>E cuidado com o excesso: mil partições diárias fazem o planejamento da query custar mais que a execução. Mensal costuma ser o ponto certo.</p>
+    </div>
+
+    <h2>Em arquivos, é a mesma ideia</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>estrutura</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">warehouse/orders/
+├── year=2026/month=01/part-00000.parquet
+├── year=2026/month=02/part-00000.parquet
+└── year=2026/month=03/part-00000.parquet</code></pre>
+    </div>
+
+    <p>É a saída particionada que você escreveu no exercício 8.4, com o nome do diretório carregando o valor da chave. Spark, DuckDB e Athena leem essa convenção e fazem o mesmo pruning — um <code>WHERE month = 3</code> abre um arquivo em vez de doze.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">A ponte com a fase 2</div>
+      <p>Este é o conceito de maior transferência da fase 1 para a 2. Partição em Spark, arquivo Parquet particionado, <em>predicate pushdown</em> e <em>partition pruning</em> são todos a mesma ideia: <strong>organizar os dados de forma que a maior parte deles nunca precise ser lida</strong>.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="note" data-title="Para saber mais: lendo um plano de verdade" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 15 &middot; Atividade 08</span></div>
+  <h1 class="act-title">Lendo um plano de verdade</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">O <code>EXPLAIN QUERY PLAN</code> do sqlite é minimalista de propósito. Num banco de produção você tem muito mais — e mais chance de se enganar.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>sql</b> <span style="color:var(--ink-3)">— PostgreSQL</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
+SELECT ...;</code></pre>
+    </div>
+
+    <div class="traps">
+      <div class="trap">
+        <h3><code>EXPLAIN</code> estima; <code>EXPLAIN ANALYZE</code> executa</h3>
+        <p>Sem <code>ANALYZE</code>, os números são previsão do planejador. Com, são medição — e a query <strong>roda de verdade</strong>, inclusive se for um <code>DELETE</code>. Envolva em transação e faça rollback quando for query de escrita.</p>
+      </div>
+      <div class="trap">
+        <h3>Compare <code>rows</code> estimado com <code>actual rows</code></h3>
+        <p>É a informação mais útil do plano inteiro. Uma estimativa de 100 linhas contra 100 mil reais significa estatística desatualizada — e explica por que ele escolheu um plano ruim. A correção é <code>ANALYZE</code>, não um índice novo.</p>
+      </div>
+      <div class="trap">
+        <h3><code>BUFFERS</code> mostra o que veio do disco</h3>
+        <p><code>shared read</code> alto contra <code>shared hit</code> é I/O de verdade. Uma query "lenta" com tudo em <code>hit</code> não tem problema de I/O — tem problema de CPU ou de estar processando linhas demais.</p>
+      </div>
+      <div class="trap">
+        <h3>O custo é acumulado, e os filhos vêm primeiro</h3>
+        <p>Leia de dentro para fora. O tempo de um nó inclui o dos filhos, então o gargalo é onde o tempo <em>aumenta muito</em> em relação ao nó de baixo.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Os três sinais que valem procurar primeiro</div>
+      <p><strong>Seq Scan</strong> em tabela grande com filtro seletivo. <strong>Nested Loop</strong> com muitas linhas no lado de fora — cada uma dispara uma busca. E <strong>Sort</strong> com <code>Sort Method: external merge</code>, que significa que a ordenação não coube na memória e foi para o disco.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Meça a query, não só o plano</div>
+      <p>Plano bonito e query lenta acontece. E o contrário também: um <code>Seq Scan</code> numa tabela de 500 linhas é o plano certo. O plano explica o <em>porquê</em> do tempo; quem decide se há problema é o cronômetro — do mesmo jeito que na aula 05.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="note" data-title="Um método para otimizar" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Método</span><span class="dot"></span><span>Aula 15 &middot; Atividade 09</span></div>
+  <h1 class="act-title">Um método para otimizar</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Otimizar por palpite é caro: cada índice criado "por precaução" custa escrita para sempre. Vale ter uma ordem.</p>
+
+    <ol>
+      <li><strong>Meça primeiro.</strong> Qual query, quantas vezes por dia, quanto tempo cada uma. Uma query de 2 s que roda uma vez por noite não é problema; uma de 50 ms que roda 100 mil vezes é.</li>
+      <li><strong>Leia o plano.</strong> <code>SCAN</code> em tabela grande? <code>SORT</code> que não precisava? Estimativa muito longe do real?</li>
+      <li><strong>Conserte a query antes do esquema.</strong> Predicado não sargable, <code>SELECT *</code>, subquery correlacionada que vira <code>JOIN</code>. Não custa nada e frequentemente resolve.</li>
+      <li><strong>Rode <code>ANALYZE</code>.</strong> Antes de criar índice, garanta que o planejador tem estatística boa.</li>
+      <li><strong>Aí sim, o índice</strong> — um, o mais específico que atenda o padrão de filtro. Confirme com <code>EXPLAIN</code> que ele está sendo usado.</li>
+      <li><strong>Meça de novo</strong>, e meça também a escrita.</li>
+      <li><strong>Se ainda não bastar</strong>, aí é particionamento, materialização, ou repensar o modelo.</li>
+    </ol>
+
+    <div class="callout bug">
+      <div class="callout-title">Os três atalhos que dão errado</div>
+      <p><strong>Indexar toda coluna do <code>WHERE</code>.</strong> Dez índices numa tabela de escrita intensa, e o planejador escolhe um só. Você pagou dez.</p>
+      <p><strong>Copiar índice de outro ambiente.</strong> O que serve para o banco de relatório não serve para o transacional — as queries são outras.</p>
+      <p><strong>Otimizar antes de medir.</strong> A intuição sobre o que é lento erra na maioria das vezes; foi o que a aula 05 mostrou quatro vezes seguidas.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Índices que ninguém usa</div>
+      <p>PostgreSQL tem <code>pg_stat_user_indexes</code>, com <code>idx_scan</code> por índice. Um índice com <code>idx_scan = 0</code> depois de um mês é custo puro de escrita — apague. É a limpeza de maior retorno e a que ninguém faz.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="lab" data-title="Hora da prática: 15.1 a 15.4" data-min="60" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 15 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Exercícios 15.1 a 15.4</h1>
+  <div class="act-meta">60 min &middot; arquivos <code>lesson15.sql</code> e <code>bench.py</code></div>
+  <div class="prose">
+
+    <div class="callout tip">
+      <div class="callout-title">Monte a bancada primeiro</div>
+      <p>Um <code>bench.py</code> que cria a tabela de 400 mil linhas em <code>sqlite3</code>, roda <code>ANALYZE</code>, e tem duas funções: <code>plano(sql)</code> que imprime o <code>EXPLAIN QUERY PLAN</code>, e <code>tempo(sql)</code> que devolve o melhor de cinco execuções. Todos os exercícios usam as duas.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">15.1</span><h2><code>SCAN</code> vira <code>SEARCH</code></h2><span class="ex-kind">medição</span></div>
+      <p>Reproduza a medição da atividade 02. Depois refaça em três escalas — 10 mil, 100 mil e 1 milhão de linhas — e monte a tabela de tempos com e sem índice.</p>
+      <p>Confirme com número o que a teoria diz: o tempo do <code>SCAN</code> cresce linearmente, o do <code>SEARCH</code> quase não muda. É a mesma prova em três escalas da aula 05.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">15.2</span><h2>A ordem das colunas</h2><span class="ex-kind">experimento</span></div>
+      <p>Crie <code>(status, created_at)</code> e meça as três queries da atividade 03. Depois apague, crie <code>(created_at, status)</code> e meça de novo. Monte a tabela 2×3.</p>
+      <p>Veja se o seu sqlite faz skip-scan e diga em qual das duas ordens ele apareceu — e por que faz sentido que tenha sido nessa.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">15.3</span><h2>Predicados que matam o índice</h2><span class="ex-kind">medição</span></div>
+      <p>Para cada linha da tabela de <em>sargable</em> da atividade 05, escreva as duas versões, mostre os dois planos e os dois tempos. São seis pares.</p>
+      <div class="callout warn">
+        <div class="callout-title">Inclua o caso da conversão implícita</div>
+        <p>Crie uma coluna <code>user_id_txt TEXT</code> com os mesmos valores, indexe, e compare <code>WHERE user_id_txt = '12345'</code> com <code>WHERE user_id_txt = 12345</code>. É o erro mais difícil de enxergar lendo a query.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">15.4</span><h2>O preço da escrita</h2><span class="ex-kind">medição</span></div>
+      <p>Meça 200 mil <code>INSERT</code> com 0, 1, 2 e 4 índices. Monte a curva e diga se o custo é linear no número de índices.</p>
+      <p>Depois meça a estratégia da atividade 06: apagar os índices, carregar, recriar. Compare com a carga mantendo os índices e diga a partir de que volume ela compensa.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="lab" data-title="Hora da prática: 15.5 a 15.7 e entrega" data-min="60" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 15 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Exercícios 15.5 a 15.7 e entrega</h1>
+  <div class="act-meta">60 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">15.5</span><h2>Cobertura</h2><span class="ex-kind">medição</span></div>
+      <p>Pegue uma query sua da aula 13 que devolva várias colunas e projete o índice de cobertura para ela. Mostre o plano antes (<code>SEARCH ... USING INDEX</code>) e depois (<code>USING COVERING INDEX</code>), com os tempos.</p>
+      <p>Depois meça o tamanho dos dois índices — no sqlite, <code>dbstat</code> ou o crescimento do arquivo. Qual foi o custo em disco do ganho de tempo?</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">15.6</span><h2>O índice que o planejador ignora</h2><span class="ex-kind">análise</span></div>
+      <p>Reproduza o caso da atividade 06: crie um índice parcial que <em>deveria</em> atender uma query e mostre que o planejador escolheu outro. Explique a escolha dele.</p>
+      <p>Depois force o uso com <code>INDEXED BY</code> (sqlite) e meça: o planejador estava certo?</p>
+      <div class="callout tip">
+        <div class="callout-title">Este é o exercício mais valioso da aula</div>
+        <p>Discordar do planejador e descobrir que ele estava certo é a experiência que faz você parar de criar índice por palpite. Se ele estiver errado no seu caso, melhor ainda — descubra por quê, e provavelmente é estatística.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">15.7</span><h2>Desafio: otimize a query da aula 13</h2><span class="ex-kind">desafio</span></div>
+      <p>Pegue a query de carga incremental do exercício 13.7 — deduplicação com <code>ROW_NUMBER</code> sobre uma tabela de staging — e aplique o método da atividade 09, do passo 1 ao 6.</p>
+      <p>Entregue: o plano inicial, o que você mudou em cada passo, o plano final e a tabela de tempos. E se algum passo não melhorou nada, <strong>diga isso</strong> — é informação tão boa quanto o ganho.</p>
+      <div class="callout warn">
+        <div class="callout-title">A pista</div>
+        <p>Uma janela precisa das linhas ordenadas por <code>PARTITION BY</code> e depois por <code>ORDER BY</code>. Um índice com exatamente essas colunas, nessa ordem, faz o <code>SORT</code> sair do plano — e é o assunto da atividade 09 da aula 13, agora com o plano na frente para provar.</p>
+      </div>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>bench.py</code> e o <code>lesson15.sql</code>, com plano e tempo de cada consulta nos comentários. Nenhuma afirmação sobre desempenho sem o plano ao lado.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de commitar</div>
+      <ul>
+        <li>Rodou <code>ANALYZE</code> antes de cada medição?</li>
+        <li>Todo índice criado foi confirmado com <code>EXPLAIN</code> como sendo usado?</li>
+        <li>Toda afirmação de "ficou mais rápido" tem os dois tempos?</li>
+        <li>Mediu também o efeito na escrita?</li>
+        <li>Sobrou algum índice que nenhuma query usa?</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 16: Git em equipe</div>
+      <p>Volta para o Git, onde a aula 06 parou. Branch de verdade, pull request, e o conflito — que não é acidente nem sinal de que alguém errou, mas o mecanismo do git dizendo que ele não sabe qual das duas versões você quer.</p>
+    </div>
+
+  </div>
+</article>
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/11</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 15</div>
+          <div class="lh-n">EXPLAIN e índices</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/sql/lesson15.sql<span class="rs">o arquivo que você entrega</span></span></li>
+        <li><span class="res-static">exercises/sql/bench.py<span class="rs">o script que gera a tabela e mede</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://www.sqlite.org/eqp.html" target="_blank" rel="noopener">SQLite — EXPLAIN QUERY PLAN<span class="rs">como ler SCAN e SEARCH</span></a></li>
+        <li><a href="https://use-the-index-luke.com/" target="_blank" rel="noopener">Use The Index, Luke!<span class="rs">o melhor material gratuito sobre índices</span></a></li>
+        <li><a href="https://www.postgresql.org/docs/current/using-explain.html" target="_blank" rel="noopener">PostgreSQL — Using EXPLAIN<span class="rs">ANALYZE, BUFFERS e custo estimado</span></a></li>
+        <li><a href="https://www.sqlite.org/queryplanner.html" target="_blank" rel="noopener">The SQLite Query Planner<span class="rs">por que a ordem das colunas importa</span></a></li>
+        <li><a href="https://www.sqlite.org/partialindex.html" target="_blank" rel="noopener">Partial indexes<span class="rs">índice sobre uma fatia</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">SQL Performance Explained<span class="rs">Winand · leitura obrigatória, 200 páginas</span></span></li>
+        <li><span class="res-static">Designing Data-Intensive Applications — cap. 3<span class="rs">Kleppmann · como um índice é construído</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
