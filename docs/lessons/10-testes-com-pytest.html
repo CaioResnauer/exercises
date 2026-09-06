@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Testes com pytest</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="10" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 10 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aulas 01 a 09</div>
+  <div class="prose">
+    <p class="lead">Quase ninguém que vem de analytics escreve teste automatizado. É a lacuna mais visível quando um analista tenta virar engenheiro — e é das mais baratas de fechar, porque o <code>pytest</code> exige aprender pouca coisa.</p>
+
+    <p>A aula 09 preparou o terreno: sem injeção de dependência não há o que testar sem banco. Agora os dublês que você escreveu à mão viram <em>fixtures</em>, e o relógio injetado vira um teste determinístico.</p>
+
+    <h2>O que você vai levar</h2>
+    <ul>
+      <li><code>assert</code> puro e a mensagem que o pytest constrói sozinho;</li>
+      <li><code>parametrize</code> — um teste, N casos, N linhas de resultado;</li>
+      <li><code>fixture</code>, <code>tmp_path</code> e <code>monkeypatch</code>;</li>
+      <li>o que testar num pipeline — e o que não vale a pena;</li>
+      <li>cobertura: para que serve e por que 100% não quer dizer nada.</li>
+    </ul>
+
+    <div class="callout tip">
+      <div class="callout-title">Um teste desta aula achou um bug de verdade</div>
+      <p>Enquanto eu escrevia os exemplos, um <code>parametrize</code> falhou: <code>round(10.005, 2)</code> não devolve <code>10.00</code>. A atividade 05 é sobre esse resultado, porque é exatamente para isso que teste existe — descobrir que a sua ideia do comportamento estava errada.</p>
+    </div>
+
+    <h2>Tempo estimado</h2>
+    <p>50 min de leitura, 2 h de exercícios. Instale antes: <code>pip install pytest pytest-cov</code>.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="O primeiro teste" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 10 &middot; Atividade 02</span></div>
+  <h1 class="act-title">O primeiro teste</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Não há classe para herdar, nem <code>assertEqual</code>, nem <code>setUp</code>. Uma função que começa com <code>test_</code> e um <code>assert</code>.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>pipeline.py</b> <span style="color:var(--ink-3)">— o código sob teste</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def parse_lines(lines: Iterable[str]) -&gt; Iterator[dict]:
+    """Yield one record per non-blank line, naming the line that fails."""
+    for number, line in enumerate(lines, start=1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            yield json.loads(line)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"line {number}: {error.msg}") from error</code></pre>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>test_pipeline.py</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from pipeline import parse_lines
+
+def test_parse_skips_blank_lines():
+    assert list(parse_lines(['{"id":1}', "", "  ", '{"id":2}'])) == [{"id": 1}, {"id": 2}]</code></pre>
+    </div>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">python -m pytest -q</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>.                                                     [100%]
+1 passed in 0.01s</div>
+    </div>
+
+    <h2>A mágica do <code>assert</code></h2>
+    <p>Um <code>assert</code> comum de Python só diz <code>AssertionError</code>. O pytest reescreve o bytecode dos arquivos de teste para reconstruir a comparação quando ela falha:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>pytest</b> <span style="color:var(--danger)">— um teste falhando</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">&gt;       assert normalize(raw) == esperado
+E       AssertionError: assert {'id': 1, 'am... 'city': 'sp'} == {'id': 1, 'am... 'city': 'sp'}
+E         Omitting 2 identical items, use -vv to show
+E         Differing items:
+E         {'amount': 10.01} != {'amount': 10.0}
+E         Use -v to get more diff</code></pre>
+    </div>
+
+    <p>Ele omitiu os dois campos iguais e apontou exatamente o que difere. Isso vem de graça — você não escreveu mensagem nenhuma.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Onde a reescrita não chega</div>
+      <p>O pytest só reescreve <code>assert</code> em arquivos que ele reconhece como teste (<code>test_*.py</code>) e em módulos registrados com <code>pytest.register_assert_rewrite</code>. Um <code>assert</code> dentro de um helper em <code>utils.py</code> não ganha a explicação — vira o <code>AssertionError</code> pelado.</p>
+    </div>
+
+    <h2>As três convenções que bastam</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>O quê</th><th>Convenção</th></tr></thead>
+        <tbody>
+          <tr><td>arquivo</td><td><code>test_*.py</code> ou <code>*_test.py</code></td></tr>
+          <tr><td>função</td><td>começa com <code>test_</code></td></tr>
+          <tr><td>classe (opcional)</td><td><code>Test*</code>, sem <code>__init__</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O nome do teste é documentação</div>
+      <p><code>test_parse_skips_blank_lines</code> diz o comportamento esperado numa linha, e é o que aparece quando falha. <code>test_parse_2</code> não diz nada — e é o nome que você vai ler às duas da manhã.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="parametrize: um teste, N casos" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 10 &middot; Atividade 03</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">parametrize</code>: um teste, N casos</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">A tentação é escrever um teste com cinco <code>assert</code>. O problema é que o primeiro que falha esconde os outros quatro.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— cinco asserts, um resultado</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def test_normalize():
+    assert normalize({"id": "1", "amount": "10.005"}) == {...}
+    assert normalize({"id": 2, "amount": 3}) == {...}          # nunca roda se o de cima falhar
+    assert normalize({"id": 3, "amount": 1.239}) == {...}</code></pre>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— um teste por caso</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@pytest.mark.parametrize("raw,esperado", [
+    ({"id": "1", "amount": "10.005", "city": " SP "}, {"id": 1, "amount": 10.01, "city": "sp"}),
+    ({"id": 2, "amount": 3, "city": "Rio"},           {"id": 2, "amount": 3.0,  "city": "rio"}),
+    ({"id": 3, "amount": 1.239},                      {"id": 3, "amount": 1.24, "city": ""}),
+])
+def test_normalize(raw, esperado):
+    assert normalize(raw) == esperado</code></pre>
+    </div>
+
+    <p>São três testes independentes. Todos rodam, e o relatório nomeia qual caso quebrou:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>pytest</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">FAILED test_pipeline.py::test_normalize[raw0-esperado0] - AssertionError: ass...
+1 failed, 7 passed in 0.05s</code></pre>
+    </div>
+
+    <p><code>[raw0-esperado0]</code> é o identificador do caso. Você pode rodar só ele: <code>pytest "test_pipeline.py::test_normalize[raw0-esperado0]"</code>.</p>
+
+    <h2>Dando nome aos casos</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@pytest.mark.parametrize("raw,esperado", [
+    pytest.param({"amount": "10.005"}, 10.01, id="string-com-3-decimais"),
+    pytest.param({"amount": 3},         3.0,  id="inteiro-vira-float"),
+    pytest.param({"amount": None},      None, id="nulo",
+                 marks=pytest.mark.xfail(reason="ainda não tratamos nulo")),
+])
+def test_normalize_amount(raw, esperado): ...</code></pre>
+    </div>
+
+    <p>O <code>id=</code> troca <code>[raw0-esperado0]</code> por <code>[string-com-3-decimais]</code>. E o <code>xfail</code> registra um caso conhecido e ainda não resolvido — ele roda, é esperado falhar, e <strong>avisa se um dia passar</strong>.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Onde ele brilha em dados</div>
+      <p>Validação e parsing são tabelas de casos por natureza: formato de data, moeda, encoding, campo ausente, campo nulo, campo vazio, valor negativo. <code>parametrize</code> transforma essa tabela em testes sem repetição — e a tabela vira a especificação do que o parser aceita.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Não parametrize o que não é o mesmo teste</div>
+      <p>Se os casos precisam de <code>if</code> dentro do teste para funcionar, eles não são o mesmo teste. Dois testes separados são mais claros que um parametrizado com ramificação.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="Fixtures: o preparo que se compartilha" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 10 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Fixtures: o preparo que se compartilha</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Uma fixture é uma função que produz o que o teste precisa. O teste pede pelo <strong>nome do parâmetro</strong>, e o pytest resolve.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@pytest.fixture
+def arquivo(tmp_path):
+    """A small JSONL file on real disk, thrown away after the test."""
+    p = tmp_path / "orders.jsonl"
+    p.write_text('{"id":1,"amount":10}\n{"id":2,"amount":20}\n', encoding="utf-8")
+    return p
+
+
+def test_le_do_disco(arquivo):          # o nome do parâmetro é o nome da fixture
+    with arquivo.open(encoding="utf-8") as fh:
+        assert total(normalize(r) for r in parse_lines(fh)) == 30.0</code></pre>
+    </div>
+
+    <p>Repare que a fixture <code>arquivo</code> usa outra fixture, <code>tmp_path</code>, que vem pronta do pytest: um diretório temporário exclusivo daquele teste, apagado depois. Fixtures compõem.</p>
+
+    <h2>As que já vêm prontas</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fixture</th><th>Dá</th><th>Use para</th></tr></thead>
+        <tbody>
+          <tr><td><code>tmp_path</code></td><td>um <code>Path</code> vazio e exclusivo</td><td>testar leitura e escrita de verdade</td></tr>
+          <tr><td><code>monkeypatch</code></td><td>substituição desfeita ao fim</td><td>variável de ambiente, atributo, função</td></tr>
+          <tr><td><code>capsys</code></td><td>o que foi para stdout/stderr</td><td>conferir saída de CLI</td></tr>
+          <tr><td><code>caplog</code></td><td>os registros de log emitidos</td><td>garantir que o aviso foi emitido</td></tr>
+          <tr><td><code>request</code></td><td>metadados do teste em curso</td><td>fixtures parametrizadas</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Limpeza: <code>yield</code> em vez de <code>return</code></h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@pytest.fixture
+def banco(tmp_path):
+    connection = sqlite3.connect(tmp_path / "test.db")
+    connection.execute("CREATE TABLE orders(id INTEGER, amount REAL)")
+    yield connection                     # o teste roda aqui
+    connection.close()                   # e isto roda depois, mesmo se ele falhar</code></pre>
+    </div>
+
+    <p>É o mesmo <code>@contextmanager</code> da aula 08 com outro decorator. E vale o mesmo cuidado: se a limpeza precisa acontecer mesmo quando o <em>setup</em> falha no meio, use <code>try/finally</code>.</p>
+
+    <h2>Escopo: quantas vezes ela roda</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@pytest.fixture(scope="session")     # uma vez para a suíte inteira
+def dataset_grande(tmp_path_factory):
+    path = tmp_path_factory.mktemp("data") / "big.jsonl"
+    gerar(path, linhas=1_000_000)
+    return path</code></pre>
+    </div>
+
+    <div class="callout bug">
+      <div class="callout-title">A fixture de escopo largo que vaza estado</div>
+      <p>Uma fixture <code>scope="session"</code> que devolve algo <strong>mutável</strong> é compartilhada por todos os testes. Um teste que altera a lista faz o próximo falhar — e a falha depende da ordem de execução, que é o pior tipo de teste intermitente. Escopo largo só para coisa imutável ou cara e somente-leitura.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title"><code>conftest.py</code></div>
+      <p>Fixtures usadas por mais de um arquivo vão para um <code>conftest.py</code> no diretório — sem importar nada, o pytest acha sozinho. Um <code>conftest.py</code> na raiz de <code>tests/</code> vale para toda a suíte; um dentro de uma pasta vale só ali.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="lab" data-title="Mão na massa: o teste que estava certo" data-min="6" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 10 &middot; Atividade 05</span></div>
+  <h1 class="act-title">O teste que estava certo</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Este é o caso real prometido na apresentação. A função arredonda para duas casas; o teste diz o que você esperaria.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def normalize(record: dict) -&gt; dict:
+    return {"id": int(record["id"]),
+            "amount": round(float(record["amount"]), 2),
+            "city": record.get("city", "").strip().lower()}
+
+
+@pytest.mark.parametrize("raw,esperado", [
+    ({"id": "1", "amount": "10.005", "city": " SP "}, {"id": 1, "amount": 10.00, "city": "sp"}),
+])
+def test_normalize(raw, esperado):
+    assert normalize(raw) == esperado</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="O teste passa? Se falhar, o bug está na função ou no teste?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a saída</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div class="code" style="margin-top:18px">
+          <div class="code-head"><span class="code-file"><b>saída real</b></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-python">Differing items:
+{'amount': 10.01} != {'amount': 10.0}</code></pre>
+        </div>
+        <p style="margin-top:16px"><code>round(10.005, 2)</code> devolve <strong>10.01</strong>, não 10.00. E o bug não está nem na função nem no teste — está na sua ideia de o que <code>10.005</code> é.</p>
+        <div class="code has-out">
+          <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-python">from decimal import Decimal
+for v in ("10.005", "2.675", "0.125", "1.005"):
+    print(f"round({v}, 2) = {round(float(v), 2):<6} | o float real é {Decimal(float(v))}")</code></pre>
+          <div class="out"><span class="out-label">Saída real</span>round(10.005, 2) = 10.01  | o float real é 10.0050000000000007815970093361102044582366943359375
+round(2.675, 2)  = 2.67   | o float real é 2.67499999999999982236431605997495353221893310546875
+round(0.125, 2)  = 0.12   | o float real é 0.125
+round(1.005, 2)  = 1.0    | o float real é 1.00499999999999989341858963598497211933135986328125</div>
+        </div>
+        <p style="margin-top:16px">Nenhum desses números existe em binário. <code>10.005</code> vira um float ligeiramente <em>acima</em>, então sobe; <code>2.675</code> e <code>1.005</code> viram floats ligeiramente <em>abaixo</em>, então descem. Não há regra a decorar: depende de para que lado o valor caiu.</p>
+        <p>O <code>0.125</code> é o único exato dos quatro — e ele desce, porque aí sim vale a regra do <code>round</code>: <strong>empate vai para o par</strong>. Duas regras diferentes, dependendo de o número ser representável ou não.</p>
+        <div class="callout warn">
+          <div class="callout-title">O que fazer com dinheiro</div>
+          <p>Não usar <code>float</code>. Use <code>Decimal</code> a partir de <strong>string</strong> — <code>Decimal("10.005")</code>, nunca <code>Decimal(10.005)</code> — e arredonde com <code>quantize(Decimal("0.01"), ROUND_HALF_UP)</code>. Um centavo por linha, em dez milhões de linhas, é uma diferença que a área financeira encontra.</p>
+        </div>
+        <div class="callout tip">
+          <div class="callout-title">E para comparar float em teste</div>
+          <p><code>assert x == pytest.approx(0.3)</code>. Ele compara com tolerância relativa e é a única forma honesta de testar aritmética de ponto flutuante — <code>0.1 + 0.2 == 0.3</code> é <code>False</code>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="Testando o que dá errado" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 10 &middot; Atividade 06</span></div>
+  <h1 class="act-title">Testando o que dá errado</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Metade do valor de um pipeline está em falhar direito. Isso também é testável, e é o teste que quase ninguém escreve.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def test_parse_reports_the_line_number():
+    with pytest.raises(ValueError, match="line 2"):
+        list(parse_lines(['{"id":1}', "{nao e json}"]))</code></pre>
+    </div>
+
+    <p>Duas coisas verificadas de uma vez: que levanta <code>ValueError</code>, e que a mensagem diz <strong>qual linha</strong>. O <code>match</code> é uma regex contra o texto da exceção — é o que impede o teste de passar com uma mensagem inútil.</p>
+
+    <div class="callout bug">
+      <div class="callout-title">O <code>pytest.raises</code> que não testa nada</div>
+      <div class="code bare" style="margin-top:14px">
+        <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— dois erros comuns</span></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">with pytest.raises(Exception):        # 1. qualquer erro passa, inclusive typo seu
+    parse_lines(linhas)               # 2. generator: não roda nada!</code></pre>
+      </div>
+      <p>O primeiro erro é capturar <code>Exception</code>: um <code>NameError</code> no seu próprio teste faria ele passar. O segundo é a lição da aula 01 — <code>parse_lines</code> é generator, então a linha não executa corpo nenhum. Sem o <code>list(...)</code>, o teste passa por acidente sempre que a função não levanta, e falha sempre que levanta.</p>
+    </div>
+
+    <h2>Inspecionar a exceção</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def test_erro_preserva_a_causa():
+    with pytest.raises(ValueError) as info:
+        list(parse_lines(["{nao e json}"]))
+    assert isinstance(info.value.__cause__, json.JSONDecodeError)</code></pre>
+    </div>
+
+    <p>O <code>raise ... from error</code> do <code>parse_lines</code> preenche o <code>__cause__</code>. Testar isso garante que a causa original não se perdeu — é o que faz o traceback em produção dizer <em>por que</em> o JSON era inválido, e não só que era.</p>
+
+    <h2>Testar que o log saiu</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def test_avisa_linha_ruim(caplog):
+    with caplog.at_level(logging.WARNING):
+        list(read_jsonl_tolerante(["{ruim}", '{"id":1}']))
+    assert "skipped" in caplog.text
+    assert caplog.records[0].levelname == "WARNING"</code></pre>
+    </div>
+
+    <p>Esse é o teste que impede a regressão da revisão da aula 04: um <code>except</code> que engole a linha ruim em silêncio. Se alguém remover o aviso, o teste cai.</p>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="video" data-title="monkeypatch e os dublês" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 10 &middot; Atividade 07</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">monkeypatch</code> e os dublês</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">A aula 09 resolveu metade do problema: o que é injetado, você substitui passando outro objeto. Esta atividade é sobre a outra metade — o que não é injetável.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def test_usa_a_url_do_ambiente(monkeypatch):
+    monkeypatch.setenv("API_URL", "https://exemplo.test")
+    monkeypatch.delenv("API_TOKEN", raising=False)
+    assert load_config().base_url == "https://exemplo.test"
+    # tudo desfeito ao fim do teste, sem você escrever nada</code></pre>
+    </div>
+
+    <p>O <code>monkeypatch</code> reverte tudo ao final — inclusive se o teste falhar no meio. Escrever <code>os.environ["API_URL"] = ...</code> à mão contamina os testes seguintes, e o efeito depende da ordem de execução.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Método</th><th>Substitui</th></tr></thead>
+        <tbody>
+          <tr><td><code>monkeypatch.setenv / delenv</code></td><td>variável de ambiente</td></tr>
+          <tr><td><code>monkeypatch.setattr</code></td><td>atributo de módulo, classe ou objeto</td></tr>
+          <tr><td><code>monkeypatch.chdir</code></td><td>diretório de trabalho</td></tr>
+          <tr><td><code>monkeypatch.syspath_prepend</code></td><td><code>sys.path</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>A regra que evita o erro clássico</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python"># em pipeline.py:  from requests import get
+
+monkeypatch.setattr("requests.get", fake)     # NÃO funciona
+monkeypatch.setattr("pipeline.get", fake)     # funciona</code></pre>
+    </div>
+
+    <p><strong>Substitua onde o nome é <em>usado</em>, não onde é definido.</strong> O <code>from requests import get</code> copiou a referência para dentro de <code>pipeline</code>; trocar em <code>requests</code> não alcança essa cópia.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Quando você precisa de monkeypatch, pergunte por quê</div>
+      <p>Substituir <code>requests.get</code> é sinal de que o cliente HTTP não foi injetado. A aula 09 já dizia: injete e o teste passa um dublê, sem mágica. Guarde o <code>monkeypatch</code> para o que <strong>não dá</strong> para injetar — ambiente, diretório de trabalho, código de terceiros.</p>
+    </div>
+
+    <h2>Dublê escrito à mão contra <code>unittest.mock</code></h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class FakeSink:
+    """Records what it was given, so the test can inspect it."""
+    def __init__(self): self.batches = []
+    def write(self, rows): self.batches.append(list(rows)); return len(rows)</code></pre>
+    </div>
+
+    <p>Doze palavras, e o teste consegue afirmar <em>o que</em> foi gravado e <em>em quantos lotes</em>. Um <code>MagicMock</code> daria o mesmo com menos digitação e um problema: ele aceita qualquer método, com qualquer assinatura. Se você renomear <code>write</code> para <code>write_batch</code>, o dublê de verdade quebra o teste — que é o que você quer — e o mock continua passando.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Se usar mock, ancore no real</div>
+      <p><code>mock.create_autospec(Sink)</code> ou <code>autospec=True</code> no <code>patch</code> fazem o dublê copiar a assinatura verdadeira. É a diferença entre um mock que protege e um que apenas concorda com tudo.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="video" data-title="O que testar num pipeline" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 10 &middot; Atividade 08</span></div>
+  <h1 class="act-title">O que testar num pipeline</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Testar tudo é caro e testar nada é o que quase todo mundo faz. O critério é o valor de cada teste dividido pelo custo de mantê-lo.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Camada</th><th>Testar</th><th>Como</th></tr></thead>
+        <tbody>
+          <tr><td>Transformação pura</td><td class="num" style="color:var(--ok)">sempre</td><td>entrada e saída, <code>parametrize</code></td></tr>
+          <tr><td>Parsing e validação</td><td class="num" style="color:var(--ok)">sempre</td><td>tabela de casos, inclusive os ruins</td></tr>
+          <tr><td>Regra de negócio</td><td class="num" style="color:var(--ok)">sempre</td><td>o exemplo que motivou a regra</td></tr>
+          <tr><td>Composição de estágios</td><td>vale a pena</td><td>fonte em memória, sink dublê</td></tr>
+          <tr><td>Conector real (API, banco)</td><td>um só, marcado</td><td><code>@pytest.mark.integration</code></td></tr>
+          <tr><td>Biblioteca de terceiros</td><td class="num" style="color:var(--danger)">não</td><td>o pandas já tem testes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Os testes que valem mais em dados</h2>
+    <div class="traps">
+      <div class="trap">
+        <h3>A entrada vazia</h3>
+        <p>Arquivo sem linhas, resposta sem itens, tabela sem registros. É o caso que nunca é testado à mão e o que mais quebra — foi a <code>StopIteration</code> da aula 01 e o <code>max()</code> sem <code>default</code> da aula 04.</p>
+      </div>
+      <div class="trap">
+        <h3>A linha malformada no meio</h3>
+        <p>Não no começo — no meio. Ela testa se o pipeline processa o que veio antes, reporta, e decide conscientemente entre parar e continuar.</p>
+      </div>
+      <div class="trap">
+        <h3>O campo nulo contra o campo ausente</h3>
+        <p><code>{"city": null}</code> e <code>{}</code> são coisas diferentes e o código quase sempre trata uma só. Dois casos de <code>parametrize</code>.</p>
+      </div>
+      <div class="trap">
+        <h3>A laziness que você prometeu</h3>
+        <p>Um teste que prova que nada foi lido antes do primeiro <code>next()</code>. Sem ele, um <code>list()</code> acrescentado no meio do pipeline passa despercebido — e é o teste da atividade 09 da aula 05, agora dentro da suíte.</p>
+      </div>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— testando laziness</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def test_parse_e_lazy(arquivo):
+    """Nada é lido antes do primeiro next()."""
+    lidas = []
+    def contando():
+        with arquivo.open(encoding="utf-8") as fh:
+            for line in fh:
+                lidas.append(line)
+                yield line
+
+    gen = parse_lines(contando())
+    assert lidas == []          # construir não lê
+    next(gen)
+    assert len(lidas) == 1      # uma linha por vez</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Marcadores para separar o que é lento</div>
+      <p>Registre <code>markers = integration: toca a rede ou o banco</code> no <code>pyproject.toml</code> e rode o dia a dia com <code>pytest -m "not integration"</code>. A suíte rápida tem que caber em segundos, ou você para de rodá-la.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="note" data-title="Para saber mais: cobertura" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 10 &middot; Atividade 09</span></div>
+  <h1 class="act-title">Cobertura, e o que ela não mede</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Útil como mapa do que nunca foi executado. Perigosa como meta.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">python -m pytest -q --cov=pipeline --cov-report=term-missing</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>..........                                             [100%]
+Name          Stmts   Miss  Cover   Missing
+-------------------------------------------
+pipeline.py      15      0   100%
+-------------------------------------------
+TOTAL            15      0   100%
+10 passed in 0.05s</div>
+    </div>
+
+    <p>A coluna que importa é <code>Missing</code>: ela lista as <strong>linhas nunca executadas</strong> por teste nenhum. Costuma apontar exatamente os ramos de erro — o <code>except</code> que ninguém exercitou.</p>
+
+    <h2>Por que 100% não quer dizer correto</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def taxa(valor, aliquota):
+    return valor * aliquota      # e se aliquota vier em porcentagem? e negativa?
+
+def test_taxa():
+    assert taxa(100, 0.1) == 10  # 100% de cobertura desta função</code></pre>
+    </div>
+
+    <p>Uma linha, um teste, 100%. E a função aceita alíquota negativa, string, <code>None</code>. Cobertura mede <strong>execução</strong>, não verificação: um teste sem nenhum <code>assert</code> cobre igual.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">A meta que produz teste ruim</div>
+      <p>"90% de cobertura" como regra de CI faz as pessoas escreverem testes que executam código sem afirmar nada, só para subir o número. O sinal útil é o oposto: olhar o <code>Missing</code> e perguntar <em>"por que ninguém passa por aqui?"</em>. Às vezes a resposta é que aquele código não precisa existir.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Cobertura de ramo</div>
+      <p><code>--cov-branch</code> conta cada saída de <code>if</code> separadamente. Um <code>if</code> sem <code>else</code> testado só pelo caminho verdadeiro aparece como ramo faltando — é um sinal bem mais honesto que a cobertura de linha.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="video" data-title="Organizando a suíte" data-min="4" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 10 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Organizando a suíte</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Onde os arquivos ficam e o que configurar para o <code>pytest</code> rodar do jeito que você quer.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>estrutura</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">projeto/
+├── pyproject.toml
+├── src/
+│   └── sales_pipeline/
+│       ├── extract.py
+│       └── transform.py
+└── tests/
+    ├── conftest.py           # fixtures compartilhadas
+    ├── test_transform.py     # espelha o módulo que testa
+    └── data/
+        └── sample.jsonl      # amostra pequena, versionada</code></pre>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>pyproject.toml</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+  "integration: toca a rede ou o banco",
+  "slow: leva mais de um segundo",
+]</code></pre>
+    </div>
+
+    <p><code>--strict-markers</code> é o detalhe que vale: sem ele, <code>@pytest.mark.integraton</code> (com typo) é silenciosamente ignorado, e aquele teste nunca roda nem é excluído. Com ele, o typo vira erro.</p>
+
+    <h2>Os comandos do dia a dia</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Comando</th><th>Faz</th></tr></thead>
+        <tbody>
+          <tr><td><code>pytest -q</code></td><td>roda tudo, saída curta</td></tr>
+          <tr><td><code>pytest -x</code></td><td>para no primeiro erro</td></tr>
+          <tr><td><code>pytest --lf</code></td><td>só os que falharam na última vez</td></tr>
+          <tr><td><code>pytest -k "parse and not lazy"</code></td><td>filtra por nome</td></tr>
+          <tr><td><code>pytest -m "not integration"</code></td><td>filtra por marcador</td></tr>
+          <tr><td><code>pytest --durations=5</code></td><td>os cinco testes mais lentos</td></tr>
+          <tr><td><code>pytest -p no:randomly</code></td><td>desliga a ordem aleatória, se instalada</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title"><code>--lf</code> muda o ritmo de trabalho</div>
+      <p>Corrigiu, roda <code>pytest --lf</code>: só os que falharam, em milissegundos. Quando passarem, roda tudo. É a diferença entre um ciclo de dois segundos e um de dois minutos — e é o que faz você rodar os testes com frequência.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="lab" data-title="Hora da prática: 10.1 a 10.4" data-min="60" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 10 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Exercícios 10.1 a 10.4</h1>
+  <div class="act-meta">60 min &middot; arquivos <code>lesson10.py</code> e <code>test_lesson10.py</code></div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">10.1</span><h2>A suíte do que você já escreveu</h2><span class="ex-kind">implementação</span></div>
+      <p>Escreva testes para o <code>batched</code>, o <code>read_jsonl</code> e o <code>chunked</code> das aulas 04 e 07. No mínimo: caso normal, entrada vazia, último lote menor, e fonte que é generator.</p>
+      <div class="callout warn">
+        <div class="callout-title">Um destes testes teria pego o bug da aula 04</div>
+        <p><code>assert list(manual_batched([], 2)) == []</code>. A sua versão original entrava em loop infinito nesse caso. Escreva o teste e rode contra a versão antiga para ver o que acontece — com <code>--timeout</code> ou <code>Ctrl+C</code>.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">10.2</span><h2>A tabela de validação</h2><span class="ex-kind">implementação</span></div>
+      <p>Escreva <code>validate(record)</code> que aceite ou rejeite um registro, e cubra com <code>parametrize</code> pelo menos oito casos: válido, campo ausente, campo nulo, string vazia, tipo errado, número negativo, data em formato errado, e um caso limite que você escolher.</p>
+      <p>Use <code>pytest.param(..., id=...)</code> para nomear cada caso. O relatório do <code>pytest -v</code> tem que ler como uma especificação.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">10.3</span><h2>Fixtures e disco de verdade</h2><span class="ex-kind">implementação</span></div>
+      <p>Escreva um <code>conftest.py</code> com três fixtures: <code>arquivo_ok</code>, <code>arquivo_com_linha_ruim</code> e <code>arquivo_vazio</code>, todas usando <code>tmp_path</code>. Teste o <code>read_partitioned</code> da aula 04 com as três.</p>
+      <p>Acrescente um teste com <code>caplog</code> provando que a linha ruim gera <strong>um aviso</strong> — o que a revisão da aula 04 apontou como faltando.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">10.4</span><h2>Sem tocar a rede</h2><span class="ex-kind">implementação</span></div>
+      <p>Pegue o <code>OrdersApi</code> da aula 09 e escreva uma <code>FakeSession</code> que devolva páginas fixas. Teste: que ele pagina até o fim, que para quando <code>has_next</code> é falso, que não faz nenhuma chamada antes do primeiro <code>next()</code>, e que uma página vazia não quebra.</p>
+      <p>Depois use <code>monkeypatch.setenv</code> para testar o carregamento da configuração a partir do ambiente.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 12 ==================== -->
+<article class="act" id="a12" data-kind="lab" data-title="Hora da prática: 10.5 a 10.7 e entrega" data-min="60" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 10 &middot; Atividade 12</span></div>
+  <h1 class="act-title">Exercícios 10.5 a 10.7 e entrega</h1>
+  <div class="act-meta">60 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">10.5</span><h2>O teste de laziness</h2><span class="ex-kind">implementação</span></div>
+      <p>Escreva o teste da atividade 08 para o seu pipeline completo: prove que nenhuma linha é lida antes do primeiro <code>next()</code> e que consumir dois registros lê exatamente dois.</p>
+      <p>Depois acrescente um <code>list()</code> no meio do pipeline, rode o teste, e mostre a falha. Esse é o teste que protege tudo que a aula 05 mediu.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">10.6</span><h2>Float e dinheiro</h2><span class="ex-kind">análise</span></div>
+      <p>Escreva testes que documentem o comportamento do <code>round</code> nos quatro valores da atividade 05. Depois implemente <code>to_cents(value: str) -&gt; int</code> usando <code>Decimal</code> e <code>ROUND_HALF_UP</code>, e prove com testes que ela dá o resultado que a área financeira espera nos mesmos quatro casos.</p>
+      <div class="callout tip">
+        <div class="callout-title">Teste de propriedade, se quiser ir além</div>
+        <p><code>pip install hypothesis</code> e escreva uma propriedade: para qualquer valor monetário, converter para centavos e voltar não pode perder dinheiro. O hypothesis procura o contraexemplo sozinho.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">10.7</span><h2>Desafio: cobertura honesta</h2><span class="ex-kind">desafio</span></div>
+      <p>Rode <code>--cov --cov-branch --cov-report=term-missing</code> sobre o seu <code>lesson10.py</code>. Para cada linha ou ramo listado em <code>Missing</code>, decida entre três respostas e escreva qual escolheu: <strong>escrever o teste</strong>, <strong>apagar o código</strong> (nunca é executado nem pelos testes nem em produção), ou <strong>documentar por que não vale testar</strong>.</p>
+      <p>Depois escreva um teste sem nenhum <code>assert</code>, rode a cobertura de novo e mostre que o número subiu. Comente o que isso diz sobre usar cobertura como meta.</p>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande <code>lesson10.py</code> e <code>test_lesson10.py</code>, com a saída de <code>pytest -v</code> e do relatório de cobertura nos comentários.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de commitar</div>
+      <ul>
+        <li>Existe um teste para <strong>entrada vazia</strong> de cada função que consome um iterável?</li>
+        <li>Todo <code>pytest.raises</code> tem exceção específica e <code>match=</code>?</li>
+        <li>Todo <code>pytest.raises</code> sobre generator tem <code>list(...)</code> dentro?</li>
+        <li>Nenhum teste depende da ordem em que roda?</li>
+        <li>A suíte inteira roda em menos de cinco segundos?</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 11: Ambiente e dependências</div>
+      <p>O teste que passa na sua máquina e falha na do colega quase nunca é problema de código. Ambientes virtuais, <code>requirements.txt</code> contra <code>pyproject.toml</code>, e por que um <em>lockfile</em> é o que separa "funciona aqui" de "funciona".</p>
+    </div>
+
+  </div>
+</article>
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/12</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 10</div>
+          <div class="lh-n">Testes com pytest</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/python/lesson10.py<span class="rs">o código sob teste</span></span></li>
+        <li><span class="res-static">exercises/python/test_lesson10.py<span class="rs">o que você entrega</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://docs.pytest.org/en/stable/how-to/fixtures.html" target="_blank" rel="noopener">fixtures<span class="rs">escopo, conftest e composição</span></a></li>
+        <li><a href="https://docs.pytest.org/en/stable/how-to/parametrize.html" target="_blank" rel="noopener">parametrize<span class="rs">um teste, N casos</span></a></li>
+        <li><a href="https://docs.pytest.org/en/stable/how-to/monkeypatch.html" target="_blank" rel="noopener">monkeypatch<span class="rs">substituir sem deixar rastro</span></a></li>
+        <li><a href="https://docs.pytest.org/en/stable/reference/reference.html#pytest-approx" target="_blank" rel="noopener">pytest.approx<span class="rs">comparar float sem se enganar</span></a></li>
+        <li><a href="https://docs.pytest.org/en/stable/how-to/tmp_path.html" target="_blank" rel="noopener">tmp_path<span class="rs">disco de verdade, descartável</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">Python Testing with pytest, 2ª ed.<span class="rs">Okken · a referência do assunto</span></span></li>
+        <li><span class="res-static">Architecture Patterns with Python — cap. 3<span class="rs">Percival & Gregory · o que testar em cada camada</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>

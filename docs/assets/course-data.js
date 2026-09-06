@@ -62,6 +62,16 @@ window.COURSE = {
       id: "08", title: "Decorators e context managers",
       slug: "lessons/08-decorators-e-context-managers.html",
       acts: 12, published: true, delivery: "pending"
+    },
+    {
+      id: "09", title: "POO para pipelines",
+      slug: "lessons/09-poo-para-pipelines.html",
+      acts: 11, published: true, delivery: "pending"
+    },
+    {
+      id: "10", title: "Testes com pytest",
+      slug: "lessons/10-testes-com-pytest.html",
+      acts: 12, published: true, delivery: "pending"
     }
   ],
 
