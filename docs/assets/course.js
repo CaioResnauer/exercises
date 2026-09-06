@@ -187,7 +187,9 @@
   });
 
   /* ---------- trace stepper ---------- */
-  const TRACE_LINES = [
+  /* Fallback: o trace da aula 01. Uma página pode trazer o seu próprio em
+     <script type="application/json"> dentro do .trace — veja a aula 04. */
+  const FALLBACK_LINES = [
     "iterator = iter([10, 20, 30])",
     "while True:",
     "    try:",
@@ -196,7 +198,7 @@
     "        break",
     "    print(item)"
   ];
-  const STEPS = [
+  const FALLBACK_STEPS = [
     { l: 0, it: "list_iterator, posição 0", item: "—", out: "(vazio)", stop: false,
       note: "iter() pede um iterator à lista. A lista não muda — nasce um objeto novo, com posição própria." },
     { l: 3, it: "list_iterator, posição 1", item: "10", out: "(vazio)", stop: false,
@@ -214,31 +216,46 @@
     { l: 5, it: "list_iterator, esgotado", item: "StopIteration", out: "10\n20\n30", stop: true,
       note: "O except captura e o break encerra. Fim do for — e o iterator continua esgotado para sempre." }
   ];
-  const tCode = document.getElementById("tCode");
-  const tIter = document.getElementById("tIter");
-  const tItem = document.getElementById("tItem");
-  const tOut  = document.getElementById("tOut");
-  const tNote = document.getElementById("tNote");
-  let tStep = 0;
+  /* O stepper é opcional: páginas sem um .trace simplesmente pulam este bloco. */
+  const traceEl = document.getElementById("trace");
+  if (traceEl) {
+    const cfgEl = traceEl.querySelector('script[type="application/json"]');
+    let cfg = null;
+    if (cfgEl) {
+      try { cfg = JSON.parse(cfgEl.textContent); } catch (_) { cfg = null; }
+    }
+    const TRACE_LINES = (cfg && cfg.lines) || FALLBACK_LINES;
+    const STEPS = (cfg && cfg.steps) || FALLBACK_STEPS;
 
-  tCode.innerHTML = TRACE_LINES.map((l, i) =>
-    `<span class="ln" data-l="${i}">${l.replace(/</g, "&lt;") || " "}</span>`).join("");
+    const tCode = document.getElementById("tCode");
+    const tIter = document.getElementById("tIter");
+    const tItem = document.getElementById("tItem");
+    const tOut  = document.getElementById("tOut");
+    const tNote = document.getElementById("tNote");
+    const tPrev = document.getElementById("tPrev");
+    const tNext = document.getElementById("tNext");
+    const tReset = document.getElementById("tReset");
+    let tStep = 0;
 
-  function drawTrace() {
-    const s = STEPS[tStep];
-    tCode.querySelectorAll(".ln").forEach(el => el.classList.toggle("on", +el.dataset.l === s.l));
-    tIter.textContent = s.it;
-    tItem.textContent = s.item;
-    tItem.className = "tstate-v" + (s.stop ? " stop" : "");
-    tOut.textContent = s.out;
-    tNote.textContent = `Passo ${tStep + 1} de ${STEPS.length} · ${s.note}`;
-    document.getElementById("tPrev").disabled = tStep === 0;
-    document.getElementById("tNext").disabled = tStep === STEPS.length - 1;
+    tCode.innerHTML = TRACE_LINES.map((l, i) =>
+      `<span class="ln" data-l="${i}">${l.replace(/</g, "&lt;") || " "}</span>`).join("");
+
+    const drawTrace = () => {
+      const s = STEPS[tStep];
+      tCode.querySelectorAll(".ln").forEach(el => el.classList.toggle("on", +el.dataset.l === s.l));
+      tIter.textContent = s.it;
+      tItem.textContent = s.item;
+      tItem.className = "tstate-v" + (s.stop ? " stop" : "");
+      tOut.textContent = s.out;
+      tNote.textContent = `Passo ${tStep + 1} de ${STEPS.length} · ${s.note}`;
+      tPrev.disabled = tStep === 0;
+      tNext.disabled = tStep === STEPS.length - 1;
+    };
+    tNext.addEventListener("click", () => { if (tStep < STEPS.length - 1) { tStep++; drawTrace(); } });
+    tPrev.addEventListener("click", () => { if (tStep > 0) { tStep--; drawTrace(); } });
+    tReset.addEventListener("click", () => { tStep = 0; drawTrace(); });
+    drawTrace();
   }
-  document.getElementById("tNext").addEventListener("click", () => { if (tStep < STEPS.length - 1) { tStep++; drawTrace(); } });
-  document.getElementById("tPrev").addEventListener("click", () => { if (tStep > 0) { tStep--; drawTrace(); } });
-  document.getElementById("tReset").addEventListener("click", () => { tStep = 0; drawTrace(); });
-  drawTrace();
 
   /* ---------- start ---------- */
   render();
