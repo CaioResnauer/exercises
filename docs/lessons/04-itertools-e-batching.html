@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>itertools e batching</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="04">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Trilha DE</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+    <div class="rail-track">
+      <div class="bar"><i id="barFill"></i></div>
+      <span class="pct" id="barPct">0%</span>
+    </div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 04 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aulas 01 a 03</div>
+  <div class="prose">
+    <p class="lead">Nas aulas anteriores você implementou <code>take</code>, <code>drop</code> e <code>Chunked</code> na mão. Foi um bom exercício — e agora vamos jogar quase tudo fora, porque a biblioteca padrão já tem essas peças, testadas, em C, e com nomes que qualquer engenheiro Python reconhece de imediato.</p>
+
+    <p>Saber <code>itertools</code> é um sinal razoavelmente confiável de senioridade em Python. Vale investir aqui.</p>
+
+    <h2>O que esta aula cobre</h2>
+    <p>Não o módulo inteiro — a documentação já faz isso. Só as peças que aparecem em pipeline de dados de verdade: <code>islice</code>, <code>chain</code>, <code>batched</code>, <code>groupby</code>, <code>tee</code>, e o punhado de funções menores que valem o espaço na memória.</p>
+
+    <p>Depois disso, dois assuntos que decidem se o seu código vai escalar: <strong>quando usar generators e quando usar pandas ou Spark</strong>, e <strong>como classificar uma agregação em O(1) ou O(n) de memória</strong>.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">O que "jogar fora" não significa</div>
+      <p>Trocar o seu código por <code>itertools</code> é uma troca, não um upgrade automático. Algumas dessas funções mudam o <strong>contrato</strong> do que você tinha — em particular, quase tudo em <code>itertools</code> devolve <em>iterator</em>, e o seu <code>Chunked</code> da aula 01 era um <em>iterable reutilizável</em>. O exercício 4.1 existe justamente para você sentir essa diferença em vez de descobrir em produção.</p>
+    </div>
+
+    <h2>Tempo estimado</h2>
+    <p>45 min de leitura, 2 h de exercícios. Os exercícios 4.3 e 4.7 pedem números medidos — reserve tempo para rodar de verdade.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="islice — fatiar sem materializar" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 04 &middot; Atividade 02</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">islice</code> — fatiar sem materializar</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">É o <code>[a:b]</code> para iteradores. A diferença com o fatiamento de lista é que nada é copiado e nada é materializado.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from itertools import islice
+
+first_10    = islice(records, 10)         # primeiros 10
+skip_5      = islice(records, 5, None)    # pula os 5 primeiros
+window      = islice(records, 100, 200)   # do 100º ao 199º
+every_other = islice(records, 0, None, 2)</code></pre>
+    </div>
+
+    <p>Casos de uso diários: inspecionar as primeiras linhas de um arquivo gigante (<code>list(islice(read_lines(path), 5))</code>) e pular cabeçalhos.</p>
+
+    <h2>Duas restrições que mordem</h2>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Não aceita índices negativos</h3>
+        <p><code>islice(records, -5, None)</code> levanta <code>ValueError</code>. E faz sentido: não dá para saber onde é o fim de um iterador sem consumi-lo inteiro. Um índice negativo exigiria bufferizar tudo — exatamente o que <code>islice</code> existe para evitar.</p>
+      </div>
+      <div class="trap">
+        <h3>Pular <em>consome</em> de verdade</h3>
+        <p><code>islice(gen, 1000, 1010)</code> não teleporta para o item 1000: ele chama <code>next()</code> mil vezes e joga os resultados fora. Se a fonte é uma API paginada, isso são todas as requisições até a página do item 1010 — pagas, contadas no rate limit, e descartadas.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O que ele devolve</div>
+      <p><code>islice</code> devolve um <strong>iterator</strong>, não uma lista. Isso é o ponto todo — mas guarde bem, porque no exercício 4.2 essa propriedade tem uma consequência que derruba muita gente.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="chain — concatenar fontes" data-min="4" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 04 &middot; Atividade 03</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">chain</code> — concatenar fontes</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Trata N fontes como se fossem uma só, sem juntar nada na memória.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from itertools import chain
+
+all_records = chain(read_jsonl("jan.jsonl"), read_jsonl("feb.jsonl"))</code></pre>
+    </div>
+
+    <p>E a variante que interessa mais, porque também é lazy na <em>lista de fontes</em>:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">paths = (p for p in Path("data").glob("*.jsonl"))
+all_records = chain.from_iterable(read_jsonl(p) for p in paths)</code></pre>
+    </div>
+
+    <p><code>chain.from_iterable</code> é o padrão para "processar N arquivos como se fossem um só" — extremamente comum em ingestão de dados particionados por data.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Repare no gerador dentro do <code>from_iterable</code></div>
+      <p>O argumento é <code>(read_jsonl(p) for p in paths)</code>, uma generator expression — não uma lista. Se fosse <code>[read_jsonl(p) for p in paths]</code>, todos os <code>read_jsonl</code> seriam construídos de uma vez. Como <code>read_jsonl</code> é generator, construir não abre o arquivo ainda — mas o hábito de manter a lista de fontes lazy é o que faz a diferença quando a fonte é uma conexão, e não um arquivo.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="batched — o mais importante para DE" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 04 &middot; Atividade 04</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">batched</code> — o mais importante para DE</h1>
+  <div class="act-meta">07 min &middot; Python 3.12+</div>
+  <div class="prose">
+    <p class="lead">Se você levar uma única função desta aula para o resto da carreira, leve esta.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from itertools import batched
+
+for batch in batched(records, 1_000):
+    conn.execute_many(INSERT, batch)     # 1 round-trip a cada 1000 registros</code></pre>
+    </div>
+
+    <h2>Por que isso importa tanto</h2>
+    <p>Inserir linha a linha no banco é o gargalo clássico de pipeline Python. Cada <code>INSERT</code> individual paga latência de rede mais overhead de transação. Agrupar em lotes de 500 a 5000 costuma dar ganhos de <strong>uma a duas ordens de grandeza</strong> — e continua sendo lazy: você nunca tem mais que um lote na memória.</p>
+
+    <p>O batching é o equilíbrio entre os dois extremos. Nem tudo na memória, nem um round-trip por registro.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Estratégia</th><th>Memória</th><th>Round-trips</th></tr></thead>
+        <tbody>
+          <tr><td><code>list(records)</code> e um insert só</td><td class="num">O(n)</td><td class="num">1</td></tr>
+          <tr><td>um insert por registro</td><td class="num">O(1)</td><td class="num">n</td></tr>
+          <tr><td><code>batched(records, k)</code></td><td class="num">O(k)</td><td class="num">n/k</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Se você está em Python &lt; 3.12</h2>
+    <p>A receita equivalente, que é a que aparece na própria documentação do módulo:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— a receita</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def batched(iterable: Iterable[T], n: int) -&gt; Iterator[tuple[T, ...]]:
+    """Batch data into tuples of length n. The last batch may be shorter."""
+    if n &lt; 1:
+        raise ValueError("n must be at least one")
+    it = iter(iterable)
+    while batch := tuple(islice(it, n)):
+        yield batch</code></pre>
+    </div>
+
+    <p>Vale ler essa implementação linha a linha — são cinco linhas com Python idiomático concentrado. Percorra o passo a passo abaixo antes de seguir; cada clique é uma linha executada, com <code>[1, 2, 3, 4, 5]</code> e <code>n = 2</code>.</p>
+
+    <div class="trace" id="trace">
+      <script type="application/json">
+      {
+        "lines": [
+          "def batched(iterable, n):",
+          "    it = iter(iterable)",
+          "    while batch := tuple(islice(it, n)):",
+          "        yield batch"
+        ],
+        "steps": [
+          { "l": 1, "it": "iter([1,2,3,4,5])", "item": "—", "out": "(nada ainda)", "stop": false,
+            "note": "iter() explícito, uma única vez. É ESTE objeto que lembra a posição entre as voltas do while — a peça que segura a implementação inteira de pé." },
+          { "l": 2, "it": "posição 2", "item": "(1, 2)", "out": "(nada ainda)", "stop": false,
+            "note": "islice consome 2 itens desse iterator; tuple() materializa o resultado. Materializar é o que produz um valor testável — segure esse pensamento." },
+          { "l": 3, "it": "posição 2", "item": "(1, 2)", "out": "(1, 2)", "stop": false,
+            "note": "Tupla não vazia é truthy: o while entra e o yield entrega o lote. O consumidor processa e descarta." },
+          { "l": 2, "it": "posição 4", "item": "(3, 4)", "out": "(1, 2)", "stop": false,
+            "note": "Segunda volta. O islice é um objeto NOVO, mas o `it` é o mesmo — por isso continua do 3, e não do 1." },
+          { "l": 3, "it": "posição 4", "item": "(3, 4)", "out": "(1, 2)\n(3, 4)", "stop": false,
+            "note": "Segundo lote entregue." },
+          { "l": 2, "it": "posição 5", "item": "(5,)", "out": "(1, 2)\n(3, 4)", "stop": false,
+            "note": "Sobrou um item só. O último lote sai menor — comportamento documentado, e a razão de o consumidor nunca poder assumir len(batch) == n." },
+          { "l": 3, "it": "posição 5", "item": "(5,)", "out": "(1, 2)\n(3, 4)\n(5,)", "stop": false,
+            "note": "Terceiro lote entregue." },
+          { "l": 2, "it": "esgotado", "item": "()", "out": "(1, 2)\n(3, 4)\n(5,)", "stop": true,
+            "note": "Iterator esgotado: islice não produz nada e tuple() devolve (). Tupla vazia é FALSY — o while para aqui. Tire o tuple() e este passo nunca acontece: o objeto islice é sempre truthy e o laço nunca termina." }
+        ]
+      }
+      </script>
+      <div class="trace-head">
+        <h3>Execução passo a passo &mdash; a receita do <code>batched</code></h3>
+        <div class="trace-ctl">
+          <button class="btn btn-ghost btn-sm" id="tPrev">Anterior</button>
+          <button class="btn btn-primary btn-sm" id="tNext">Próximo passo</button>
+          <button class="btn btn-ghost btn-sm" id="tReset">Reiniciar</button>
+        </div>
+      </div>
+      <div class="trace-body">
+        <div class="trace-code" id="tCode"></div>
+        <div class="trace-state">
+          <div class="tstate-row"><span class="tstate-k">it</span><span class="tstate-v acc" id="tIter">—</span></div>
+          <div class="tstate-row"><span class="tstate-k">batch</span><span class="tstate-v" id="tItem">—</span></div>
+          <div class="tstate-row"><span class="tstate-k">lotes entregues</span><span class="tstate-v" id="tOut">(nada ainda)</span></div>
+        </div>
+      </div>
+      <div class="trace-note" id="tNote">Passo 1 de 8 &middot; clique em “Próximo passo”.</div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="lab" data-title="Mão na massa: por que o tuple() é obrigatório" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 04 &middot; Atividade 05</span></div>
+  <h1 class="act-title">Por que o <code style="font-size:.82em">tuple()</code> é obrigatório</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">A receita da atividade anterior tem uma peça que parece decoração e não é. Tire o <code>tuple()</code> e veja o que você acha que acontece.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— o tuple() saiu</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def batched(iterable, n):
+    it = iter(iterable)
+    batch = islice(it, n)
+    while batch:
+        yield batch
+        batch = islice(it, n)
+
+
+print(list(batched([1, 2, 3, 4, 5], 2)))</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="O que esse programa faz? Termina? Se sim, imprime o quê?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a saída</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <p style="margin-top:18px">Ele <strong>nunca termina</strong>. Interrompendo depois de alguns segundos, os valores produzidos são:</p>
+        <div class="code">
+          <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— primeiros 6 valores</span></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-python">[(1, 2), (3, 4), (5,), (), (), ()]   # ... e assim para sempre</code></pre>
+        </div>
+        <p style="margin-top:16px">O laço produz os três lotes corretos e depois entra em regime permanente devolvendo lotes vazios, sem parar nunca.</p>
+        <p><strong>A causa:</strong> <code>while batch:</code> pergunta se o objeto <code>batch</code> é verdadeiro. Quando <code>batch</code> é uma tupla, a resposta depende do conteúdo — <code>()</code> é falso. Quando <code>batch</code> é um objeto <code>islice</code>, a resposta é <em>sempre</em> verdadeiro, esgotado ou não.</p>
+        <div class="code has-out">
+          <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-python">from itertools import islice
+print(bool(islice(iter([]), 3)))     # iterador vazio, fatia vazia
+print(bool(tuple(islice(iter([]), 3))))</code></pre>
+          <div class="out"><span class="out-label">Saída real</span>True
+False</div>
+        </div>
+        <p style="margin-top:16px">O <code>tuple()</code> não está ali para "converter para tupla". Ele está ali para <strong>forçar a avaliação</strong> — trocar uma promessa de valores por valores de verdade, que é a única coisa que se pode testar.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">A regra a levar</div>
+      <p>Um objeto lazy nunca sabe, e nunca pode dizer, se ainda tem itens. Perguntar <code>if it:</code> ou <code>while it:</code> a um iterador é sempre um bug — a resposta é <code>True</code> por padrão e não tem relação nenhuma com o conteúdo. A atividade 07 da aula 01 já tinha avisado por outro caminho: <em>não existe <code>hasNext()</code> em Python</em>.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="groupby — agrupamento lazy, com uma pegadinha grande" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 04 &middot; Atividade 06</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">groupby</code> — agrupamento lazy</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">A função mais útil e mais mal-entendida do módulo. Duas pegadinhas, e as duas saem da mesma raiz: ele é lazy.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from itertools import groupby
+
+for date, group in groupby(records, key=lambda r: r["date"]):
+    print(date, sum(r["amount"] for r in group))</code></pre>
+    </div>
+
+    <h2>Pegadinha 1 — ele só agrupa elementos consecutivos</h2>
+    <p>Ele não é o <code>GROUP BY</code> do SQL nem o <code>groupby</code> do pandas. Se os dados não estiverem ordenados pela chave, você recebe o mesmo grupo várias vezes:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">data = [("a", 1), ("b", 2), ("a", 3)]
+result = {k: list(g) for k, g in groupby(data, key=lambda x: x[0])}
+print(result)</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>{'a': [('a', 3)], 'b': [('b', 2)]}</div>
+    </div>
+
+    <p>O primeiro grupo <code>'a'</code> foi sobrescrito pelo segundo. Note que não houve erro: o <code>groupby</code> emitiu três grupos, o dict comprehension colapsou dois deles, e o resultado é silenciosamente errado.</p>
+
+    <p>Isso é consequência direta da laziness. Agrupar de verdade exigiria ver o dataset inteiro antes de emitir o primeiro grupo — o oposto do que um iterador faz. Se você precisa disso, ou ordena antes (<code>sorted</code>, que é eager) ou acumula num <code>defaultdict</code> — e aceita o custo de memória nos dois casos.</p>
+
+    <h2>Pegadinha 2 — o grupo é um iterador compartilhado</h2>
+    <p>O objeto <code>group</code> é válido só até você avançar para o próximo grupo. Isto <strong>não</strong> funciona:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— não faça isso</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">data = [("a", 1), ("a", 2), ("b", 3)]
+groups = list(groupby(data, key=lambda x: x[0]))
+print([(k, list(g)) for k, g in groups])</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>[('a', []), ('b', [])]</div>
+    </div>
+
+    <p>Todos os grupos saem vazios. O <code>list()</code> externo percorreu o <code>groupby</code> até o fim, e cada avanço invalidou o grupo anterior. Se precisa guardar, converta <em>na hora</em>:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">groups = [(k, list(g)) for k, g in groupby(data, key=lambda x: x[0])]</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Quando o <code>groupby</code> é imbatível</div>
+      <p>Quando a fonte <strong>já chega ordenada pela chave</strong> — arquivo particionado por data, resultado de <code>ORDER BY</code>, log cronológico. Aí ele agrupa em memória O(1): processa um grupo, descarta, passa ao próximo. Nenhuma alternativa chega perto disso. Volte a esta frase quando fizer o exercício 4.4.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="lab" data-title="Mão na massa: ordenar ou acumular?" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 04 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Ordenar ou acumular?</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Uma fonte de 300 mil registros que <strong>já vem ordenada pela chave</strong>, e você quer a soma por grupo. Duas implementações:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python"># A — groupby direto na fonte
+total = 0
+for k, g in groupby(sorted_stream(), key=lambda x: x[0]):
+    total += sum(v for _, v in g)
+
+# B — defaultdict acumulando
+dd = defaultdict(list)
+for k, v in sorted_stream():
+    dd[k].append(v)
+total = sum(sum(v) for v in dd.values())</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p2">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="Qual das duas usa mais memória de pico, e por qual fator?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a medição</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div class="code has-out" style="margin-top:18px">
+          <div class="code-head"><span class="code-file"><b>tracemalloc</b> <span style="color:var(--ink-3)">— 300.000 registros, 300 grupos</span></span><button class="copy">Copiar</button></div>
+          <pre><code class="language-python">A — groupby em streaming : pico   0.00 MB
+B — defaultdict          : pico  11.70 MB</code></pre>
+        </div>
+        <p style="margin-top:16px">Quatro ordens de grandeza. O <code>groupby</code> nunca segurou mais que um grupo por vez; o <code>defaultdict</code> teve que segurar os 300 mil valores antes de conseguir responder qualquer coisa.</p>
+        <p><strong>A condição que faz isso valer é "já vem ordenada".</strong> Se você precisar de um <code>sorted()</code> antes, ele materializa a fonte inteira e a vantagem evapora — os dois viram O(n), e aí a escolha passa a ser sobre outra coisa (ordem de saída, legibilidade), não sobre memória.</p>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">A pergunta certa</div>
+      <p>Não é "groupby ou defaultdict?". É <strong>"a minha fonte já está ordenada pela chave de agrupamento?"</strong> — e, se não estiver, "consigo pedir para ela vir ordenada?". Um <code>ORDER BY</code> no banco, ou ler as partições em ordem, transforma uma agregação O(n) em O(1) de graça.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="video" data-title="tee — duplicar um iterador (com cuidado)" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 04 &middot; Atividade 08</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">tee</code> — duplicar um iterador</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Resolve o problema do exercício 3.5 — duas saídas a partir de uma fonte — e traz junto um custo que quase ninguém mede antes de usar.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from itertools import tee
+stream_a, stream_b = tee(records, 2)</code></pre>
+    </div>
+
+    <h2>O buffer escondido</h2>
+    <p><code>tee</code> guarda internamente <strong>todos os itens que um ramo já consumiu e o outro ainda não</strong>. Ele precisa: a fonte original só passa uma vez, e o ramo atrasado tem que receber o que já passou.</p>
+
+    <p>A consequência: se você consumir <code>stream_a</code> inteiro antes de tocar em <code>stream_b</code>, o <code>tee</code> terá bufferizado o dataset completo na memória — exatamente o que você estava tentando evitar ao usar generators.</p>
+
+    <div class="callout bug">
+      <div class="callout-title">O padrão que parece certo e é o pior caso</div>
+      <div class="code bare" style="margin-top:14px">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">branch_a, branch_b = tee(records, 2)
+
+for r in (x for x in branch_a if x.valid):      # drena branch_a até o fim
+    valid_sink(r)
+for r in (x for x in branch_b if not x.valid):  # branch_b lê tudo do buffer
+    rejected_sink(r)</code></pre>
+      </div>
+      <p>Legível, simétrico, e o pior caso possível para o <code>tee</code>: no fim do primeiro laço o buffer contém o dataset inteiro. Você vai medir isso no exercício 4.7.</p>
+    </div>
+
+    <h2>A regra</h2>
+    <p><code>tee</code> só é seguro quando os ramos <strong>avançam mais ou menos juntos</strong> — tipicamente dentro de um mesmo <code>zip</code> ou de um mesmo laço. Para "processar todos os válidos, depois todos os inválidos", um único laço que roteia é melhor, mais simples e O(1).</p>
+
+    <div class="callout warn">
+      <div class="callout-title">E não use o original depois</div>
+      <p>Depois de <code>tee(records, 2)</code>, o <code>records</code> original não deve mais ser consumido diretamente. Se você avançar nele, os dois ramos perdem os itens — e sem erro nenhum.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="note" data-title="Para saber mais: o resto do módulo" data-min="3" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 04 &middot; Atividade 09</span></div>
+  <h1 class="act-title">O resto do módulo, em uma tela</h1>
+  <div class="act-meta">03 min</div>
+  <div class="prose">
+    <p>Não precisa decorar. Precisa saber que existem, para reconhecer quando o problema que você tem é um destes:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Função</th><th>O que faz</th><th>Onde aparece em ETL</th></tr></thead>
+        <tbody>
+          <tr><td><code>count(start, step)</code></td><td>contador infinito</td><td>gerar IDs sequenciais com <code>zip</code></td></tr>
+          <tr><td><code>cycle(iterable)</code></td><td>repete infinitamente</td><td>round-robin de credenciais ou proxies</td></tr>
+          <tr><td><code>repeat(value, times)</code></td><td>o mesmo valor N vezes</td><td>preencher coluna constante num <code>zip</code></td></tr>
+          <tr><td><code>takewhile(pred, it)</code></td><td>pega enquanto for verdade</td><td>ler até o fim de um preâmbulo</td></tr>
+          <tr><td><code>dropwhile(pred, it)</code></td><td>pula enquanto for verdade</td><td>pular cabeçalho de tamanho variável</td></tr>
+          <tr><td><code>compress(data, sel)</code></td><td>filtro por máscara booleana</td><td>aplicar uma máscara já calculada</td></tr>
+          <tr><td><code>pairwise(it)</code></td><td>pares consecutivos (3.10+)</td><td>deltas em série temporal</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title"><code>takewhile</code> não é <code>filter</code></div>
+      <p><code>takewhile</code> para no <strong>primeiro</strong> item que falha o teste e nunca mais olha o resto; <code>filter</code> examina todos e descarta os que falham. Trocar um pelo outro num arquivo com cabeçalho no meio é um bug clássico.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="video" data-title="itertools vs pandas vs Spark" data-min="4" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 04 &middot; Atividade 10</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">itertools</code> vs pandas vs Spark</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Vale ter isso claro para não virar o cara que faz tudo com generator por esporte.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Cenário</th><th>Ferramenta</th></tr></thead>
+        <tbody>
+          <tr><td>Streaming de arquivo ou API, transformação linha a linha, memória apertada</td><td>generators + <code>itertools</code></td></tr>
+          <tr><td>Dados cabem na memória, operações colunares, joins, estatística</td><td>pandas / polars</td></tr>
+          <tr><td>Dados não cabem em uma máquina</td><td>Spark</td></tr>
+          <tr><td>Ingestão e limpeza antes de virar DataFrame</td><td>generators + <code>itertools</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>O padrão que combina os dois</h2>
+    <p>Muito comum e muito bom: <strong>generators para ingerir e limpar em streaming, <code>batched</code> para agrupar, e um DataFrame por lote</strong>. Memória constante, e ainda com a API rica do pandas.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">for i, batch in enumerate(batched(clean_records(read_jsonl(path)), 50_000)):
+    df = pd.DataFrame(batch)
+    df.to_parquet(f"out/part-{i:05d}.parquet")</code></pre>
+    </div>
+
+    <p>Isso é, literalmente, uma versão manual do que o Spark faz com partições — e o formato de saída particionado é o que você vai consumir na fase 2 do roadmap.</p>
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="video" data-title="Agregações em uma passada" data-min="3" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 04 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Agregações em uma passada</h1>
+  <div class="act-meta">03 min</div>
+  <div class="prose">
+    <p class="lead">Complemento natural do batching: agregar sem materializar.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">total      = sum(r["amount"] for r in records)          # uma passada, O(1) de memória
+maximum    = max(records, key=lambda r: r["amount"])    # idem
+unique_ids = {r["id"] for r in records}                 # O(n) — consciente disso?</code></pre>
+    </div>
+
+    <p>Note o contraste. Soma e máximo são O(1) de memória: cabem num acumulador de tamanho fixo. Deduplicação é O(n): para saber se um id já apareceu, é preciso lembrar de todos os que apareceram.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Agregação</th><th>Memória</th><th>Por quê</th></tr></thead>
+        <tbody>
+          <tr><td><code>sum</code>, <code>min</code>, <code>max</code>, <code>len</code>, média</td><td class="num">O(1)</td><td>acumulador de tamanho fixo</td></tr>
+          <tr><td><code>set</code>, <code>distinct</code>, <code>group by</code> não ordenado</td><td class="num">O(n)</td><td>precisa lembrar do que já viu</td></tr>
+          <tr><td><code>sorted</code>, mediana, percentil</td><td class="num">O(n)</td><td>precisa do dataset inteiro</td></tr>
+          <tr><td><code>group by</code> em fonte ordenada</td><td class="num">O(1)</td><td>um grupo por vez, e descarta</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Ponte com a fase 2</div>
+      <p>Saber classificar uma agregação nesses termos é o que te permite prever se um pipeline vai escalar. E é exatamente o mesmo raciocínio que decide se uma operação no Spark causa <em>shuffle</em>: as O(1) desta tabela são as que o Spark resolve dentro da partição; as O(n) são as que obrigam a mover dados entre executores.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 12 ==================== -->
+<article class="act" id="a12" data-kind="lab" data-title="Hora da prática: 4.1 a 4.4" data-min="60" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 04 &middot; Atividade 12</span></div>
+  <h1 class="act-title">Exercícios 4.1 a 4.4</h1>
+  <div class="act-meta">60 min &middot; arquivo <code>exercises/python/lesson04.py</code></div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">4.1</span><h2>Substituindo o que você escreveu</h2><span class="ex-kind">refactor</span></div>
+      <p>Reescreva <code>take</code>, <code>drop</code> e <code>Chunked</code> (aulas 01 e 02) usando <code>itertools</code>. Compare linha a linha e comente qual versão você acha mais legível — e se a resposta muda dependendo de quem lê o código.</p>
+      <div class="callout warn">
+        <div class="callout-title">Antes de dizer "a nova é melhor"</div>
+        <p>Rode <code>list(x)</code> duas vezes na versão nova e na antiga, e compare. Se o resultado for diferente, você não fez um refactor — você mudou o contrato. Diga isso no comentário.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">4.2</span><h2>Implementando <code>batched</code> na mão</h2><span class="ex-kind">implementação</span></div>
+      <p>Sem olhar a receita desta aula, escreva sua própria versão de <code>batched</code>. Depois compare com a receita e comente as diferenças. Se a sua não usou <code>iter()</code> explícito, teste com uma fonte que é um generator e veja o que acontece.</p>
+      <div class="callout bug">
+        <div class="callout-title">Teste obrigatório</div>
+        <p>Chame a sua função e materialize o resultado: <code>print(list(minha_batched([1,2,3,4,5], 2)))</code>. Uma implementação de <code>batched</code> que nunca foi executada não é uma resposta — é uma hipótese.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">4.3</span><h2>Batching e performance</h2><span class="ex-kind">medição</span></div>
+      <p>Simule um banco com <code>insert(record)</code> fazendo <code>time.sleep(0.0005)</code> e <code>insert_many(records)</code> fazendo <code>time.sleep(0.0005 + 0.00001 * len(records))</code>. Processe 10.000 registros das duas formas e reporte os tempos. Depois teste lotes de 10, 100, 1000 e 10000 e comente onde está o ponto de retorno decrescente.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">4.4</span><h2>A armadilha do <code>groupby</code></h2><span class="ex-kind">análise</span></div>
+      <p><strong>(a)</strong> Escreva um exemplo que demonstre o problema dos grupos não-consecutivos. <strong>(b)</strong> Corrija ordenando antes. <strong>(c)</strong> Escreva uma versão alternativa com <code>defaultdict</code> e compare: qual usa mais memória, e em que situação cada uma é preferível?</p>
+      <div class="callout tip">
+        <div class="callout-title">Para o item (c)</div>
+        <p>Responda com <code>tracemalloc</code>, não com intuição — e faça a medição nos <strong>dois</strong> cenários: fonte desordenada e fonte já ordenada. A resposta se inverte entre eles, e é isso que a pergunta está procurando.</p>
+      </div>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 13 ==================== -->
+<article class="act" id="a13" data-kind="lab" data-title="Hora da prática: 4.5 a 4.7 e entrega" data-min="60" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 04 &middot; Atividade 13</span></div>
+  <h1 class="act-title">Exercícios 4.5 a 4.7 e entrega</h1>
+  <div class="act-meta">60 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">4.5</span><h2>Múltiplos arquivos como um só</h2><span class="ex-kind">implementação</span></div>
+      <p>Usando <code>chain.from_iterable</code>, escreva <code>read_partitioned(directory, pattern="*.jsonl") -&gt; Iterator[dict]</code> que lê todos os arquivos de um diretório como um fluxo único. Garanta que os arquivos sejam abertos sob demanda (não todos de uma vez) e prove isso com um <code>print</code> no momento da abertura mais <code>take(..., 2)</code>.</p>
+      <div class="callout warn">
+        <div class="callout-title">O <code>take</code> faz parte da prova</div>
+        <p>A assinatura diz <code>Iterator[dict]</code>: cada item é um registro, não um iterador de registros. Se o seu teste tiver dois <code>for</code> aninhados, o de dentro está iterando as <strong>chaves</strong> de um dict — e a prova de laziness não prova nada.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">4.6</span><h2>Deltas com <code>pairwise</code></h2><span class="ex-kind">implementação</span></div>
+      <p>Dada uma série de leituras <code>{"timestamp": ..., "value": ...}</code> ordenada por tempo, escreva um estágio que produza a variação entre leituras consecutivas, detectando gaps maiores que N minutos. Use <code>pairwise</code>.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">4.7</span><h2>Desafio: <code>tee</code> vs roteamento</h2><span class="ex-kind">medição</span></div>
+      <p>Resolva o exercício 3.5 (válidos e inválidos em saídas separadas) de duas formas: com <code>tee</code> e com um loop único de roteamento. Meça a memória de pico das duas com <code>tracemalloc</code> usando 200 mil registros. Comente o resultado — e diga qual você colocaria em produção.</p>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>lesson04.py</code> com os números medidos nos comentários (4.3 e 4.7). Não precisa ser benchmark rigoroso; quero ver que você mediu em vez de supor, que é um hábito que separa engenheiro de chutador.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de commitar</div>
+      <ul>
+        <li>Toda função que você escreveu é <strong>chamada</strong> em algum lugar do <code>main()</code>?</li>
+        <li>Rodou o arquivo inteiro do começo ao fim, sem erro e sem travar?</li>
+        <li>Sobrou algum <code>import</code> que você não usou?</li>
+        <li>Os comentários de análise respondem a pergunta <em>inteira</em>, incluindo a segunda metade?</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 05: Memória na prática</div>
+      <p>Medindo, provando e sabendo quando lazy é a escolha errada. Depois de duas aulas afirmando "isso é O(1)", chegou a hora de instrumentar e verificar.</p>
+    </div>
+
+  </div>
+</article>
+
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/13</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 04</div>
+          <div class="lh-n">itertools e batching</div>
+        </div>
+      </div>
+      <ul class="acts" id="actList"></ul>
+      <div class="locked">
+        <div class="locked-item"><div><div class="lk-n">Aula 05</div><div class="lk-t">Memória na prática</div></div><span class="lk-c">0/11</span></div>
+        <div class="locked-item"><div><div class="lk-n">Aula 06</div><div class="lk-t">Git e o repositório</div></div><span class="lk-c">0/10</span></div>
+      </div>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><a href="../reviews/04-revisao.html">Revisão da sua entrega<span class="rs">correção do lesson04.py, com os pontos a refazer</span></a></li>
+        <li><span class="res-static">exercises/python/lesson04.py<span class="rs">o arquivo que você entrega</span></span></li>
+        <li><span class="res-static">exercises/python/data/*.jsonl<span class="rs">entrada do exercício 4.5</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://docs.python.org/3/library/itertools.html" target="_blank" rel="noopener">itertools<span class="rs">docs.python.org</span></a></li>
+        <li><a href="https://docs.python.org/3/library/itertools.html#itertools-recipes" target="_blank" rel="noopener">itertools recipes<span class="rs">de onde vem a receita do batched</span></a></li>
+        <li><a href="https://docs.python.org/3/library/itertools.html#itertools.groupby" target="_blank" rel="noopener">itertools.groupby<span class="rs">leia a nota sobre grupos compartilhados</span></a></li>
+        <li><a href="https://docs.python.org/3/library/stdtypes.html#truth-value-testing" target="_blank" rel="noopener">Truth Value Testing<span class="rs">por que islice é sempre truthy</span></a></li>
+        <li><a href="https://peps.python.org/pep-0572/" target="_blank" rel="noopener">PEP 572 — Walrus<span class="rs">o := da receita do batched</span></a></li>
+        <li><a href="https://docs.python.org/3/library/tracemalloc.html" target="_blank" rel="noopener">tracemalloc<span class="rs">medir pico de alocação</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">Fluent Python, 2ª ed. — cap. 17<span class="rs">Ramalho · itertools em profundidade</span></span></li>
+        <li><span class="res-static">Effective Python, 3ª ed. — itens 20-24<span class="rs">Slatkin · hábitos de iteração no dia a dia</span></span></li>
+      </ul>
+      <h3>Próximo passo</h3>
+      <ul>
+        <li><span class="res-static">Aula 05 — Memória na prática<span class="rs">liberada depois da entrega do lesson04.py</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
