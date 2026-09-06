@@ -27,6 +27,7 @@ import socketserver
 import sys
 import threading
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from pathlib import Path
 
 try:
@@ -42,6 +43,44 @@ DOCS = Path(__file__).resolve().parent
 # 44px; normal prose in this design is ~640px.
 MIN_TEXT_WIDTH = 120
 VIEWPORTS = [("desktop", 1440, 900), ("mobile", 390, 844)]
+
+
+class NestingCheck(HTMLParser):
+    """Report mismatched tags.
+
+    A browser silently repairs bad nesting, so a page can render fine and
+    still be wrong — `</code></pre>` used to close a <div class="out"> makes
+    the rest of the document a child of that div. Chromium never complains,
+    which is exactly why this runs on the source instead.
+    """
+
+    VOID = {"meta", "link", "br", "hr", "img", "input",
+            "circle", "path", "rect", "source"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.stack: list[tuple[str, tuple[int, int]]] = []
+        self.problems: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in self.VOID:
+            self.stack.append((tag, self.getpos()))
+
+    def handle_endtag(self, tag):
+        if tag in self.VOID:
+            return
+        if not self.stack:
+            self.problems.append(f"</{tag}> sem abertura na linha {self.getpos()[0]}")
+            return
+        open_tag, (line, _) = self.stack[-1]
+        if open_tag != tag:
+            self.problems.append(
+                f"</{tag}> na linha {self.getpos()[0]} fecha <{open_tag}> "
+                f"aberto na linha {line}")
+        self.stack.pop()
+
+    def unclosed(self):
+        return [f"<{t}> da linha {p[0]} nunca fechada" for t, p in self.stack]
 
 
 @dataclass
@@ -180,6 +219,12 @@ def check_page(page, base_url: str, rel: str, html: str) -> Report:
         report.fail("sem <title>")
     if page.eval_on_selector("body", "b => b.dataset.lesson || ''").strip() == "":
         report.fail("<body> sem data-lesson")
+
+    # --- source nesting ----------------------------------------------------
+    nesting = NestingCheck()
+    nesting.feed(html)
+    for problem in nesting.problems[:5] + nesting.unclosed()[:5]:
+        report.fail(f"aninhamento: {problem}")
 
     # --- page against the manifest -----------------------------------------
     # course-data.js is the single source of truth for titles, activity counts
