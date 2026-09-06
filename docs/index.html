@@ -3,24 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Python avançado para engenharia de dados</title>
+<title>Fluxo</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="assets/course.css">
-<style>
-  /* index-only: no side rail here, so the stage keeps its right padding */
-  .home{padding-top:64px}
-  .home .stage{padding-right:clamp(18px,4vw,40px)}
-  .home .res{padding:0;margin-top:32px}
-  .home .soon{opacity:.5}
-  .home .n{color:var(--ink-3);font-family:var(--mono);font-size:.9em;margin-right:10px}
-</style>
 </head>
-<body>
+<body data-lesson="index" data-base=".">
 
 <header class="topbar">
   <div class="brand">
     <span class="brand-mark" aria-hidden="true">&gt;_</span>
-    <span class="brand-name">Trilha DE</span>
+    <span class="brand-name">Fluxo</span>
   </div>
   <div class="course">
     <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
@@ -30,56 +22,132 @@
   </div>
 </header>
 
-<div class="home">
-  <main class="stage">
-    <div class="reader">
+<main class="home">
 
-      <div class="kicker"><span class="tag">Índice</span><span class="dot"></span><span>Fase 1 &middot; seis aulas</span></div>
-      <h1 class="act-title">Python avançado para engenharia de dados</h1>
-      <div class="act-meta">Fase 1 &middot; do protocolo de iteração ao repositório</div>
+  <div class="home-hero">
+    <div class="home-kicker">Fase 1 &middot; seis aulas</div>
+    <h1 class="home-title">Python avançado para engenharia de dados</h1>
+    <p class="home-lead">Uma trilha curta sobre como o Python percorre dados sem carregar tudo na memória — iteração, generators, pipelines e <code>itertools</code> — construída do alicerce para cima, na ordem em que os conceitos se apoiam.</p>
 
-      <div class="prose">
-        <p class="lead">Uma trilha curta sobre como o Python percorre dados sem carregar tudo na memória — iteração, generators, pipelines e <code>itertools</code> — construída do alicerce para cima, na ordem em que os conceitos se apoiam.</p>
-        <p>Cada aula é uma página só, com atividades que você marca como concluídas. O progresso fica salvo no seu navegador, separado por aula.</p>
-        <p>Depois que um <code>lessonNN.py</code> é entregue, ele é corrigido e a correção vira uma <strong>página de revisão</strong> — com o conteúdo reexplicado, mais devagar, nos pontos onde houve erro.</p>
-      </div>
-
-      <div class="res">
-        <h3>Aulas</h3>
-        <ul>
-          <li>
-            <a href="lessons/01-protocolo-de-iteracao.html"><span class="n">01</span>O protocolo de iteração<span class="rs">15 atividades &middot; 213 min &middot; <code>iter()</code>, <code>next()</code> e <code>StopIteration</code> sem usar <code>yield</code></span></a>
-          </li>
-          <li class="soon">
-            <span class="res-static"><span class="n">02</span>Generators e yield<span class="rs">ainda não publicada</span></span>
-          </li>
-          <li class="soon">
-            <span class="res-static"><span class="n">03</span>Pipelines de generators<span class="rs">ainda não publicada</span></span>
-          </li>
-          <li>
-            <a href="lessons/04-itertools-e-batching.html"><span class="n">04</span>itertools e batching<span class="rs">13 atividades &middot; 165 min &middot; <code>islice</code>, <code>batched</code>, <code>groupby</code> e o custo escondido do <code>tee</code></span></a>
-          </li>
-          <li>
-            <a href="lessons/05-memoria-na-pratica.html"><span class="n">05</span>Memória na prática<span class="rs">11 atividades &middot; 170 min &middot; <code>tracemalloc</code>, provar O(1) em três escalas e os quatro casos em que lazy é errado</span></a>
-          </li>
-          <li>
-            <a href="lessons/06-git-e-o-repositorio.html"><span class="n">06</span>Git e o repositório<span class="rs">10 atividades &middot; 125 min &middot; o que o git guarda por dentro, as três áreas, Conventional Commits</span></a>
-          </li>
-        </ul>
-      </div>
-
-      <div class="res">
-        <h3>Revisões de entrega</h3>
-        <ul>
-          <li>
-            <a href="reviews/04-revisao.html"><span class="n">04</span>Revisão do <code>lesson04.py</code><span class="rs">correção comentada, com os pontos a refazer e o conteúdo reexplicado onde houve erro</span></a>
-          </li>
-        </ul>
-      </div>
-
+    <div class="home-progress">
+      <div class="hp-num"><b id="hpDone">0</b>/<span id="hpTotal">0</span></div>
+      <div class="hp-meta">atividades concluídas<br><span id="hpLessons">nas aulas publicadas</span></div>
+      <div class="hp-bar"><i id="hpFill"></i></div>
     </div>
-  </main>
-</div>
 
+    <section class="home-gap" id="homeGap" hidden>
+      <h2 id="gapTitle">Aviso</h2>
+      <p id="gapBody"></p>
+      <p>O ciclo da trilha é: estudar a aula, entregar o <code>lessonNN.py</code>, receber a correção como uma <strong>página de revisão</strong> — com o conteúdo reexplicado, mais devagar, nos pontos onde houve erro.</p>
+    </section>
+  </div>
+
+  <section class="home-section">
+    <h2>Aulas</h2>
+    <ul class="cards" id="cards"></ul>
+  </section>
+
+  <section class="home-section" id="reviewsSection" hidden>
+    <h2>Revisões de entrega</h2>
+    <ul class="cards" id="reviewCards"></ul>
+  </section>
+
+</main>
+
+<script src="assets/course-data.js"></script>
+<script>
+/* O índice não carrega course.js: ele não tem atividades, rail nem stepper.
+   Só lê o manifesto e o progresso guardado por cada aula. */
+(() => {
+  "use strict";
+  const COURSE = window.COURSE;
+  const esc = (s) => String(s).replace(/[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  const DESC = {
+    "01": "<code>iter()</code>, <code>next()</code> e <code>StopIteration</code> — o protocolo por baixo do <code>for</code>, sem usar <code>yield</code>",
+    "02": "a mecânica de pausa e retomada, generator expressions e <code>yield from</code>",
+    "03": "estágios que se compõem sem materializar nada no meio",
+    "04": "<code>islice</code>, <code>batched</code>, <code>groupby</code> e o custo escondido do <code>tee</code>",
+    "05": "<code>tracemalloc</code>, provar O(1) em três escalas e os quatro casos em que lazy é errado",
+    "06": "o que o git guarda por dentro, as três áreas e Conventional Commits"
+  };
+
+  /* ---------- progresso do curso ---------- */
+  const total = COURSE.courseProgress();
+  document.getElementById("hpDone").textContent = total.done;
+  document.getElementById("hpTotal").textContent = total.total;
+  const pct = total.total ? Math.round((total.done / total.total) * 100) : 0;
+  document.getElementById("hpFill").style.width = pct + "%";
+  const publicadas = COURSE.lessons.filter((l) => l.published).length;
+  document.getElementById("hpLessons").textContent =
+    `${pct}% das ${publicadas} aulas publicadas`;
+
+  /* ---------- aviso do buraco 02/03 ---------- */
+  const faltando = COURSE.lessons.filter(
+    (l) => !l.published && COURSE.gap.lessons.includes(l.id));
+  if (faltando.length) {
+    const nomes = faltando.map((l) => `<strong>${l.id} — ${esc(l.title)}</strong>`).join(" e ");
+    document.getElementById("gapTitle").textContent =
+      faltando.length > 1 ? "Duas aulas ainda não escritas" : "Uma aula ainda não escrita";
+    document.getElementById("gapBody").innerHTML =
+      `As aulas ${nomes} ainda não têm página, e as aulas 04 a 06 as declaram como ` +
+      `pré-requisito. Dá para seguir mesmo assim se você já domina ${COURSE.gap.needed} — ` +
+      `é só isso que as três seguintes assumem conhecido.`;
+    document.getElementById("homeGap").hidden = false;
+  }
+
+  /* ---------- cards das aulas ---------- */
+  const badge = (lesson) => {
+    const meta = COURSE.delivery[lesson.delivery] || COURSE.delivery.pending;
+    return `<span class="badge ${meta.cls}">${meta.label}</span>`;
+  };
+
+  document.getElementById("cards").innerHTML = COURSE.lessons.map((lesson) => {
+    const desc = DESC[lesson.id] || "";
+    const top = `<div class="card-top">
+        <span class="card-n">${lesson.id}</span>
+        <span class="card-t">${esc(lesson.title)}</span>
+        ${badge(lesson)}
+      </div>`;
+
+    if (!lesson.published) {
+      return `<li><div class="card is-unpublished">${top}
+        <p class="card-desc">${desc}</p>
+        <div class="card-foot"><span class="card-c">${esc(lesson.note || "ainda não publicada")}</span></div>
+      </div></li>`;
+    }
+
+    const p = COURSE.progressOf(lesson.id);
+    const w = p.total ? Math.round((p.done / p.total) * 100) : 0;
+    const review = lesson.review
+      ? `<a class="card-review" href="${lesson.review}">ver a revisão &rarr;</a>` : "";
+    return `<li><a class="card" href="${lesson.slug}">${top}
+      <p class="card-desc">${desc}</p>
+      <div class="card-foot">
+        <span class="card-c">${p.done}/${p.total} atividades</span>
+        <span class="card-bar"><i style="width:${w}%"></i></span>
+        ${review}
+      </div>
+    </a></li>`;
+  }).join("");
+
+  /* ---------- revisões publicadas ---------- */
+  const comRevisao = COURSE.lessons.filter((l) => l.review);
+  if (comRevisao.length) {
+    document.getElementById("reviewCards").innerHTML = comRevisao.map((lesson) =>
+      `<li><a class="card" href="${lesson.review}">
+        <div class="card-top">
+          <span class="card-n">${lesson.id}</span>
+          <span class="card-t">Revisão do <code>lesson${lesson.id}.py</code></span>
+          <span class="badge is-reviewed">revisada</span>
+        </div>
+        <p class="card-desc">correção comentada da entrega, com os pontos a refazer e o
+        conteúdo reexplicado onde houve erro</p>
+      </a></li>`).join("");
+    document.getElementById("reviewsSection").hidden = false;
+  }
+})();
+</script>
 </body>
 </html>
