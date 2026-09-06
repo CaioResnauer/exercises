@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ambiente e dependências</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="11" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 11 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aulas 01 a 10</div>
+  <div class="prose">
+    <p class="lead">"Na minha máquina funciona" quase nunca é problema de código. É problema de <strong>ambiente</strong> — versões diferentes, pacote instalado por acidente, dependência que ninguém declarou.</p>
+
+    <p>A aula 10 deixou você com uma suíte de testes. Ela só tem valor se rodar igual na sua máquina, na do colega e no CI. Esta aula é sobre garantir isso.</p>
+
+    <h2>O que você vai sair sabendo</h2>
+    <ul>
+      <li>O que um ambiente virtual <em>realmente</em> faz — são três linhas de configuração, não mágica;</li>
+      <li>Por que <code>pip freeze &gt; requirements.txt</code> é a resposta errada para a pergunta certa;</li>
+      <li>A diferença entre <strong>declarar</strong> uma dependência e <strong>travar</strong> uma versão;</li>
+      <li><code>pyproject.toml</code>, e quando <code>poetry</code> ou <code>uv</code> valem a pena.</li>
+    </ul>
+
+    <div class="callout tip">
+      <div class="callout-title">A aula mais curta da fase</div>
+      <p>São 35 minutos de leitura, e você provavelmente já usa metade disso. O que muda é entender <em>por que</em>, porque é isso que te salva quando o ambiente quebra de um jeito que o tutorial não previu.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="O problema, concretamente" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 11 &middot; Atividade 02</span></div>
+  <h1 class="act-title">O problema, concretamente</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Sem ambiente virtual, todo projeto seu compartilha a mesma pilha de pacotes — inclusive os que o sistema operacional instalou.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b> <span style="color:var(--ink-3)">— nesta máquina, fora de qualquer venv</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">python3 -c "import sys, site; print(sys.executable); print(site.getusersitepackages())"
+pip list | wc -l</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>/usr/bin/python3
+/home/caio/.local/lib/python3.14/site-packages
+81 pacotes visíveis</div>
+    </div>
+
+    <p>Oitenta e um pacotes que ninguém deste projeto pediu. Três coisas ruins acontecem por causa disso:</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>A dependência fantasma</h3>
+        <p>O seu código faz <code>import requests</code> e funciona — porque outra coisa instalou <code>requests</code> um dia. Ele não está no seu <code>requirements.txt</code>, e o colega que clonar recebe <code>ModuleNotFoundError</code>. O teste da aula 10 passa aqui e falha lá.</p>
+      </div>
+      <div class="trap">
+        <h3>O conflito de versões</h3>
+        <p>Projeto A precisa de <code>pandas 1.5</code>, projeto B de <code>pandas 2.2</code>. Sem isolamento, um dos dois está quebrado a qualquer momento, e instalar um conserta e quebra alternadamente.</p>
+      </div>
+      <div class="trap">
+        <h3>O Python do sistema</h3>
+        <p>Em Debian e Ubuntu, o <code>python3</code> do sistema é usado por ferramentas do próprio sistema. Instalar pacote nele é como editar arquivo em <code>/usr</code> — por isso as distribuições recentes recusam com <code>externally-managed-environment</code>.</p>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">O sinal de que você está nesse buraco</div>
+      <p>Se você já digitou <code>pip install --break-system-packages</code> ou <code>--user</code> para fazer alguma coisa funcionar, era isto. A flag resolve o sintoma e piora a causa — o pacote foi para um lugar compartilhado por todos os seus projetos.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="O que um venv realmente é" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 11 &middot; Atividade 03</span></div>
+  <h1 class="act-title">O que um venv realmente é</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Menos do que parece, e é bom que seja: um diretório, um arquivo de configuração de quatro linhas e um <code>sys.prefix</code> diferente.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">python3 -m venv .venv
+cat .venv/pyvenv.cfg</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>home = /usr/bin
+include-system-site-packages = false
+version = 3.14.4
+executable = /usr/bin/python3.14</div>
+    </div>
+
+    <p>É isso. O <code>python</code> dentro do venv é um link para o interpretador do sistema; o que muda é que, ao subir, ele encontra esse <code>pyvenv.cfg</code> e reconfigura onde procurar pacotes:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">.venv/bin/python -c "import sys; print(sys.prefix); print(sys.base_prefix); [print(p) for p in sys.path if p]"</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>sys.prefix     : .../p1
+base_prefix    : /usr
+isolado?       : True
+caminhos de import:
+  /usr/lib/python314.zip
+  /usr/lib/python3.14
+  /usr/lib/python3.14/lib-dynload
+  .../p1/lib/python3.14/site-packages</div>
+    </div>
+
+    <p>A biblioteca padrão continua vindo de <code>/usr</code> — ela é a mesma. O que mudou é a última linha: o <code>site-packages</code> agora é o do projeto, e o <code>~/.local</code> com os 81 pacotes <strong>sumiu do caminho</strong>.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Você não precisa ativar</div>
+      <p><code>source .venv/bin/activate</code> só coloca <code>.venv/bin</code> na frente do <code>PATH</code>. Chamar <code>.venv/bin/python</code> ou <code>.venv/bin/pytest</code> pelo caminho completo tem exatamente o mesmo efeito — e é o que você escreve num <code>Makefile</code> ou numa etapa de CI, onde não há shell interativo.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">O venv não vai para o git</div>
+      <p><code>.venv/</code> entra no <code>.gitignore</code>. Ele tem centenas de MB, é específico do seu sistema operacional e é <strong>derivado</strong> — regenerável a partir do que está versionado. É a regra da aula 06: versione a fonte, não o derivado.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="Declarar não é travar" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 11 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Declarar não é travar</h1>
+  <div class="act-meta">07 min &middot; o núcleo da aula</div>
+  <div class="prose">
+    <p class="lead">São duas perguntas diferentes, e quase todo <code>requirements.txt</code> por aí tenta responder as duas com o mesmo arquivo.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>Declarar</th><th>Travar</th></tr></thead>
+        <tbody>
+          <tr><td>Responde</td><td>de que este projeto depende?</td><td>o que exatamente instalar hoje?</td></tr>
+          <tr><td>Contém</td><td>o que você importa, com faixa de versão</td><td>tudo, inclusive dependência de dependência, com versão exata</td></tr>
+          <tr><td>Escrito por</td><td>você, à mão</td><td>a ferramenta</td></tr>
+          <tr><td>Arquivo</td><td><code>pyproject.toml</code></td><td><code>*.lock</code>, <code>requirements.lock</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Por que <code>pip freeze</code> é a resposta errada</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>bash</b> <span style="color:var(--danger)">— o que quase todo mundo faz</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">pip install requests pandas
+pip freeze &gt; requirements.txt</code></pre>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>requirements.txt</b> <span style="color:var(--ink-3)">— o resultado</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">certifi==2025.8.3
+charset-normalizer==3.4.1
+idna==3.10
+numpy==2.3.2
+pandas==2.2.3
+python-dateutil==2.9.0
+pytz==2025.2
+requests==2.32.4
+six==1.17.0
+tzdata==2025.2
+urllib3==2.5.0</code></pre>
+    </div>
+
+    <p>Onze linhas para duas dependências. O arquivo agora mistura tudo:</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Não dá para saber o que é seu</h3>
+        <p><code>six</code> está aí porque você precisa dele ou porque o <code>python-dateutil</code> precisa? Daqui a um ano, ninguém sabe se pode remover.</p>
+      </div>
+      <div class="trap">
+        <h3>Ele congela o que não devia</h3>
+        <p><code>urllib3==2.5.0</code> impede uma correção de segurança do <code>requests</code> de chegar. Você trava a árvore inteira quando só queria travar o topo.</p>
+      </div>
+      <div class="trap">
+        <h3>Ele leva junto o lixo do ambiente</h3>
+        <p>Se o venv tinha <code>pytest</code>, <code>ipython</code> e aquele pacote que você instalou para testar uma ideia, tudo entra — e vira dependência de produção.</p>
+      </div>
+    </div>
+
+    <h2>O jeito certo, com dois arquivos</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>pyproject.toml</b> <span style="color:var(--ok)">— o que você declara</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">[project]
+name = "sales-pipeline"
+version = "0.1.0"
+requires-python = "&gt;=3.12"
+dependencies = [
+  "requests&gt;=2.32,&lt;3",
+  "pandas&gt;=2.2,&lt;3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest&gt;=8", "pytest-cov", "mypy"]</code></pre>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>bash</b> <span style="color:var(--ok)">— o lock, gerado</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">pip install pip-tools
+pip-compile pyproject.toml -o requirements.lock      # resolve e trava tudo
+pip-sync requirements.lock                            # instala exatamente aquilo</code></pre>
+    </div>
+
+    <p>Os dois vão para o git. O <code>pyproject.toml</code> diz a intenção e é editado por gente; o <code>.lock</code> diz o fato e é editado por ferramenta. Quando você quiser atualizar, roda o <code>pip-compile</code> de novo e o <em>diff</em> mostra exatamente o que mudou.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">A faixa de versão que faz sentido</div>
+      <p><code>&gt;=2.32,&lt;3</code>: aceita correção e recurso novo, recusa a próxima versão maior. É o contrato do <em>semantic versioning</em>. Fixar <code>==</code> no arquivo de declaração é abrir mão de qualquer correção de segurança; não pôr limite nenhum é aceitar que a versão 3.0 quebre o seu build sem aviso.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="lab" data-title="Mão na massa: o que quebra o colega" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 11 &middot; Atividade 05</span></div>
+  <h1 class="act-title">O que quebra o colega</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Um repositório com este conteúdo. Três coisas nele vão fazer o clone de outra pessoa falhar — ou, pior, funcionar diferente.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>repositório</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">sales-pipeline/
+├── .venv/                 # versionado
+├── requirements.txt       # gerado com pip freeze, 47 linhas
+├── src/pipeline.py        # importa requests, pandas e dateutil
+└── tests/test_pipeline.py # importa pytest e freezegun</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="Três problemas. Quais, e o que cada um causa no clone de outra pessoa?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a resposta</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div class="traps" style="margin-top:18px">
+          <div class="trap">
+            <h3><code>.venv/</code> versionado</h3>
+            <p>Centenas de MB no repositório para sempre — e a lição da aula 06 vale: apagar depois não tira do histórico. Pior, ele contém caminhos absolutos e binários compilados para <em>o seu</em> sistema. No macOS do colega, o <code>.venv</code> clonado simplesmente não roda.</p>
+          </div>
+          <div class="trap">
+            <h3><code>freezegun</code> e <code>pytest</code> misturados com produção</h3>
+            <p>Se estão no <code>requirements.txt</code>, vão para a imagem de produção — mais superfície, mais tempo de build, mais CVE para acompanhar. Se <em>não</em> estão, a suíte de testes não roda no CI. Um <code>requirements.txt</code> só não consegue separar os dois casos; é para isso que existe <code>optional-dependencies</code>.</p>
+          </div>
+          <div class="trap">
+            <h3>Nenhum <code>requires-python</code></h3>
+            <p>O código usa <code>batched</code>, da aula 04, que só existe no 3.12+. Quem tiver 3.11 recebe <code>ImportError: cannot import name 'batched'</code> — e vai procurar o erro no código, não na versão. Uma linha no <code>pyproject.toml</code> faz o <code>pip</code> recusar a instalação com a mensagem certa.</p>
+          </div>
+        </div>
+        <div class="callout tip">
+          <div class="callout-title">E um quarto, que não estava na pergunta</div>
+          <p><code>dateutil</code> é importado pelo código mas provavelmente não está declarado — ele veio junto do <code>pandas</code>. Funciona hoje; no dia em que o pandas trocar de dependência, some. Toda coisa que você <code>import</code> tem que estar declarada, mesmo que já venha por tabela.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="pip, poetry ou uv" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 11 &middot; Atividade 06</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">pip</code>, <code style="font-size:.82em">poetry</code> ou <code style="font-size:.82em">uv</code></h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">As três resolvem o mesmo problema com quantidades diferentes de opinião. Nenhuma é errada.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>venv + pip-tools</th><th>Poetry</th><th>uv</th></tr></thead>
+        <tbody>
+          <tr><td>Cria o ambiente</td><td>você (<code>python -m venv</code>)</td><td>a ferramenta</td><td>a ferramenta</td></tr>
+          <tr><td>Resolve e trava</td><td><code>pip-compile</code></td><td><code>poetry.lock</code></td><td><code>uv.lock</code></td></tr>
+          <tr><td>Velocidade de instalação</td><td>baseline</td><td>parecida</td><td>ordens de grandeza mais rápida</td></tr>
+          <tr><td>Peças a instalar antes</td><td>nenhuma além do pip</td><td>o Poetry</td><td>o uv (binário único)</td></tr>
+          <tr><td>Padrão do arquivo</td><td><code>pyproject.toml</code> padrão</td><td><code>pyproject.toml</code>, seção própria</td><td><code>pyproject.toml</code> padrão</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>O que escolher agora</h2>
+    <p>Para o seu primeiro repositório de portfólio: <strong><code>venv</code> + <code>pyproject.toml</code></strong>. Sem ferramenta extra, todo mundo consegue rodar, e o arquivo é o padrão da linguagem — o que você aprende aí vale para as outras duas.</p>
+
+    <p>O <code>uv</code> vale a pena assim que o projeto crescer: ele lê o mesmo <code>pyproject.toml</code>, resolve muito mais rápido e substitui <code>venv</code>, <code>pip</code> e <code>pip-tools</code> de uma vez. A migração é trocar comandos, não arquivos.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>bash</b> <span style="color:var(--ink-3)">— os mesmos passos, nas três</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash"># venv + pip
+python -m venv .venv &amp;&amp; . .venv/bin/activate
+pip install -e ".[dev]"
+
+# poetry
+poetry install --with dev
+poetry run pytest
+
+# uv
+uv sync --extra dev
+uv run pytest</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O <code>-e</code> do <code>pip install -e .</code></div>
+      <p>Instala o próprio projeto em modo editável: o <code>src/</code> passa a ser importável de qualquer lugar sem gambiarra de <code>sys.path</code>, e as edições valem na hora. É o que faz <code>from sales_pipeline.transform import clean</code> funcionar tanto no teste quanto no script — e resolve o <code>ModuleNotFoundError</code> mais comum de quem organiza o projeto em <code>src/</code>.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Não misture as três</div>
+      <p>Um <code>poetry.lock</code> e um <code>requirements.txt</code> no mesmo repositório é a garantia de que os dois vão divergir, e de que metade das pessoas vai instalar o conjunto errado. Escolha uma e apague o resto.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="note" data-title="Para saber mais: o ambiente além do Python" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 11 &middot; Atividade 07</span></div>
+  <h1 class="act-title">O ambiente além do Python</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Um <em>lockfile</em> perfeito ainda deixa três coisas variando entre a sua máquina e o servidor.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>A versão do interpretador</h3>
+        <p><code>requires-python</code> declara a faixa aceita, mas não instala nada. Dentro da faixa, 3.12 e 3.14 têm comportamentos diferentes — <code>dict</code> ordenado, mensagens de erro, desempenho. Fixe a versão exata no Dockerfile e no CI, e anote no README.</p>
+      </div>
+      <div class="trap">
+        <h3>Bibliotecas do sistema</h3>
+        <p>Pacotes com extensão em C dependem de bibliotecas nativas — <code>libpq</code> para <code>psycopg</code>, <code>libssl</code>, drivers ODBC. O lock não as cobre. Foi exatamente o que aconteceu com o Chromium do <code>check.py</code> deste site: o pacote Python instalou, e o binário não subia porque faltavam quatro bibliotecas do sistema.</p>
+      </div>
+      <div class="trap">
+        <h3>Variáveis de ambiente e locale</h3>
+        <p><code>LANG</code> muda o <em>encoding</em> padrão de <code>open()</code>, <code>TZ</code> muda o que <code>datetime.now()</code> devolve. Um pipeline que roda certo aqui e erra três horas em produção quase sempre é <code>TZ</code>. Passe <code>encoding="utf-8"</code> sempre, e trabalhe em UTC.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">É por isso que o contêiner ganhou</div>
+      <p>Um <code>Dockerfile</code> fixa o sistema operacional, as bibliotecas nativas, a versão do Python e o lock, tudo num arquivo versionado. Não é assunto da fase 1, mas é para onde isto aponta — e por isso vale aprender a separar declaração de trava agora, porque a imagem se constrói em cima disso.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">O teste que revela ambiente escondido</div>
+      <p>Crie um venv <strong>limpo</strong>, instale só o que está declarado, e rode a suíte. É o mesmo que o CI faz, e é a única forma honesta de descobrir a dependência fantasma. Fazer isso uma vez antes de cada entrega vale mais que qualquer ferramenta.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="lab" data-title="Hora da prática: 11.1 a 11.4" data-min="50" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 11 &middot; Atividade 08</span></div>
+  <h1 class="act-title">Exercícios 11.1 a 11.4</h1>
+  <div class="act-meta">50 min &middot; diretório <code>exercises/python/lesson11/</code></div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">11.1</span><h2>Abra o venv por dentro</h2><span class="ex-kind">experimento</span></div>
+      <p>Crie um venv e reproduza a atividade 03: mostre o <code>pyvenv.cfg</code>, o <code>sys.prefix</code>, o <code>sys.base_prefix</code> e o <code>sys.path</code>, dentro e fora dele. Aponte exatamente qual entrada do <code>sys.path</code> mudou.</p>
+      <p>Depois crie um com <code>--system-site-packages</code> e mostre a diferença no <code>sys.path</code>. Diga em que situação essa flag é útil e por que ela normalmente não é.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">11.2</span><h2>A dependência fantasma</h2><span class="ex-kind">experimento</span></div>
+      <p>Num venv limpo, instale <strong>só</strong> <code>pytest</code>. Escreva um módulo que importe algo que você usa hoje sem declarar — <code>requests</code>, <code>dateutil</code>, o que for — e rode. Mostre o erro.</p>
+      <p>Depois liste, para o seu <code>lesson10.py</code>, todo <code>import</code> de terceiros e confira contra o que você declararia. Quantos faltavam?</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">11.3</span><h2>Declarar e travar, separados</h2><span class="ex-kind">implementação</span></div>
+      <p>Escreva um <code>pyproject.toml</code> para um projeto pequeno com <code>requests</code> e <code>pytest</code>, separando produção de <code>dev</code> em <code>optional-dependencies</code>, com <code>requires-python</code>. Gere o lock com <code>pip-compile</code> (ou <code>uv lock</code>) e commite os dois.</p>
+      <p>Compare o número de linhas dos dois arquivos e explique a diferença. Depois abra o lock e ache uma dependência que você não pediu — diga de quem ela veio.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">11.4</span><h2>O clone limpo</h2><span class="ex-kind">verificação</span></div>
+      <p>Clone o seu próprio repositório num diretório novo, crie um venv do zero, instale <strong>só</strong> o que está declarado, e rode a suíte da aula 10. Reporte tudo que faltou.</p>
+      <div class="callout tip">
+        <div class="callout-title">O jeito rápido de simular outra máquina</div>
+        <p><code>git clone . /tmp/clone-teste &amp;&amp; cd /tmp/clone-teste</code>. O clone só traz o que está versionado — se o teste precisa de um arquivo que só existe no seu diretório, ele vai falhar aqui, que é exatamente o que você quer descobrir.</p>
+      </div>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="lab" data-title="Entrega" data-min="30" hidden>
+  <div class="kicker"><span class="tag is-lab">Entrega</span><span class="dot"></span><span>Aula 11 &middot; Atividade 09</span></div>
+  <h1 class="act-title">Entrega</h1>
+  <div class="act-meta">30 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">11.5</span><h2>Arrume o ambiente deste repositório</h2><span class="ex-kind">entrega</span></div>
+      <p>O repositório <code>exercises</code> hoje não declara nada. Acrescente:</p>
+      <ul>
+        <li>Um <code>pyproject.toml</code> na raiz com <code>requires-python</code> e as dependências de dev que as aulas usaram (<code>pytest</code>, <code>pytest-cov</code>, <code>mypy</code>);</li>
+        <li><code>.venv/</code> no <code>.gitignore</code>, se ainda não estiver;</li>
+        <li>Uma seção no README dizendo, em três comandos, como clonar e rodar os exercícios.</li>
+      </ul>
+      <div class="callout warn">
+        <div class="callout-title">Cuidado com o <code>batched</code></div>
+        <p>Os exercícios da aula 04 usam <code>itertools.batched</code>, que é 3.12+. Se você declarar <code>requires-python = "&gt;=3.10"</code>, estará mentindo. Declare o que o código realmente exige — e, se quiser aceitar 3.10, inclua a receita alternativa da aula 04 no código.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">11.6</span><h2>Desafio: o CI mínimo</h2><span class="ex-kind">desafio</span></div>
+      <p>Escreva um workflow do GitHub Actions que, a cada push, crie um ambiente limpo, instale o que está declarado e rode a suíte. Vinte linhas bastam.</p>
+      <p>Isso fecha o assunto da aula: o CI é a máquina do colega, rodando a cada commit e sem paciência para "aqui funciona". E prepara a aula 16, onde o resultado dele vira parte do pull request.</p>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>pyproject.toml</code>, o lock e a saída do exercício 11.4 — a lista do que faltou no clone limpo. Se não faltou nada, diga isso; é um bom resultado.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de commitar</div>
+      <ul>
+        <li>Todo módulo de terceiros que você importa está <strong>declarado</strong>?</li>
+        <li>Dependência de teste está separada da de produção?</li>
+        <li><code>.venv/</code> está no <code>.gitignore</code>?</li>
+        <li>O <code>requires-python</code> reflete o que o código realmente exige?</li>
+        <li>Você rodou a suíte num clone limpo?</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 12: Logging estruturado</div>
+      <p>O <code>print</code> não tem nível, não tem origem, não tem hora e não tem para onde ir. Vamos trocar por logs que uma máquina consegue filtrar — e medir por que <code>log.debug("x %s", y)</code> é diferente de <code>log.debug(f"x {y}")</code> mesmo quando o nível está desligado.</p>
+    </div>
+
+  </div>
+</article>
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/9</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 11</div>
+          <div class="lh-n">Ambiente e dependências</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/python/lesson11/<span class="rs">um projeto pequeno, com o ambiente montado</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://docs.python.org/3/library/venv.html" target="_blank" rel="noopener">venv<span class="rs">o que ele cria, e o que não cria</span></a></li>
+        <li><a href="https://packaging.python.org/en/latest/guides/writing-pyproject-toml/" target="_blank" rel="noopener">pyproject.toml<span class="rs">o formato que substituiu o setup.py</span></a></li>
+        <li><a href="https://pip.pypa.io/en/stable/topics/repeatable-installs/" target="_blank" rel="noopener">Repeatable installs<span class="rs">o guia oficial sobre lockfile</span></a></li>
+        <li><a href="https://python-poetry.org/docs/basic-usage/" target="_blank" rel="noopener">Poetry<span class="rs">resolução de dependências e lock</span></a></li>
+        <li><a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">uv<span class="rs">o instalador rápido que virou padrão de fato</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">Python Packaging User Guide<span class="rs">gratuito em packaging.python.org</span></span></li>
+        <li><span class="res-static">The Pragmatic Programmer — cap. sobre reprodutibilidade<span class="rs">Hunt & Thomas · o princípio por trás</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
