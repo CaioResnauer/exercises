@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Git em equipe: pull requests e conflitos</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="16" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 16 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aula 06</div>
+  <div class="prose">
+    <p class="lead">A aula 06 mostrou o que o git guarda e como um commit se escreve. Esta é sobre o que muda quando existe outra pessoa — ou quando você quer que o seu repositório pareça que existe.</p>
+
+    <p>Três coisas: trabalhar em branch em vez de empurrar direto na <code>main</code>, abrir um pull request que alguém consiga revisar, e resolver o conflito — que não é acidente nem sinal de que alguém errou.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Conflito é uma pergunta, não um erro</div>
+      <p>O git resolve sozinho quase tudo. Quando ele para e pede ajuda, é porque duas pessoas mudaram <strong>as mesmas linhas</strong> e não existe forma automática de saber qual das duas intenções vale. A atividade 05 mostra um conflito real e a resolução que parece certa e desfaz uma correção.</p>
+    </div>
+
+    <h2>E se eu trabalho sozinho?</h2>
+    <p>Vale igual, por dois motivos. Um pull request no seu próprio repositório dá um lugar para o CI rodar e para você reler o diff inteiro antes de mesclar — e reler o próprio diff pega mais bug do que se imagina. O outro é que o histórico do seu portfólio é lido por quem avalia, e um repositório com PRs conta uma história diferente de trinta commits direto na <code>main</code>.</p>
+
+    <h2>Tempo estimado</h2>
+    <p>40 min de leitura, 1 h 20 de exercícios. Todos os comandos e saídas foram executados.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="Por que não commitar na main" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 16 &middot; Atividade 02</span></div>
+  <h1 class="act-title">Por que não commitar na main</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Não é cerimônia. A <code>main</code> tem um papel: ela é a versão que <strong>funciona</strong>. Todo commit direto nela é uma aposta de que você não quebrou nada.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Com branch</th><th>Direto na main</th></tr></thead>
+        <tbody>
+          <tr><td>o CI roda antes de entrar</td><td>o CI roda depois; se quebrou, já está lá</td></tr>
+          <tr><td>o trabalho pela metade fica isolado</td><td>ou você segura o commit por dias, ou empurra incompleto</td></tr>
+          <tr><td>desfazer é apagar o branch</td><td>desfazer é <code>revert</code> no histórico público</td></tr>
+          <tr><td>o diff da mudança inteira existe</td><td>a mudança está espalhada em N commits misturados</td></tr>
+          <tr><td>dá para pedir revisão</td><td>não há o que revisar antes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>O ciclo</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">git switch main &amp;&amp; git pull --rebase          # parta do que está publicado
+git switch -c feat/lesson13-window-functions   # um branch por unidade de trabalho
+
+# ... commits pequenos, um por ideia, como na aula 06 ...
+
+git push -u origin feat/lesson13-window-functions
+gh pr create --fill                            # ou pelo site</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O nome do branch é a primeira comunicação</div>
+      <p><code>tipo/escopo-curto</code>, no mesmo vocabulário dos Conventional Commits: <code>feat/</code>, <code>fix/</code>, <code>docs/</code>, <code>chore/</code>. <code>feat/window-functions</code> diz o que é numa lista de vinte branches; <code>teste</code>, <code>novo</code> e <code>caio2</code> não dizem nada — e são os que ficam esquecidos no remoto por um ano.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Branch curto</div>
+      <p>Um branch que vive duas semanas acumula divergência, e cada dia a mais aumenta a chance de conflito. Se o trabalho é grande, quebre em pedaços que entrem sozinhos — três PRs de um dia são muito mais fáceis de revisar e mesclar que um de duas semanas.</p>
+    </div>
+
+    <p>E a <code>main</code> tem que ser protegida no servidor, não pela sua disciplina. No GitHub: <em>Settings &rarr; Branches &rarr; Add rule</em>, exigindo pull request e o CI verde. Depois disso, <code>git push origin main</code> é recusado — inclusive por você, num dia de pressa.</p>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="O pull request" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 16 &middot; Atividade 03</span></div>
+  <h1 class="act-title">O pull request</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Um PR é um pedido: <em>"puxe estes commits para a main"</em>. O que o torna útil não é o mecanismo — é a descrição.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>markdown</b> <span style="color:var(--ok)">— o formato que funciona</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">## O que muda
+Deduplicação da staging passa a usar ROW_NUMBER com desempate por id.
+
+## Por quê
+Dois registros com o mesmo updated_at faziam o resultado variar entre
+execuções — a carga da noite 03/09 trouxe 4 pedidos diferentes da anterior
+com os mesmos dados de entrada.
+
+## Como revisar
+Comece por transform.sql; o resto é teste. O EXPLAIN antes e depois está
+no comentário do commit 3c2a1f9.
+
+## O que ficou de fora
+O índice (order_id, updated_at) que faria o SORT sumir do plano — está
+medido e vai em PR separado.</code></pre>
+    </div>
+
+    <div class="traps">
+      <div class="trap">
+        <h3><em>O que muda</em> — uma frase</h3>
+        <p>O revisor lê isso antes do diff. Se você não consegue resumir numa frase, o PR está fazendo mais de uma coisa.</p>
+      </div>
+      <div class="trap">
+        <h3><em>Por quê</em> — a parte que o diff não mostra</h3>
+        <p>O diff mostra o que mudou; ele nunca mostra a razão. É aqui que entra o número, o incidente, o ticket. Daqui a um ano, esta é a única fonte.</p>
+      </div>
+      <div class="trap">
+        <h3><em>Como revisar</em> — respeite o tempo de quem lê</h3>
+        <p>Por onde começar, o que é ruído, o que merece atenção. Um PR de 400 linhas em que 350 são teste gerado deveria dizer isso na primeira linha.</p>
+      </div>
+      <div class="trap">
+        <h3><em>O que ficou de fora</em> — evita metade dos comentários</h3>
+        <p>Diga o que você viu e decidiu não fazer agora. Isso transforma "você esqueceu X" em "concordo, deixa para depois".</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Do terminal</div>
+      <div class="code bare" style="margin-top:12px">
+        <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-bash">gh pr create --fill              # usa os commits como título e corpo
+gh pr create --draft             # abre como rascunho: CI roda, ninguém é notificado
+gh pr view --web                 # abre no navegador
+gh pr checks                     # o estado do CI
+gh pr diff                       # o diff completo no terminal</code></pre>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Tamanho é a variável que mais importa</div>
+      <p>A pesquisa sobre revisão de código é consistente: acima de ~400 linhas, a taxa de defeitos encontrados despenca — o revisor cansa e passa a aprovar. Um PR de 2.000 linhas recebe "LGTM" em dois minutos, e isso é pior que não ter revisão, porque cria a impressão de que houve.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="Anatomia de um conflito" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 16 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Anatomia de um conflito</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Duas pessoas mexeram na mesma função. Uma trocou o arredondamento por centavos inteiros; a outra acrescentou um campo. Rodando de verdade:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">git merge feat/city</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>Auto-merging transform.py
+CONFLICT (content): Merge conflict in transform.py
+Automatic merge failed; fix conflicts and then commit the result.</div>
+    </div>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>transform.py</b> <span style="color:var(--ink-3)">— o que o git escreveu</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def normalize(record):
+    return {
+        "id": int(record["id"]),
+&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
+        "amount": to_cents(record["amount"]),
+=======
+        "amount": round(float(record["amount"]), 2),
+        "city": record["city"].strip().lower(),
+&gt;&gt;&gt;&gt;&gt;&gt;&gt; feat/city
+    }</code></pre>
+    </div>
+
+    <p>Entre <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> e <code>=======</code> está o que existe em <code>HEAD</code> — <strong>onde você está</strong>. Entre <code>=======</code> e <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>, o que vem do branch que você está trazendo. Fora dos marcadores, o git já resolveu.</p>
+
+    <h2>O git guardou as três versões</h2>
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">git status --short
+git ls-files -u</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>UU transform.py
+
+100644 af5f801c... 1  transform.py
+100644 a06c7de7... 2  transform.py
+100644 d0ada785... 3  transform.py</div>
+    </div>
+
+    <p><code>UU</code> significa <em>unmerged, both modified</em>. E os três estágios no index são o que faz o merge funcionar:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Estágio</th><th>É</th><th>Como ver</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>a <strong>base comum</strong>: o último ancestral dos dois</td><td><code>git show :1:transform.py</code></td></tr>
+          <tr><td>2</td><td>a sua versão (<code>HEAD</code>)</td><td><code>git show :2:transform.py</code></td></tr>
+          <tr><td>3</td><td>a do outro branch</td><td><code>git show :3:transform.py</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b> <span style="color:var(--ok)">— a base é o que resolve a dúvida</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">git show :1:transform.py</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>def normalize(record):
+    return {
+        "id": int(record["id"]),
+        "amount": round(float(record["amount"]), 2),
+    }</div>
+    </div>
+
+    <p>Comparando com a base fica óbvio quem mudou o quê: o lado 2 <strong>trocou</strong> a linha do <code>amount</code>; o lado 3 <strong>manteve</strong> aquela linha e acrescentou o <code>city</code>. É por isso que o git não conseguiu decidir — as duas edições encostam na mesma linha.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Ligue o <code>diff3</code> e nunca mais desligue</div>
+      <div class="code bare" style="margin-top:12px">
+        <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-bash">git config --global merge.conflictStyle zdiff3</code></pre>
+      </div>
+      <p>Com isso, o git inclui a <strong>base comum</strong> dentro dos marcadores, num terceiro bloco. Você passa a ver as três versões no próprio arquivo, sem precisar do <code>git show :1:</code> — e a decisão vira quase automática.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="lab" data-title="Mão na massa: a resolução que parece certa" data-min="6" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 16 &middot; Atividade 05</span></div>
+  <h1 class="act-title">A resolução que parece certa</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">O conflito da atividade anterior, e alguém resolvendo com pressa: apaga os marcadores, fica com o lado que tem o campo novo.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>transform.py</b> <span style="color:var(--ink-3)">— depois da resolução</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def normalize(record):
+    return {
+        "id": int(record["id"]),
+        "amount": round(float(record["amount"]), 2),
+        "city": record["city"].strip().lower(),
+    }</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de continuar</div>
+      <textarea placeholder="O que há de errado? O que o CI vai dizer?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <p style="margin-top:18px">O arquivo <strong>compila, passa no lint e não tem marcador de conflito.</strong> E a correção de centavos inteiros — o <code>to_cents</code>, que estava na <code>main</code> — foi silenciosamente desfeita.</p>
+        <p>É o pior formato de falha da aula 04, agora no git: nada reclama, e o bug que alguém já tinha corrigido volta. O CI só pega se houver um teste que cubra o arredondamento — o que a aula 10 pediu no exercício 10.6.</p>
+        <div class="callout bug">
+          <div class="callout-title">Por que isso acontece tanto</div>
+          <p>Porque a resolução <em>parece</em> uma escolha entre dois blocos de texto, e não é. Os dois lados mudaram coisas <strong>diferentes</strong> que por acaso ficaram perto. A resposta certa quase nunca é "um dos dois" — é combinar as duas intenções:</p>
+          <div class="code bare" style="margin-top:12px">
+            <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— as duas intenções</span></span><button class="copy">Copiar</button></div>
+            <pre><code class="language-python">        "amount": to_cents(record["amount"]),
+        "city": record["city"].strip().lower(),</code></pre>
+          </div>
+        </div>
+        <div class="callout tip">
+          <div class="callout-title">O método, em quatro passos</div>
+          <ol>
+            <li><strong>Leia a base</strong> (<code>git show :1:</code> ou o bloco do <code>zdiff3</code>). O que cada lado <em>mudou</em> em relação a ela?</li>
+            <li><strong>Nomeie as duas intenções</strong> em voz alta. "Um trocou float por centavos; o outro acrescentou cidade."</li>
+            <li><strong>Escreva o código que atende as duas.</strong> Frequentemente não é nenhum dos dois blocos literalmente.</li>
+            <li><strong>Rode os testes</strong> antes do <code>git add</code>. Um merge é uma mudança de código como qualquer outra.</li>
+          </ol>
+        </div>
+        <p>E o passo zero: se você não entende o que o outro lado estava fazendo, <strong>pergunte a quem escreveu</strong>. Resolver conflito adivinhando a intenção alheia é como o merge acima acontece.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="Resolvendo na prática" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 16 &middot; Atividade 06</span></div>
+  <h1 class="act-title">Resolvendo na prática</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Com o método da atividade anterior, o mesmo conflito resolvido direito — e o resultado no histórico.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">> editar transform.py combinando as duas intenções
+python -m pytest -q
+git add transform.py
+git commit -m "merge: keep integer cents and add city"
+
+git log --oneline --graph --all</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>*   feb131c merge: keep integer cents and add city
+|\
+| * d17bd78 feat(transform): add the city field
+* | acbfac3 fix(transform): use integer cents instead of float
+|/
+* 110568c feat(transform): add normalize</div>
+    </div>
+
+    <p>O commit de merge tem <strong>dois pais</strong> — é o único tipo de commit que tem — e o grafo mostra as duas linhas que se separaram e voltaram. E o <code>blame</code> continua apontando para quem escreveu cada linha, não para o merge:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">git blame --date=short -- transform.py</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>^110568c (Caio 2026-09-06 1) def normalize(record):
+^110568c (Caio 2026-09-06 2)     return {
+^110568c (Caio 2026-09-06 3)         "id": int(record["id"]),
+acbfac3a (Caio 2026-09-06 4)         "amount": to_cents(record["amount"]),
+d17bd78b (Caio 2026-09-06 5)         "city": record["city"].strip().lower(),
+^110568c (Caio 2026-09-06 6)     }</div>
+    </div>
+
+    <h2>Os comandos de escape</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Comando</th><th>Faz</th></tr></thead>
+        <tbody>
+          <tr><td><code>git merge --abort</code></td><td>volta ao estado anterior ao merge, sem perder nada</td></tr>
+          <tr><td><code>git checkout --ours &lt;f&gt;</code></td><td>fica com a sua versão inteira do arquivo</td></tr>
+          <tr><td><code>git checkout --theirs &lt;f&gt;</code></td><td>fica com a versão do outro branch</td></tr>
+          <tr><td><code>git checkout -m &lt;f&gt;</code></td><td>recria os marcadores, se você bagunçou o arquivo</td></tr>
+          <tr><td><code>git diff --name-only --diff-filter=U</code></td><td>lista só os arquivos em conflito</td></tr>
+          <tr><td><code>git mergetool</code></td><td>abre a ferramenta visual configurada</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title"><code>--ours</code> e <code>--theirs</code> invertem no rebase</div>
+      <p>Num <code>merge</code>, <em>ours</em> é o seu branch. Num <code>rebase</code>, o git reaplica os seus commits <em>sobre</em> o outro — então <em>ours</em> passa a ser o branch de destino e <em>theirs</em> é o seu trabalho. É a confusão mais comum de quem resolve conflito no rebase, e leva a descartar o próprio código.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title"><code>rerere</code>: resolva uma vez</div>
+      <div class="code bare" style="margin-top:12px">
+        <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-bash">git config --global rerere.enabled true</code></pre>
+      </div>
+      <p>Com isso ligado, o git grava como você resolveu — <code>Recorded resolution for 'transform.py'</code> — e reaplica sozinho se o mesmo conflito reaparecer. Num rebase longo, o mesmo conflito volta a cada commit reaplicado; sem <code>rerere</code>, você resolve o mesmo trecho oito vezes.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="note" data-title="Para saber mais: como evitar conflito" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 16 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Como evitar conflito</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Conflito é função de duas variáveis: quanto tempo o branch vive, e quanta gente mexe no mesmo arquivo. Dá para atacar as duas.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Integre todo dia</h3>
+        <p><code>git switch main &amp;&amp; git pull --rebase &amp;&amp; git switch - &amp;&amp; git rebase main</code>. Um conflito de um dia é pequeno e você lembra do contexto; um de duas semanas é arqueologia.</p>
+      </div>
+      <div class="trap">
+        <h3>PR pequeno</h3>
+        <p>Menos linhas tocadas, menos superfície de colisão. É o mesmo argumento do tamanho da atividade 03, por outro motivo.</p>
+      </div>
+      <div class="trap">
+        <h3>Combine antes quem mexe onde</h3>
+        <p>Trinta segundos de conversa evitam duas pessoas reescrevendo a mesma função. É a solução mais eficaz e a menos técnica.</p>
+      </div>
+      <div class="trap">
+        <h3>Formatação automática, e num commit separado</h3>
+        <p>Um <code>black</code> ou <code>ruff format</code> rodando em todo mundo elimina o conflito de estilo. Mas <strong>nunca</strong> misture reformatação com mudança de comportamento no mesmo commit: o diff fica ilegível e o conflito, garantido. Reformate em commit próprio, e registre o hash em <code>.git-blame-ignore-revs</code>.</p>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Os arquivos que sempre conflitam</div>
+      <p>Lockfiles (<code>poetry.lock</code>, <code>uv.lock</code>), migrações numeradas sequencialmente, e qualquer arquivo gerado que esteja versionado. Para lockfile, a resolução não é editar à mão — é pegar a versão da <code>main</code> e regerar: <code>git checkout --theirs uv.lock &amp;&amp; uv lock</code>.</p>
+    </div>
+
+    <div class="callout bug">
+      <div class="callout-title">O conflito que o git não vê</div>
+      <p>Você renomeia <code>normalize</code> para <code>clean_record</code> num branch; no outro, alguém acrescenta três chamadas a <code>normalize</code>. Arquivos diferentes, <strong>zero conflito no merge</strong>, e o código quebra na hora de rodar.</p>
+      <p>Isso é um conflito semântico, e nenhuma ferramenta de merge pega. Quem pega é o CI da aula 11 rodando a suíte da aula 10 — que é o argumento mais forte a favor de exigir CI verde antes de mesclar.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="video" data-title="Revisar código" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 16 &middot; Atividade 08</span></div>
+  <h1 class="act-title">Revisar código</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Você já recebeu uma revisão nesta trilha — a da aula 04. Vale saber escrever uma.</p>
+
+    <h2>A ordem em que se lê um PR</h2>
+    <ol>
+      <li><strong>A descrição.</strong> O que muda e por quê. Se não dá para entender, o primeiro comentário é sobre isso.</li>
+      <li><strong>Os testes.</strong> Eles dizem o que o autor acha que o código faz, e revelam os casos que ele não pensou.</li>
+      <li><strong>A mudança principal.</strong> Aquilo que a descrição prometeu.</li>
+      <li><strong>O resto</strong>, procurando o que <em>não</em> foi prometido — a mudança que entrou de carona.</li>
+    </ol>
+
+    <h2>O que procurar, em ordem de valor</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Procure</th><th>Exemplo desta trilha</th></tr></thead>
+        <tbody>
+          <tr><td>Está correto no caso vazio e no limite?</td><td>o <code>manual_batched</code> em loop infinito com entrada vazia</td></tr>
+          <tr><td>O contrato mudou sem aviso?</td><td>o <code>chunked</code> que deixou de ser reutilizável</td></tr>
+          <tr><td>Escala?</td><td>um <code>in</code> sobre lista dentro de laço; um <code>list()</code> no meio do pipeline</td></tr>
+          <tr><td>Falha direito?</td><td><code>except Exception: continue</code> engolindo linha ruim</td></tr>
+          <tr><td>Vaza segredo ou recurso?</td><td>token no <code>repr</code>; arquivo sem <code>with</code></td></tr>
+          <tr><td>Estilo</td><td>deixe para o formatador — não gaste revisão com isso</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Como escrever o comentário</div>
+      <p>Sobre o <strong>código</strong>, não sobre a pessoa: "esta função retorna None quando a lista é vazia" em vez de "você esqueceu de tratar". Diga o <strong>porquê</strong>, não só o quê. E marque o que é opcional — um <code>nit:</code> na frente deixa claro que não bloqueia.</p>
+      <p>Quando for elogio, seja específico: "o <code>CountingSink</code> isola bem a medição" ensina mais que um "ficou bom".</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Aprovar sem ler é pior que não revisar</div>
+      <p>Um "LGTM" registra que alguém olhou. Se ninguém olhou, o registro é falso e a próxima pessoa confia nele. Se você não tem tempo, diga isso — é uma resposta legítima e honesta.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="lab" data-title="Hora da prática: 16.1 a 16.4" data-min="50" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 16 &middot; Atividade 09</span></div>
+  <h1 class="act-title">Exercícios 16.1 a 16.4</h1>
+  <div class="act-meta">50 min</div>
+  <div class="prose">
+
+    <div class="callout warn">
+      <div class="callout-title">Os três primeiros num repositório descartável</div>
+      <p><code>mkdir /tmp/git-team &amp;&amp; cd /tmp/git-team &amp;&amp; git init</code>. Só o 16.4 é no seu repositório de verdade.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">16.1</span><h2>Provoque o conflito</h2><span class="ex-kind">experimento</span></div>
+      <p>Reproduza exatamente o cenário da atividade 04: um arquivo, dois branches, edições vizinhas na mesma função. Mostre a saída do <code>git merge</code>, o <code>git status --short</code>, o <code>git ls-files -u</code> e as três versões com <code>git show :1:</code>, <code>:2:</code> e <code>:3:</code>.</p>
+      <p>Depois ligue <code>merge.conflictStyle=zdiff3</code>, refaça, e compare os marcadores. Diga qual dos dois formatos você quer para sempre.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">16.2</span><h2>Resolva errado e prove com teste</h2><span class="ex-kind">experimento</span></div>
+      <p>Escreva um teste que cubra o comportamento de <em>cada</em> lado do conflito. Resolva ficando só com um dos blocos, rode a suíte, e mostre o teste vermelho. Depois resolva combinando as duas intenções e mostre a suíte verde.</p>
+      <div class="callout tip">
+        <div class="callout-title">O ponto do exercício</div>
+        <p>É o argumento concreto para exigir CI verde no PR. Sem o teste, a resolução errada da atividade 05 entra na <code>main</code> e ninguém percebe por semanas.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">16.3</span><h2>O conflito semântico</h2><span class="ex-kind">experimento</span></div>
+      <p>Num branch, renomeie uma função. No outro, acrescente chamadas a ela em <strong>outro arquivo</strong>. Faça o merge e mostre que o git não reclama de nada. Depois rode a suíte e mostre o erro.</p>
+      <p>Escreva em duas frases o que isso implica sobre confiar num merge limpo.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">16.4</span><h2><code>rerere</code></h2><span class="ex-kind">experimento</span></div>
+      <p>Ligue o <code>rerere</code>, provoque um conflito, resolva, e desfaça o merge com <code>git reset --hard</code>. Refaça o merge e mostre a linha <code>Resolved 'arquivo' using previous resolution</code>.</p>
+      <p>Diga em que situação isso economiza tempo de verdade — e por que ele é uma faca de dois gumes se você resolveu errado da primeira vez.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="lab" data-title="Entrega: o seu primeiro pull request" data-min="30" hidden>
+  <div class="kicker"><span class="tag is-lab">Entrega</span><span class="dot"></span><span>Aula 16 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Entrega: o seu primeiro pull request</h1>
+  <div class="act-meta">30 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">16.5</span><h2>Proteja a <code>main</code> e abra um PR</h2><span class="ex-kind">entrega</span></div>
+      <p>No repositório <code>exercises</code>:</p>
+      <ul>
+        <li>Ative a proteção da <code>main</code> exigindo pull request e o CI da aula 11 verde;</li>
+        <li>Faça o trabalho pendente da aula 06 — o <code>lesson03.py</code> vazio — num branch <code>fix/lesson03</code>;</li>
+        <li>Abra o PR com as quatro seções da atividade 03;</li>
+        <li>Espere o CI, revise o seu próprio diff <strong>linha a linha</strong>, e mescle.</li>
+      </ul>
+      <div class="callout tip">
+        <div class="callout-title">Revisar o próprio PR não é teatro</div>
+        <p>Ler o diff inteiro numa tela de review, fora do editor onde você escreveu, pega debug esquecido, arquivo que entrou sem querer e comentário desatualizado. É o mesmo efeito de reler um texto impresso.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">16.6</span><h2>Desafio: revise a si mesmo, por escrito</h2><span class="ex-kind">desafio</span></div>
+      <p>Pegue o seu <code>lesson04.py</code> — o que foi revisado na aula 04 — e escreva a revisão que você faria hoje, <strong>sem reler a minha</strong>. Use a tabela da atividade 08 como roteiro.</p>
+      <p>Depois compare com a revisão publicada. O que você achou que eu não achei? O que eu achei que você não achou? Escreva as duas listas — a segunda é a mais útil.</p>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o link do PR mesclado e as saídas dos exercícios 16.1 a 16.4.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de mesclar</div>
+      <ul>
+        <li>A <code>main</code> está protegida no servidor?</li>
+        <li>O PR tem descrição com <em>o que</em> e <em>por quê</em>?</li>
+        <li>O CI está verde?</li>
+        <li>Você leu o próprio diff inteiro?</li>
+        <li>Nenhum arquivo entrou sem querer — <code>.venv</code>, dado, <code>__pycache__</code>?</li>
+        <li>O branch foi apagado depois?</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 17: o projeto da fase 1</div>
+      <p>A última. Tudo que veio até aqui num repositório só: um pipeline que extrai de uma API pública, valida, grava em disco, tem testes, log estruturado, ambiente declarado e README. O primeiro item do seu portfólio.</p>
+    </div>
+
+  </div>
+</article>
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/10</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 16</div>
+          <div class="lh-n">Git em equipe</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">um pull request no seu próprio repositório<span class="rs">o que você entrega</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://git-scm.com/docs/git-merge#_how_conflicts_are_presented" target="_blank" rel="noopener">Como o git apresenta conflitos<span class="rs">os marcadores, e o diff3</span></a></li>
+        <li><a href="https://git-scm.com/docs/git-rerere" target="_blank" rel="noopener">git rerere<span class="rs">gravar e reaplicar uma resolução</span></a></li>
+        <li><a href="https://docs.github.com/en/pull-requests" target="_blank" rel="noopener">GitHub — Pull requests<span class="rs">review, draft, required checks</span></a></li>
+        <li><a href="https://cli.github.com/manual/gh_pr" target="_blank" rel="noopener">gh pr<span class="rs">abrir e revisar PR do terminal</span></a></li>
+        <li><a href="https://www.conventionalcommits.org/pt-br/v1.0.0/" target="_blank" rel="noopener">Conventional Commits<span class="rs">a especificação, em português</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">Pro Git, 2ª ed. — caps. 3, 5 e 7<span class="rs">Chacon & Straub · branch, fluxo distribuído e ferramentas</span></span></li>
+        <li><span class="res-static">Google — Modern Code Review<span class="rs">o que a pesquisa diz sobre revisão que funciona</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
