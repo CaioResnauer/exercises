@@ -181,6 +181,32 @@ def check_page(page, base_url: str, rel: str, html: str) -> Report:
     if page.eval_on_selector("body", "b => b.dataset.lesson || ''").strip() == "":
         report.fail("<body> sem data-lesson")
 
+    # --- page against the manifest -----------------------------------------
+    # course-data.js is the single source of truth for titles, activity counts
+    # and delivery state, while each lesson page also declares its own id and
+    # state on <body>. Two places holding the same fact will drift, so the two
+    # are compared here rather than trusted.
+    manifest = page.evaluate("() => (window.COURSE && window.COURSE.lessons) || null")
+    if manifest:
+        lesson_id = page.eval_on_selector("body", "b => b.dataset.lesson || ''")
+        delivery = page.eval_on_selector("body", "b => b.dataset.delivery || ''")
+        owner = lesson_id.split("-")[0]
+        entry = next((l for l in manifest if l["id"] == owner), None)
+        if entry:
+            if delivery and entry["delivery"] != delivery:
+                report.fail(f"data-delivery={delivery!r} mas o manifesto diz "
+                            f"{entry['delivery']!r} para a aula {owner}")
+            if "-" not in lesson_id:
+                acts = len(page.query_selector_all(".act"))
+                if acts and entry["acts"] != acts:
+                    report.fail(f"a pagina tem {acts} atividades mas o manifesto "
+                                f"declara {entry['acts']}")
+                slug = entry.get("slug")
+                if slug and not rel.endswith(slug.split("/")[-1]):
+                    report.fail(f"slug do manifesto ({slug}) nao bate com {rel}")
+        elif lesson_id not in ("index",):
+            report.fail(f"data-lesson={lesson_id!r} nao existe no manifesto")
+
     # --- javascript errors -------------------------------------------------
     for message in console:
         report.fail(f"console: {message}")
