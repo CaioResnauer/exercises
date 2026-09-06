@@ -92,6 +92,21 @@ window.COURSE = {
       id: "14", title: "SQL: CTEs recursivas",
       slug: "lessons/14-sql-ctes-recursivas.html",
       acts: 10, published: true, delivery: "pending"
+    },
+    {
+      id: "15", title: "SQL: EXPLAIN, índices e particionamento",
+      slug: "lessons/15-sql-explain-e-indices.html",
+      acts: 11, published: true, delivery: "pending"
+    },
+    {
+      id: "16", title: "Git em equipe: pull requests e conflitos",
+      slug: "lessons/16-git-em-equipe.html",
+      acts: 10, published: true, delivery: "pending"
+    },
+    {
+      id: "17", title: "Projeto da fase 1: da API ao disco",
+      slug: "lessons/17-projeto-da-fase-1.html",
+      acts: 11, published: true, delivery: "pending"
     }
   ],
 

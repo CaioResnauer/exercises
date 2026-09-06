@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Projeto da fase 1: da API ao disco</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="17" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="4">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 17 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">04 min &middot; a última da fase 1</div>
+  <div class="prose">
+    <p class="lead">Dezesseis aulas de peças soltas. Esta é a montagem: um pipeline que extrai de uma API pública, valida, grava em disco — com testes, log estruturado, ambiente declarado e README.</p>
+
+    <p>É o primeiro repositório do seu portfólio, e o critério não é "roda". É <strong>outra pessoa clonar, rodar os testes e entender a arquitetura em cinco minutos</strong>.</p>
+
+    <h2>O que este projeto tem que provar</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Prova</th><th>Vem da aula</th></tr></thead>
+        <tbody>
+          <tr><td>Processa mais dados do que cabe na memória</td><td>02, 03, 05</td></tr>
+          <tr><td>Grava em lotes, não linha a linha</td><td>04</td></tr>
+          <tr><td>Escolhe a estrutura de dados pelo custo</td><td>07</td></tr>
+          <tr><td>Fecha o que abre, mesmo com erro</td><td>08</td></tr>
+          <tr><td>É testável porque recebe as dependências</td><td>09</td></tr>
+          <tr><td>Tem testes que rodam sem rede</td><td>10</td></tr>
+          <tr><td>Roda num clone limpo</td><td>11</td></tr>
+          <tr><td>Diz o que fez, em log estruturado</td><td>12</td></tr>
+          <tr><td>Tem histórico legível e entrou por PR</td><td>06, 16</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Repositório novo, e separado</div>
+      <p>Este projeto <strong>não</strong> vai no <code>exercises</code>. Aquele é o seu caderno — exercício, tentativa, código que existe para aprender. Um repositório de portfólio é um produto. Misturar prejudica os dois: o caderno fica engessado e o portfólio fica cheio de exercício.</p>
+    </div>
+
+    <h2>Tempo estimado</h2>
+    <p>25 min de leitura, e o projeto leva de 6 a 10 horas. Não tenha pressa: este é o artefato que vai ser lido.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="Escolhendo a fonte" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 17 &middot; Atividade 02</span></div>
+  <h1 class="act-title">Escolhendo a fonte</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">A API decide metade da qualidade do projeto. Uma que devolve trinta registros num JSON só não exercita nada do que a fase 1 ensinou.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Precisa ser paginada</h3>
+        <p>Sem paginação não há streaming, não há generator, não há motivo para o <code>batched</code>. É o requisito que mais importa.</p>
+      </div>
+      <div class="trap">
+        <h3>Precisa devolver volume</h3>
+        <p>Alguns milhares de registros no mínimo. Com duzentos, todo argumento de memória vira teoria.</p>
+      </div>
+      <div class="trap">
+        <h3>Não precisa de cadastro</h3>
+        <p>Quem for avaliar o repositório precisa conseguir rodar. Se exigir chave, o projeto tem que funcionar com dados de amostra versionados — e isso é trabalho extra.</p>
+      </div>
+      <div class="trap">
+        <h3>Melhor se tiver sujeira</h3>
+        <p>Campo nulo, formato de data inconsistente, registro duplicado. É o que dá material para a validação — e o que existe em dados de verdade.</p>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fonte</th><th>Por que serve</th></tr></thead>
+        <tbody>
+          <tr><td><strong>GitHub API</strong></td><td>paginação com <code>Link</code> header, rate limit de verdade, volume ilimitado</td></tr>
+          <tr><td><strong>Open-Meteo</strong></td><td>série temporal longa, sem chave, ótima para janelas e gaps</td></tr>
+          <tr><td><strong>Banco Central</strong></td><td>séries diárias com buracos em feriado — o calendário da aula 14</td></tr>
+          <tr><td><strong>IBGE</strong></td><td>hierarquia UF &rarr; município, e nomes com acento para testar encoding</td></tr>
+          <tr><td><strong>dados.gov.br</strong></td><td>CSV grande e sujo de verdade; o mais realista dos cinco</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Antes de decidir, faça uma requisição</div>
+      <p>Chame uma página no <code>curl</code> e olhe. Quantos registros por página? Como se pede a próxima — cursor, offset, <code>Link</code> header? O que vem quando acaba: lista vazia, 404, campo <code>has_next</code>? Isso muda a estrutura do seu extrator, e é melhor descobrir agora.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Rate limit é parte do projeto</div>
+      <p>A GitHub API dá 60 requisições por hora sem autenticação. Bater no limite e tratar direito — ler o <code>Retry-After</code>, esperar, registrar em log — é exatamente o <code>retry</code> da aula 08 num caso real. Não é obstáculo, é conteúdo.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="A arquitetura" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 17 &middot; Atividade 03</span></div>
+  <h1 class="act-title">A arquitetura</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Três camadas, e a regra que faz o projeto ser testável: <strong>o miolo não sabe de onde vem nem para onde vai</strong>.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>estrutura</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash">weather-pipeline/
+├── README.md
+├── pyproject.toml
+├── .env.example
+├── .gitignore
+├── src/weather_pipeline/
+│   ├── config.py        # dataclass frozen, lida do ambiente na borda
+│   ├── extract.py       # o conector: pagina a API, devolve Iterator[dict]
+│   ├── transform.py     # funções puras: validar, normalizar, deduplicar
+│   ├── load.py          # o sink: grava em lotes, fecha no finally
+│   ├── logging_setup.py # dictConfig, humano ou JSON
+│   └── cli.py           # o main(): monta tudo e é o único que lê o ambiente
+├── tests/
+│   ├── conftest.py
+│   ├── data/sample.jsonl
+│   ├── test_transform.py
+│   ├── test_extract.py
+│   └── test_load.py
+└── .github/workflows/ci.yml</code></pre>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Camada</th><th>Sabe</th><th>Não sabe</th></tr></thead>
+        <tbody>
+          <tr><td><code>extract</code></td><td>HTTP, paginação, retry</td><td>o que os dados significam</td></tr>
+          <tr><td><code>transform</code></td><td>as regras dos dados</td><td>que existe API ou arquivo</td></tr>
+          <tr><td><code>load</code></td><td>formato de saída, lote</td><td>de onde veio</td></tr>
+          <tr><td><code>cli</code></td><td>tudo — variáveis, caminhos, montagem</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>cli.py</b> <span style="color:var(--ok)">— a única função que conhece o mundo</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def main() -&gt; int:
+    config = Config.from_env()
+    setup_logging(config.log_level, config.log_format)
+    log = logging.getLogger("pipeline")
+
+    run_id = uuid4().hex[:8]
+    log.info("job started", extra={"context": {"run_id": run_id, "since": config.since}})
+
+    source = WeatherApi(config.api, session=requests.Session())
+    stages = pipeline(drop_invalid, normalize, Dedupe(key=itemgetter("station", "ts")))
+
+    with JsonlSink(config.out_dir, batch_size=config.batch_size) as sink:
+        report = Loader(sink).run(stages(source.read(since=config.since)))
+
+    log.info("job finished", extra={"context": {
+        "run_id": run_id, "rows_in": report.seen, "rows_out": report.written,
+        "rejected": report.rejected, "seconds": round(report.seconds, 1)}})
+    return 0 if report.written else 1</code></pre>
+    </div>
+
+    <p>Quinze linhas, e todas as aulas estão ali: o generator do <code>read</code>, os estágios compostos da 09, o context manager da 08, o lote da 04, o log estruturado da 12. E o código de saída no fim — um job que não gravou nada precisa <strong>falhar</strong>, ou o agendador vai achar que deu certo.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">O teste de fogo da arquitetura</div>
+      <p>Consigo trocar a API por um arquivo local mexendo em <strong>uma linha</strong> do <code>cli.py</code>? Se sim, as camadas estão certas. Se for preciso mexer em <code>transform.py</code>, elas vazaram uma na outra.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="Extract: paginar sem materializar" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 17 &middot; Atividade 04</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">extract</code>: paginar sem materializar</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">O conector é onde a aula 09 encontra a 02: uma classe que guarda configuração e um método que devolve generator.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>extract.py</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class WeatherApi:
+    """Read-only connector. `read` yields one record at a time, lazily."""
+
+    def __init__(self, config: ApiConfig, session) -&gt; None:
+        self._config = config
+        self._session = session
+
+    @retry(times=3, exceptions=(ConnectionError, TimeoutError), base_delay=1)
+    def _fetch(self, page: int) -&gt; dict:
+        response = self._session.get(
+            f"{self._config.base_url}/observations",
+            params={"page": page, "per_page": self._config.page_size},
+            timeout=self._config.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def read(self, since: str) -&gt; Iterator[dict]:
+        page = 1
+        while True:
+            payload = self._fetch(page)
+            items = payload["items"]
+            if not items:
+                return
+            log.debug("page fetched", extra={"context": {"page": page, "rows": len(items)}})
+            yield from items
+            if not payload.get("has_next"):
+                return
+            page += 1</code></pre>
+    </div>
+
+    <p>Cinco decisões nesse trecho, e cada uma vem de uma aula:</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3><code>yield from items</code>, não <code>yield items</code></h3>
+        <p>A assinatura diz <code>Iterator[dict]</code>: cada item é um registro. Devolver a lista da página faria o consumidor iterar páginas — que foi exatamente o bug do exercício 4.5.</p>
+      </div>
+      <div class="trap">
+        <h3>Duas condições de parada</h3>
+        <p>Página vazia <em>e</em> <code>has_next</code> falso. APIs mentem: algumas devolvem <code>has_next: true</code> na última página. Sem a primeira condição, o laço é infinito.</p>
+      </div>
+      <div class="trap">
+        <h3><code>timeout</code> sempre</h3>
+        <p>Sem <code>timeout</code>, o <code>requests</code> espera para sempre. Um job travado sem erro é pior que um job que falha — o agendador não sabe que tem problema.</p>
+      </div>
+      <div class="trap">
+        <h3><code>raise_for_status()</code></h3>
+        <p>Sem ele, um HTTP 500 vira um <code>response.json()</code> que estoura com uma mensagem que não menciona HTTP nenhum.</p>
+      </div>
+      <div class="trap">
+        <h3>A sessão é injetada</h3>
+        <p>É o que permite o teste passar uma <code>FakeSession</code> e rodar sem rede. Sem isso, não há teste de extração — só teste de integração lento e intermitente.</p>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Guarde o bruto antes de transformar</div>
+      <p>Vale muito gravar a resposta crua da API em <code>data/raw/</code> antes de qualquer transformação. Quando a validação rejeitar um registro, você vai querer olhar o que veio — e refazer a chamada pode não ser possível (rate limit, dado que mudou). É a diferença entre depurar em cinco minutos e não conseguir depurar.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="video" data-title="Transform: validar é decidir" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 17 &middot; Atividade 05</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">transform</code>: validar é decidir</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Funções puras, sem I/O, cada uma com uma responsabilidade. É a camada mais fácil de testar e a que carrega as regras do negócio.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>transform.py</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">@dataclass(frozen=True, slots=True)
+class Observation:
+    station: str
+    ts: datetime
+    temperature: float
+
+
+class Invalid(Exception):
+    """A record that cannot be turned into an Observation."""
+
+
+def parse(record: dict) -&gt; Observation:
+    """Turn one raw record into an Observation, or say precisely why not."""
+    try:
+        return Observation(
+            station=record["station_id"].strip().upper(),
+            ts=datetime.fromisoformat(record["timestamp"]),
+            temperature=float(record["temp_c"]),
+        )
+    except KeyError as error:
+        raise Invalid(f"missing field {error.args[0]!r}") from error
+    except (TypeError, ValueError) as error:
+        raise Invalid(f"bad value: {error}") from error</code></pre>
+    </div>
+
+    <p>O <code>Invalid</code> com a razão específica é o que torna o log útil: <code>missing field 'temp_c'</code> diz o que consertar; <code>ValueError</code> não diz nada.</p>
+
+    <h2>A decisão que o projeto tem que tomar</h2>
+    <p>Registro inválido: <strong>parar tudo, ou pular e contar?</strong> Não há resposta universal — há uma escolha, que precisa estar explícita no código e no README.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>transform.py</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def drop_invalid(records: Iterable[dict], report: Report,
+                 max_rejected: float = 0.05) -&gt; Iterator[Observation]:
+    """Skip records that fail to parse, aborting if too many do."""
+    for raw in records:
+        report.seen += 1
+        try:
+            yield parse(raw)
+        except Invalid as error:
+            report.rejected += 1
+            if report.rejected &lt;= 5:
+                log.warning("rejected", extra={"context": {
+                    "row": report.seen, "reason": str(error)}})
+            if report.seen &gt;= 100 and report.rejected / report.seen &gt; max_rejected:
+                raise RuntimeError(
+                    f"{report.rejected}/{report.seen} rejeitados, acima de "
+                    f"{max_rejected:.0%} — abortando") from error</code></pre>
+    </div>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Um limiar, não "sempre pula"</h3>
+        <p><code>except: continue</code> responde "infinitos registros ruins são aceitáveis" sem ninguém ter decidido isso. Um limiar torna a decisão explícita — e pega o dia em que a API mudou o schema e 100% falha.</p>
+      </div>
+      <div class="trap">
+        <h3>Registre as primeiras, conte todas</h3>
+        <p>Cinco avisos bastam para diagnosticar; o total vai no relatório final. É a regra de contadores em vez de eventos da aula 12.</p>
+      </div>
+      <div class="trap">
+        <h3>O <code>report</code> é injetado</h3>
+        <p>Contador dentro do laço, não uma passada extra sobre o iterador — o log que mente da aula 12.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O nível acima: dead-letter</div>
+      <p>Em vez de descartar, grave os rejeitados num <code>rejected.jsonl</code> com o motivo. Custa cinco linhas, e transforma "3% falharam" em "aqui estão as 412 linhas e o porquê de cada uma". É o que um time de dados faria.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="Load: lote, atômico, particionado" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 17 &middot; Atividade 06</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">load</code>: lote, atômico, particionado</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">A saída em disco parece a parte trivial e tem três armadilhas.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>load.py</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">class JsonlSink:
+    """Write records as JSONL, one file per day, atomically."""
+
+    def __init__(self, out_dir: Path, batch_size: int = 1000) -&gt; None:
+        self._out_dir = out_dir
+        self._batch_size = batch_size
+        self._stack: ExitStack | None = None
+        self._handles: dict[str, TextIO] = {}
+        self._tmp: dict[str, Path] = {}
+
+    def __enter__(self) -&gt; "JsonlSink":
+        self._stack = ExitStack()
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -&gt; bool:
+        self._stack.close()                  # fecha todos os arquivos
+        if exc_type is None:
+            for key, tmp in self._tmp.items():
+                tmp.replace(self._out_dir / f"date={key}" / "part-00000.jsonl")
+        else:
+            for tmp in self._tmp.values():
+                tmp.unlink(missing_ok=True)  # não deixa saída pela metade
+        return False</code></pre>
+    </div>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Escreva em temporário e renomeie</h3>
+        <p><code>Path.replace</code> é atômico no mesmo sistema de arquivos. Sem isso, um job que morre no meio deixa um arquivo parcial — e o processo seguinte lê metade dos dados achando que leu tudo. É o pior tipo de erro: silencioso e plausível.</p>
+      </div>
+      <div class="trap">
+        <h3><code>ExitStack</code> para N arquivos</h3>
+        <p>Uma partição por dia, e o número de dias vem dos dados. É o exercício 8.4 no projeto: abre cada arquivo uma vez, fecha todos no fim, inclusive se der erro no meio.</p>
+      </div>
+      <div class="trap">
+        <h3>Particione pelo que vai ser filtrado</h3>
+        <p><code>date=2026-03-05/</code> é a convenção que Spark, DuckDB e Athena entendem — e é o <em>partition pruning</em> da aula 15. Se ninguém vai filtrar por data, não particione: mil arquivos pequenos são piores que um grande.</p>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Idempotência</div>
+      <p>Rodar o job duas vezes com a mesma entrada tem que produzir o mesmo resultado — não o dobro das linhas. Abrir em modo <code>"a"</code> quebra isso; o padrão de temporário mais <code>replace</code> resolve de graça. Escreva isso no README: <em>"o job é idempotente por dia"</em>.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Por que JSONL e não CSV</div>
+      <p>JSONL preserva tipo e aninhamento, não tem problema de vírgula dentro de campo, e é lido em streaming linha a linha. Se quiser ir além, grave Parquet com <code>pyarrow</code> — compressão e leitura por coluna, que é a fase 2 batendo na porta.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="video" data-title="Os testes que provam" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 17 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Os testes que provam</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">A suíte inteira roda sem rede, sem credencial, em menos de cinco segundos. Se não roda, a arquitetura da atividade 03 falhou em algum ponto.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Prova</th></tr></thead>
+        <tbody>
+          <tr><td><code>test_transform.py</code></td><td>tabela de casos: válido, campo ausente, nulo, tipo errado, data ruim</td></tr>
+          <tr><td><code>test_extract.py</code></td><td>pagina até o fim, para na página vazia, não chama nada antes do <code>next()</code></td></tr>
+          <tr><td><code>test_load.py</code></td><td>lotes do tamanho certo, último menor, erro não deixa arquivo parcial</td></tr>
+          <tr><td><code>test_pipeline.py</code></td><td>ponta a ponta com fonte em memória e diretório <code>tmp_path</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>tests/test_load.py</b> <span style="color:var(--ok)">— o teste que mais vale</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def test_erro_nao_deixa_arquivo_parcial(tmp_path):
+    """A failed run must leave no output at all, not half of it."""
+    with pytest.raises(RuntimeError):
+        with JsonlSink(tmp_path, batch_size=2) as sink:
+            sink.write([{"station": "A", "ts": "2026-03-01"}])
+            raise RuntimeError("falhou no meio")
+
+    assert list(tmp_path.rglob("*.jsonl")) == []</code></pre>
+    </div>
+
+    <p>Esse teste é o que separa um pipeline de um script. Ele afirma uma propriedade sobre a <strong>falha</strong> — e é a que ninguém verifica à mão.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>tests/test_pipeline.py</b> <span style="color:var(--ok)">— a laziness, defendida</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def test_nada_e_lido_antes_do_primeiro_next():
+    chamadas = []
+    session = FakeSession(pages=[...], on_call=chamadas.append)
+
+    registros = WeatherApi(config, session).read(since="2026-03-01")
+    assert chamadas == []          # construir não chama a API
+    next(registros)
+    assert len(chamadas) == 1      # uma página, não todas</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Um teste de integração, marcado</div>
+      <p>Vale ter <strong>um</strong> teste que chama a API de verdade, com <code>@pytest.mark.integration</code>. Ele pega a mudança de schema que nenhum dublê pega. Fica fora do <code>pytest -m "not integration"</code> do dia a dia e roda uma vez por dia no CI.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="video" data-title="O README" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 17 &middot; Atividade 08</span></div>
+  <h1 class="act-title">O README</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">É a única parte do repositório que <strong>todo mundo</strong> lê. Ele decide se a pessoa continua.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>README.md</b> <span style="color:var(--ink-3)">— o esqueleto</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-bash"># weather-pipeline
+
+Extrai observações meteorológicas da API do Open-Meteo, valida e grava
+em JSONL particionado por dia. Memória constante: processa qualquer
+volume sem carregar tudo.
+
+## Rodar
+
+    git clone ... &amp;&amp; cd weather-pipeline
+    python -m venv .venv &amp;&amp; . .venv/bin/activate
+    pip install -e ".[dev]"
+    python -m weather_pipeline --since 2026-03-01 --out data/
+
+## Testar
+
+    pytest -m "not integration"
+
+## Arquitetura
+
+    extract  ->  transform  ->  load
+    (API)        (puro)         (JSONL)
+
+extract devolve um Iterator[dict] e nunca materializa uma página inteira.
+transform são funções puras, sem I/O. load grava em lotes de 1.000,
+escrevendo num temporário e renomeando ao final — o job é idempotente por
+dia e uma falha não deixa saída parcial.
+
+Todas as dependências são injetadas no cli.py, que é o único módulo que lê
+o ambiente. É o que permite a suíte rodar sem rede em menos de 5 s.
+
+## Decisões
+
+- **JSONL, não CSV:** preserva tipo, sem escape de vírgula, lê em streaming.
+- **Rejeita até 5% dos registros:** acima disso o job aborta. Um schema que
+  mudou falha alto em vez de gravar dados errados em silêncio.
+- **Sem banco:** a fase 1 é sobre o pipeline. A carga em warehouse é fase 2.
+
+## Limites conhecidos
+
+- Rate limit da API não é respeitado entre execuções paralelas.
+- Deduplicação é O(chaves distintas) em memória; acima de ~10M chaves,
+  precisaria de disco.</code></pre>
+    </div>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>As três primeiras linhas dizem o que é</h3>
+        <p>Sem "este projeto foi desenvolvido com o objetivo de". O que faz, de onde lê, para onde escreve.</p>
+      </div>
+      <div class="trap">
+        <h3>Comando antes de arquitetura</h3>
+        <p>Quem abre quer rodar. A explicação vem depois — e aí sim quem se interessou lê.</p>
+      </div>
+      <div class="trap">
+        <h3><em>Decisões</em> é a seção que impressiona</h3>
+        <p>Mostra que houve escolha, e não só código que foi saindo. É o que diferencia um repositório de tutorial de um de engenheiro.</p>
+      </div>
+      <div class="trap">
+        <h3><em>Limites conhecidos</em> também</h3>
+        <p>Contraintuitivo: dizer o que não funciona aumenta a confiança. Sinaliza que você mediu, encontrou o teto, e sabe onde ele está.</p>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Diagrama só se ajudar</div>
+      <p>Três caixas em ASCII bastam para um pipeline linear. Um diagrama gerado com vinte componentes num projeto de quatro arquivos tem o efeito contrário.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="note" data-title="A régua da entrega" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Critério</span><span class="dot"></span><span>Aula 17 &middot; Atividade 09</span></div>
+  <h1 class="act-title">A régua da entrega</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">O que eu vou olhar — e, com pequenas variações, o que qualquer pessoa técnica olha nos primeiros cinco minutos.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Em ordem</th><th>O que reprova</th></tr></thead>
+        <tbody>
+          <tr><td>1. Clonei e rodei os testes</td><td>faltou dependência, precisou de credencial, quebrou</td></tr>
+          <tr><td>2. Li o README</td><td>não diz o que faz, ou não diz como rodar</td></tr>
+          <tr><td>3. <code>git log --oneline</code></td><td>"update", "fix", "wip", tudo direto na main</td></tr>
+          <tr><td>4. Abri o <code>cli.py</code></td><td>toda a lógica num arquivo só, ou <code>os.environ</code> espalhado</td></tr>
+          <tr><td>5. Abri um teste</td><td>só caminho feliz; nenhum caso vazio ou de erro</td></tr>
+          <tr><td>6. Procurei o <code>with</code> e o lote</td><td>arquivo sem <code>with</code>, escrita linha a linha</td></tr>
+          <tr><td>7. Procurei segredo</td><td>token no código, <code>.env</code> versionado</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout bug">
+      <div class="callout-title">Os três erros mais comuns de portfólio</div>
+      <p><strong>Não roda.</strong> É o que mais reprova, e o mais fácil de evitar: clone num diretório novo e rode antes de considerar pronto. Foi o exercício 11.4.</p>
+      <p><strong>Notebook em vez de módulo.</strong> Um <code>.ipynb</code> com tudo prova que você explora dados; não prova que você escreve software. Se quiser incluir um, que seja <em>além</em> do pacote, não no lugar dele.</p>
+      <p><strong>README de tutorial.</strong> "Neste projeto aprendi a usar pandas" é linguagem de curso. Escreva como quem entrega um sistema.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O que vale ponto extra</div>
+      <p>Um número medido no README ("processa 1,2M de registros com pico de 40 MB"). Um teste que prova uma propriedade de falha. Uma seção de decisões com um trade-off real. CI verde visível. Nessa ordem.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="lab" data-title="O projeto" data-min="360" hidden>
+  <div class="kicker"><span class="tag is-lab">Projeto</span><span class="dot"></span><span>Aula 17 &middot; Atividade 10</span></div>
+  <h1 class="act-title">O projeto</h1>
+  <div class="act-meta">6 a 10 h &middot; repositório novo</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">17.1</span><h2>Escolha e explore a fonte</h2><span class="ex-kind">preparação</span></div>
+      <p>Escolha uma API da atividade 02 e documente, antes de escrever código: quantos registros por página, como se pede a próxima, o que vem no fim, e quais campos são sujos. Uma requisição no <code>curl</code> e dez linhas de anotação.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">17.2</span><h2>O esqueleto e o CI</h2><span class="ex-kind">implementação</span></div>
+      <p>Repositório novo, estrutura da atividade 03, <code>pyproject.toml</code> com <code>requires-python</code> e extras de dev, <code>.gitignore</code>, <code>.env.example</code>, e o workflow de CI da aula 11. <strong>Proteja a <code>main</code> agora</strong>, antes do primeiro código — depois é tarde.</p>
+      <p>Daqui em diante, todo trabalho entra por PR.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">17.3</span><h2>Transform primeiro</h2><span class="ex-kind">implementação</span></div>
+      <p>Comece pela camada pura: <code>parse</code>, <code>drop_invalid</code>, <code>normalize</code>, <code>Dedupe</code>. Com testes desde o primeiro commit, usando dados de amostra em <code>tests/data/</code>.</p>
+      <div class="callout tip">
+        <div class="callout-title">Por que começar por aqui</div>
+        <p>É a camada que não depende de nada. Você escreve e testa sem ter API, sem ter sink — e chega no extrator já sabendo qual é o formato do registro que ele precisa produzir.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">17.4</span><h2>Extract com dublê</h2><span class="ex-kind">implementação</span></div>
+      <p>O conector da atividade 04, com <code>retry</code>, <code>timeout</code> e <code>raise_for_status</code>. Teste com <code>FakeSession</code>: paginação até o fim, página vazia, laziness, e HTTP 500 disparando retry.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">17.5</span><h2>Load atômico</h2><span class="ex-kind">implementação</span></div>
+      <p>O sink da atividade 06: lote, <code>ExitStack</code>, temporário mais <code>replace</code>, partição por dia. Com o teste que prova que uma falha não deixa arquivo parcial.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">17.6</span><h2>Amarre no <code>cli.py</code></h2><span class="ex-kind">implementação</span></div>
+      <p>O <code>main()</code> da atividade 03, com <code>argparse</code>, configuração do ambiente, logging configurado e código de saída. Rode ponta a ponta com dados de verdade.</p>
+      <p>Prove com <code>tracemalloc</code> que o pico não cresce com o volume: rode com 1.000, 10.000 e 100.000 registros e ponha a tabela no README.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="lab" data-title="Entrega e fechamento da fase 1" data-min="60" hidden>
+  <div class="kicker"><span class="tag is-lab">Entrega</span><span class="dot"></span><span>Aula 17 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Entrega e fechamento da fase 1</h1>
+  <div class="act-meta">60 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">17.7</span><h2>README e decisões</h2><span class="ex-kind">entrega</span></div>
+      <p>Escreva o README da atividade 08, com as cinco seções — inclusive <em>Decisões</em> e <em>Limites conhecidos</em>. A tabela de memória do 17.6 entra aqui.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">17.8</span><h2>O clone limpo</h2><span class="ex-kind">verificação</span></div>
+      <p>Clone em <code>/tmp</code>, crie um venv do zero, instale só o declarado, rode os testes e rode o pipeline. <strong>Anote tudo que falhou</strong> e conserte.</p>
+      <div class="callout warn">
+        <div class="callout-title">Este passo não é opcional</div>
+        <p>É o item 1 da régua da atividade 09, e o que mais reprova. Fazer isso uma vez custa dez minutos; não fazer custa a primeira impressão.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">17.9</span><h2>Desafio: rode contra volume de verdade</h2><span class="ex-kind">desafio</span></div>
+      <p>Puxe pelo menos 100 mil registros. Meça tempo total, pico de memória e taxa de rejeição, e ponha os três no README.</p>
+      <p>Depois ache o gargalo com o método da aula 15 aplicado ao Python: onde vai o tempo? Rede, parsing ou escrita? Reporte, e diga o que você faria — sem necessariamente fazer.</p>
+    </div>
+
+    <hr>
+
+    <h2>Fase 1 encerrada</h2>
+    <p>Dezessete aulas. O fio foi um só: <strong>o Python percorre dados de um jeito específico, e conhecer esse jeito é o que separa código que escala de código que funciona no seu notebook.</strong> O SQL e o Git entraram porque um pipeline não existe sozinho — ele consulta e é versionado.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Bloco</th><th>O que ficou</th></tr></thead>
+        <tbody>
+          <tr><td>01–05</td><td>iteração, generators, <code>itertools</code>, e medir em vez de supor</td></tr>
+          <tr><td>07–09</td><td>escolher a estrutura pelo custo, envolver em vez de alterar, receber em vez de construir</td></tr>
+          <tr><td>10–12</td><td>testar, declarar o ambiente, e dizer o que aconteceu</td></tr>
+          <tr><td>13–15</td><td>janelas, recursão, e ler o plano antes de acreditar</td></tr>
+          <tr><td>06, 16</td><td>um histórico que conta a história, e um PR que dá para revisar</td></tr>
+          <tr><td>17</td><td>tudo junto, num repositório que outra pessoa consegue rodar</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O que atravessa para a fase 2</div>
+      <p><code>df.collect()</code> é o <code>list(iterator)</code> da aula 01 com um custo maior de errar. Partição é o lote da aula 04 e o pruning da aula 15. Shuffle é a agregação O(n) da aula 05 — as O(1) resolvem dentro da partição, as O(n) obrigam a mover dados. Você não vai aprender esses conceitos do zero; vai reconhecê-los com outro nome.</p>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Antes de começar a fase 2</div>
+      <p>Feche as pendências: os itens obrigatórios da revisão da aula 04, o <code>lesson03.py</code>, e as entregas de 05 a 16. A fase 2 assume que o modelo de iteração está firme — se ainda houver dúvida entre iterable e iterator, ela reaparece em Spark, mais cara.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">E mande o link do repositório</div>
+      <p>Ele vai ser revisado no mesmo formato das outras: uma página de revisão, com os pontos a refazer e o conteúdo reexplicado onde houver erro. Só que desta vez a revisão é do projeto inteiro, não de um arquivo.</p>
+    </div>
+
+  </div>
+</article>
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/11</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 17</div>
+          <div class="lh-n">Projeto da fase 1</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">um repositório novo, só seu<span class="rs">o primeiro item do portfólio</span></span></li>
+        <li><span class="res-static">exercises/ continua sendo o caderno<span class="rs">projeto e estudo são repositórios separados</span></span></li>
+      </ul>
+      <h3>APIs públicas sem cadastro</h3>
+      <ul>
+        <li><a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener">Open-Meteo<span class="rs">clima histórico, JSON, sem chave</span></a></li>
+        <li><a href="https://dados.gov.br/" target="_blank" rel="noopener">dados.gov.br<span class="rs">dados abertos do governo brasileiro</span></a></li>
+        <li><a href="https://dadosabertos.bcb.gov.br/" target="_blank" rel="noopener">Banco Central — dados abertos<span class="rs">séries temporais, câmbio, SELIC</span></a></li>
+        <li><a href="https://api.github.com/" target="_blank" rel="noopener">GitHub API<span class="rs">paginada de verdade, com rate limit</span></a></li>
+        <li><a href="https://servicodados.ibge.gov.br/api/docs" target="_blank" rel="noopener">IBGE — API de serviços<span class="rs">municípios, agregados, censo</span></a></li>
+      </ul>
+      <h3>Referência</h3>
+      <ul>
+        <li><a href="https://12factor.net/" target="_blank" rel="noopener">The Twelve-Factor App<span class="rs">configuração, log e processos</span></a></li>
+        <li><span class="res-static">Architecture Patterns with Python<span class="rs">Percival & Gregory · portas e adaptadores</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
