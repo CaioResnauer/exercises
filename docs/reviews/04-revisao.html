@@ -7,19 +7,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="../assets/course.css">
 </head>
-<body data-lesson="04-revisao">
+<body data-lesson="04-revisao" data-base=".." data-delivery="reviewed">
 
 <header class="topbar">
   <div class="brand">
     <span class="brand-mark" aria-hidden="true">&gt;_</span>
-    <span class="brand-name">Trilha DE</span>
+    <span class="brand-name">Fluxo</span>
   </div>
   <div class="course">
     <div class="course-name">Revisão &middot; Aula 04 &middot; itertools e batching</div>
-    <div class="rail-track">
-      <div class="bar"><i id="barFill"></i></div>
-      <span class="pct" id="barPct">0%</span>
-    </div>
   </div>
   <div class="topbar-end">
     <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
@@ -699,16 +695,12 @@ tuple() inside the condition and add the assertions that catch it."</code></pre>
           <div class="lh-n">itertools e batching</div>
         </div>
       </div>
-      <ul class="acts" id="actList"></ul>
-      <div class="locked">
-        <a class="locked-item" href="../lessons/05-memoria-na-pratica.html"><div><div class="lk-n">Aula 05</div><div class="lk-t">Memória na prática</div></div><span class="lk-c">publicada</span></a>
-      </div>
+      <ul class="tree" id="tree"></ul>
     </div>
 
     <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
       <h3>Contexto</h3>
       <ul>
-        <li><a href="../lessons/04-itertools-e-batching.html">Aula 04 — itertools e batching<span class="rs">o enunciado que gerou esta revisão</span></a></li>
         <li><a href="../lessons/01-protocolo-de-iteracao.html">Aula 01 — O protocolo de iteração<span class="rs">atividades 03 e 07: a raiz dos dois bugs</span></a></li>
         <li><span class="res-static">exercises/python/lesson04.py<span class="rs">revisado no commit 012e669</span></span></li>
       </ul>
@@ -720,10 +712,6 @@ tuple() inside the condition and add the assertions that catch it."</code></pre>
         <li><a href="https://docs.python.org/3/library/itertools.html#itertools.tee" target="_blank" rel="noopener">itertools.tee<span class="rs">leia a nota sobre o buffer interno</span></a></li>
         <li><a href="https://docs.python.org/3/library/json.html#json.JSONDecodeError" target="_blank" rel="noopener">json.JSONDecodeError<span class="rs">no lugar do except Exception</span></a></li>
       </ul>
-      <h3>Próximo passo</h3>
-      <ul>
-        <li><span class="res-static">Refazer os itens 1 e 2<span class="rs">obrigatórios antes da aula 05</span></span></li>
-      </ul>
     </div>
   </aside>
 </div>
@@ -731,6 +719,7 @@ tuple() inside the condition and add the assertions that catch it."</code></pre>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../assets/course-data.js"></script>
 <script src="../assets/course.js"></script>
 </body>
 </html>

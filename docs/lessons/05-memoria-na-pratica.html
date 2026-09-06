@@ -7,19 +7,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="../assets/course.css">
 </head>
-<body data-lesson="05">
+<body data-lesson="05" data-base=".." data-delivery="pending">
 
 <header class="topbar">
   <div class="brand">
     <span class="brand-mark" aria-hidden="true">&gt;_</span>
-    <span class="brand-name">Trilha DE</span>
+    <span class="brand-name">Fluxo</span>
   </div>
   <div class="course">
     <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
-    <div class="rail-track">
-      <div class="bar"><i id="barFill"></i></div>
-      <span class="pct" id="barPct">0%</span>
-    </div>
   </div>
   <div class="topbar-end">
     <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
@@ -717,18 +713,13 @@ sum(map(lambda v: v, xs))     41.6 ms</code></pre>
           <div class="lh-n">Memória na prática</div>
         </div>
       </div>
-      <ul class="acts" id="actList"></ul>
-      <div class="locked">
-        <a class="locked-item" href="04-itertools-e-batching.html"><div><div class="lk-n">Aula 04</div><div class="lk-t">itertools e batching</div></div><span class="lk-c">publicada</span></a>
-        <a class="locked-item" href="06-git-e-o-repositorio.html"><div><div class="lk-n">Aula 06</div><div class="lk-t">Git e o repositório</div></div><span class="lk-c">publicada</span></a>
-      </div>
+      <ul class="tree" id="tree"></ul>
     </div>
 
     <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
       <h3>Desta aula</h3>
       <ul>
         <li><span class="res-static">exercises/python/lesson05.py<span class="rs">o arquivo que você entrega</span></span></li>
-        <li><a href="../reviews/04-revisao.html">Revisão da aula 04<span class="rs">as quatro medições que motivaram esta aula</span></a></li>
       </ul>
       <h3>Documentação</h3>
       <ul>
@@ -743,10 +734,6 @@ sum(map(lambda v: v, xs))     41.6 ms</code></pre>
         <li><span class="res-static">High Performance Python, 2ª ed. — cap. 11<span class="rs">Gorelick &amp; Ozsvald · perfil de memória</span></span></li>
         <li><span class="res-static">Fluent Python, 2ª ed. — cap. 17<span class="rs">Ramalho · o custo real de um generator</span></span></li>
       </ul>
-      <h3>Próximo passo</h3>
-      <ul>
-        <li><a href="06-git-e-o-repositorio.html">Aula 06 — Git e o repositório<span class="rs">a última da fase 1</span></a></li>
-      </ul>
     </div>
   </aside>
 </div>
@@ -754,6 +741,7 @@ sum(map(lambda v: v, xs))     41.6 ms</code></pre>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../assets/course-data.js"></script>
 <script src="../assets/course.js"></script>
 </body>
 </html>

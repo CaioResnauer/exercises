@@ -7,19 +7,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="../assets/course.css">
 </head>
-<body data-lesson="04">
+<body data-lesson="04" data-base=".." data-delivery="reviewed">
 
 <header class="topbar">
   <div class="brand">
     <span class="brand-mark" aria-hidden="true">&gt;_</span>
-    <span class="brand-name">Trilha DE</span>
+    <span class="brand-name">Fluxo</span>
   </div>
   <div class="course">
     <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
-    <div class="rail-track">
-      <div class="bar"><i id="barFill"></i></div>
-      <span class="pct" id="barPct">0%</span>
-    </div>
   </div>
   <div class="topbar-end">
     <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
@@ -649,17 +645,12 @@ unique_ids = {r["id"] for r in records}                 # O(n) — consciente di
           <div class="lh-n">itertools e batching</div>
         </div>
       </div>
-      <ul class="acts" id="actList"></ul>
-      <div class="locked">
-        <a class="locked-item" href="05-memoria-na-pratica.html"><div><div class="lk-n">Aula 05</div><div class="lk-t">Memória na prática</div></div><span class="lk-c">publicada</span></a>
-        <a class="locked-item" href="06-git-e-o-repositorio.html"><div><div class="lk-n">Aula 06</div><div class="lk-t">Git e o repositório</div></div><span class="lk-c">publicada</span></a>
-      </div>
+      <ul class="tree" id="tree"></ul>
     </div>
 
     <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
       <h3>Desta aula</h3>
       <ul>
-        <li><a href="../reviews/04-revisao.html">Revisão da sua entrega<span class="rs">correção do lesson04.py, com os pontos a refazer</span></a></li>
         <li><span class="res-static">exercises/python/lesson04.py<span class="rs">o arquivo que você entrega</span></span></li>
         <li><span class="res-static">exercises/python/data/*.jsonl<span class="rs">entrada do exercício 4.5</span></span></li>
       </ul>
@@ -677,10 +668,6 @@ unique_ids = {r["id"] for r in records}                 # O(n) — consciente di
         <li><span class="res-static">Fluent Python, 2ª ed. — cap. 17<span class="rs">Ramalho · itertools em profundidade</span></span></li>
         <li><span class="res-static">Effective Python, 3ª ed. — itens 20-24<span class="rs">Slatkin · hábitos de iteração no dia a dia</span></span></li>
       </ul>
-      <h3>Próximo passo</h3>
-      <ul>
-        <li><a href="05-memoria-na-pratica.html">Aula 05 — Memória na prática<span class="rs">medir em vez de supor</span></a></li>
-      </ul>
     </div>
   </aside>
 </div>
@@ -688,6 +675,7 @@ unique_ids = {r["id"] for r in records}                 # O(n) — consciente di
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../assets/course-data.js"></script>
 <script src="../assets/course.js"></script>
 </body>
 </html>

@@ -7,19 +7,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="../assets/course.css">
 </head>
-<body data-lesson="01">
+<body data-lesson="01" data-base=".." data-delivery="delivered">
 
 <header class="topbar">
   <div class="brand">
     <span class="brand-mark" aria-hidden="true">&gt;_</span>
-    <span class="brand-name">Trilha DE</span>
+    <span class="brand-name">Fluxo</span>
   </div>
   <div class="course">
     <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
-    <div class="rail-track">
-      <div class="bar"><i id="barFill"></i></div>
-      <span class="pct" id="barPct">0%</span>
-    </div>
   </div>
   <div class="topbar-end">
     <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
@@ -1397,14 +1393,7 @@ fonte iterator: [[1, 2]] []</div>
           <div class="lh-n">O protocolo de iteração</div>
         </div>
       </div>
-      <ul class="acts" id="actList"></ul>
-      <div class="locked">
-        <div class="locked-item"><div><div class="lk-n">Aula 02</div><div class="lk-t">Generators e yield</div></div><span class="lk-c">em breve</span></div>
-        <div class="locked-item"><div><div class="lk-n">Aula 03</div><div class="lk-t">Pipelines de generators</div></div><span class="lk-c">em breve</span></div>
-        <a class="locked-item" href="04-itertools-e-batching.html"><div><div class="lk-n">Aula 04</div><div class="lk-t">itertools e batching</div></div><span class="lk-c">publicada</span></a>
-        <a class="locked-item" href="05-memoria-na-pratica.html"><div><div class="lk-n">Aula 05</div><div class="lk-t">Memória na prática</div></div><span class="lk-c">publicada</span></a>
-        <a class="locked-item" href="06-git-e-o-repositorio.html"><div><div class="lk-n">Aula 06</div><div class="lk-t">Git e o repositório</div></div><span class="lk-c">publicada</span></a>
-      </div>
+      <ul class="tree" id="tree"></ul>
     </div>
 
     <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
@@ -1426,10 +1415,6 @@ fonte iterator: [[1, 2]] []</div>
         <li><span class="res-static">Fluent Python, 2ª ed. — cap. 17<span class="rs">Ramalho · iterators, generators e corrotinas clássicas</span></span></li>
         <li><span class="res-static">Effective Python, 3ª ed. — itens 20-24<span class="rs">Slatkin · hábitos de iteração no dia a dia</span></span></li>
       </ul>
-      <h3>Próximo passo</h3>
-      <ul>
-        <li><span class="res-static">Aula 02 — Generators e yield<span class="rs">liberada depois da entrega do lesson01.py</span></span></li>
-      </ul>
     </div>
   </aside>
 </div>
@@ -1437,6 +1422,7 @@ fonte iterator: [[1, 2]] []</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../assets/course-data.js"></script>
 <script src="../assets/course.js"></script>
 </body>
 </html>

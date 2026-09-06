@@ -54,25 +54,93 @@
     }).catch(() => {});
   }
 
-  /* ---------- lista lateral ---------- */
+  /* ---------- árvore da trilha ----------
+     O rail mostra as seis aulas, não só a atual: a aula aberta expandida nas
+     suas atividades, as outras clicáveis, as não publicadas visíveis e
+     desabilitadas com o motivo. Tudo gerado a partir de window.COURSE, para
+     que qualquer página — inclusive a aula 01 — receba a mesma navegação. */
+  const COURSE = window.COURSE;
+  const LESSON_ID = document.body.dataset.lesson || "";
+  const IS_REVIEW = LESSON_ID.includes("-");
+  const OWNER_ID = IS_REVIEW ? LESSON_ID.split("-")[0] : LESSON_ID;
+
+  /* Aulas publicadas vizinhas: é o que permite o "Avançar" da última
+     atividade sair da aula em vez de parar em "Concluir aula". */
+  const PUBLISHED = COURSE.lessons.filter((l) => l.published);
+  const HERE = PUBLISHED.findIndex((l) => l.id === OWNER_ID);
+  const OWNER = COURSE.lessons.find((l) => l.id === OWNER_ID) || null;
+  /* Numa revisão as duas pontas apontam para a aula corrigida: a revisão é um
+     desvio, não um passo da trilha. */
+  const PREV_LESSON = IS_REVIEW ? OWNER : (HERE > 0 ? PUBLISHED[HERE - 1] : null);
+  const NEXT_LESSON = IS_REVIEW ? OWNER
+    : (HERE >= 0 && HERE < PUBLISHED.length - 1 ? PUBLISHED[HERE + 1] : null);
+
+  const escapeHtml = (s) => String(s).replace(/[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function deliveryBadge(lesson, extraClass) {
+    const meta = COURSE.delivery[lesson.delivery] || COURSE.delivery.pending;
+    const review = COURSE.href(lesson.review);
+    const cls = `badge ${meta.cls}${extraClass ? " " + extraClass : ""}`;
+    return review
+      ? `<a class="${cls}" href="${review}">${meta.label}</a>`
+      : `<span class="${cls}">${meta.label}</span>`;
+  }
+
+  function activityRows() {
+    return acts.map((a, i) => {
+      const kind = a.dataset.kind || "video";
+      const min = a.dataset.min;
+      const dur = (kind === "video" || kind === "lab") && min
+        ? `<span class="du">${String(min).padStart(2, "0")} min</span>` : "";
+      return `<li data-for="${a.id}">
+        <button type="button">
+          <span class="ic">${ICON[kind] || ICON.video}</span>
+          <span class="txt"><span class="nm">${i + 1}. ${escapeHtml(a.dataset.title)}</span>${dur}</span>
+          <span class="ck">${CHECK}</span>
+        </button>
+      </li>`;
+    }).join("");
+  }
+
+  const treeEl = document.getElementById("tree");
+  function buildTree() {
+    if (!treeEl) return;
+    treeEl.innerHTML = COURSE.lessons.map((lesson) => {
+      const current = lesson.id === OWNER_ID;
+      const progress = lesson.published ? COURSE.progressOf(lesson.id) : null;
+      const count = progress ? `<span class="ln-c">${progress.done}/${progress.total}</span>` : "";
+      const head = `<span class="ln-n">${lesson.id}</span>
+        <span class="ln-t">${escapeHtml(lesson.title)}</span>${count}`;
+
+      let row;
+      if (!lesson.published) {
+        row = `<div class="lesson-row is-unpublished" aria-disabled="true">${head}</div>
+               <p class="ln-note">${escapeHtml(lesson.note || "ainda não publicada")}</p>`;
+      } else if (current && !IS_REVIEW) {
+        row = `<div class="lesson-row is-current" aria-current="true">${head}</div>`;
+      } else {
+        row = `<a class="lesson-row" href="${COURSE.href(lesson.slug)}">${head}</a>`;
+      }
+
+      const parts = [row, `<div class="ln-badge">${deliveryBadge(lesson)}</div>`];
+      const actsList = `<ul class="acts" id="actList">${activityRows()}</ul>`;
+      if (current && !IS_REVIEW) parts.push(actsList);
+      if (lesson.review) {
+        const onIt = current && IS_REVIEW;
+        const label = '<span class="ln-n">&#8627;</span><span class="ln-t">Revisão da entrega</span>';
+        parts.push(onIt
+          ? `<div class="lesson-row is-sub is-current" aria-current="true">${label}</div>`
+          : `<a class="lesson-row is-sub" href="${COURSE.href(lesson.review)}">${label}</a>`);
+      }
+      if (current && IS_REVIEW) parts.push(actsList);
+      return `<li class="tree-lesson${current ? " is-open" : ""}">${parts.join("")}</li>`;
+    }).join("");
+  }
+  buildTree();
   const listEl = document.getElementById("actList");
-  listEl.innerHTML = acts.map((a, i) => {
-    const kind = a.dataset.kind || "video";
-    const min = a.dataset.min;
-    const dur = (kind === "video" || kind === "lab") && min
-      ? `<span class="du">${String(min).padStart(2, "0")} min</span>` : "";
-    return `<li data-for="${a.id}">
-      <button type="button">
-        <span class="ic">${ICON[kind] || ICON.video}</span>
-        <span class="txt"><span class="nm">${i + 1}. ${a.dataset.title}</span>${dur}</span>
-        <span class="ck">${CHECK}</span>
-      </button>
-    </li>`;
-  }).join("");
 
   /* ---------- render ---------- */
-  const barFill = document.getElementById("barFill");
-  const barPct  = document.getElementById("barPct");
   const ringFill = document.getElementById("ringFill");
   const ringTxt = document.getElementById("ringTxt");
   const doneChk = document.getElementById("doneChk");
@@ -93,15 +161,23 @@
     });
 
     const n = acts.filter(a => state.done[a.id]).length;
-    const pct = Math.round((n / TOTAL) * 100);
-    barFill.style.width = pct + "%";
-    barPct.textContent = pct + "%";
-    ringTxt.textContent = n + "/" + TOTAL;
-    ringFill.setAttribute("stroke-dasharray", `${(CIRC * n / TOTAL).toFixed(1)} ${CIRC.toFixed(1)}`);
+    if (ringTxt) ringTxt.textContent = n + "/" + TOTAL;
+    if (ringFill) {
+      ringFill.setAttribute("stroke-dasharray",
+        `${(CIRC * n / TOTAL).toFixed(1)} ${CIRC.toFixed(1)}`);
+    }
+    /* Numa revisão a aula aberta na árvore é a 04, mas as atividades contadas
+       são as da revisão — não sobrescreva o número dela. */
+    const treeCount = !IS_REVIEW && treeEl
+      && treeEl.querySelector(".tree-lesson.is-open > .ln-c, .tree-lesson.is-open .lesson-row .ln-c");
+    if (treeCount) treeCount.textContent = n + "/" + TOTAL;
 
     doneChk.checked = !!state.done[state.current];
-    prevBtn.disabled = idx === 0;
-    nextBtn.textContent = idx === TOTAL - 1 ? "Concluir aula" : "Avançar →";
+    prevBtn.disabled = idx === 0 && !PREV_LESSON;
+    nextBtn.textContent = idx < TOTAL - 1 ? "Avançar →"
+      : IS_REVIEW ? `Voltar à aula ${OWNER_ID} →`
+      : NEXT_LESSON ? `Aula ${NEXT_LESSON.id}: ${NEXT_LESSON.title} →`
+      : "Concluir aula";
 
     // restaura previsões escritas
     document.querySelectorAll(".predict").forEach(p => {
@@ -126,12 +202,17 @@
 
   prevBtn.addEventListener("click", () => {
     const i = acts.findIndex(a => a.id === state.current);
-    if (i > 0) goTo(acts[i - 1].id);
+    if (i > 0) { goTo(acts[i - 1].id); return; }
+    /* primeira atividade: volta para a última da aula anterior */
+    if (PREV_LESSON) location.href = COURSE.href(PREV_LESSON.slug) + "#last";
   });
   nextBtn.addEventListener("click", () => {
     const i = acts.findIndex(a => a.id === state.current);
     state.done[state.current] = true;
-    if (i < TOTAL - 1) goTo(acts[i + 1].id); else { render(); persist(); }
+    if (i < TOTAL - 1) { goTo(acts[i + 1].id); return; }
+    persist();
+    /* última atividade: entra na primeira da próxima aula publicada */
+    if (NEXT_LESSON) location.href = COURSE.href(NEXT_LESSON.slug); else render();
   });
   doneChk.addEventListener("change", () => {
     if (doneChk.checked) state.done[state.current] = true;
@@ -256,6 +337,61 @@
     tReset.addEventListener("click", () => { tStep = 0; drawTrace(); });
     drawTrace();
   }
+
+  /* ---------- selo de entrega no topo da aula ----------
+     Injetado por JS para que nenhuma página precise repetir a marcação, e para
+     que o estado venha do manifesto — a única fonte de verdade. */
+  const reader = document.getElementById("reader");
+  if (reader && OWNER) {
+    const strip = document.createElement("div");
+    strip.className = "lesson-state";
+    const meta = COURSE.delivery[OWNER.delivery] || COURSE.delivery.pending;
+    const reviewHref = COURSE.href(OWNER.review);
+    strip.innerHTML =
+      `<span class="ls-k">Aula ${OWNER.id}</span>` +
+      `<span class="ls-t">${escapeHtml(OWNER.title)}</span>` +
+      `<span class="badge ${meta.cls}">${IS_REVIEW ? "revisão desta entrega" : meta.label}</span>` +
+      (IS_REVIEW
+        ? `<a class="ls-back" href="${COURSE.href(OWNER.slug)}">&larr; voltar à aula ${OWNER.id}</a>`
+        : reviewHref ? `<a class="ls-back" href="${reviewHref}">ver a revisão &rarr;</a>` : "");
+    reader.parentNode.insertBefore(strip, reader);
+  }
+
+  /* ---------- rodapé de navegação da trilha ----------
+     Anterior / índice / próxima, montado a partir do manifesto e acrescentado
+     depois dos botões de atividade. */
+  const footnav = document.querySelector(".footnav");
+  if (footnav && COURSE.lessons.length) {
+    const nav = document.createElement("nav");
+    nav.className = "lessonnav";
+    nav.setAttribute("aria-label", "Navegação entre aulas");
+    const link = (lesson, dir, arrow) => {
+      if (!lesson || !lesson.slug) return `<span class="lnav ${dir} is-off"></span>`;
+      const suffix = dir === "prev" && !IS_REVIEW ? "#last" : "";
+      return `<a class="lnav ${dir}" href="${COURSE.href(lesson.slug)}${suffix}">
+        <span class="lnav-k">${arrow}</span>
+        <span class="lnav-t">Aula ${lesson.id} &middot; ${escapeHtml(lesson.title)}</span></a>`;
+    };
+    nav.innerHTML =
+      link(PREV_LESSON, "prev", "&larr; anterior") +
+      `<a class="lnav home" href="${COURSE.base() || "./"}index.html">
+         <span class="lnav-k">índice</span>
+         <span class="lnav-t">${escapeHtml(COURSE.name)} &middot; ${escapeHtml(COURSE.phase)}</span></a>` +
+      link(NEXT_LESSON, "next", "próxima &rarr;");
+    footnav.parentNode.insertBefore(nav, footnav.nextSibling);
+  }
+
+  /* ---------- deep link ----------
+     Permite que a navegação entre aulas chegue numa atividade específica:
+     #a3 abre aquela atividade, #last abre a última (usado pelo "Anterior"). */
+  function applyHash() {
+    const hash = (location.hash || "").slice(1);
+    if (!hash) return;
+    if (hash === "last") { state.current = acts[TOTAL - 1].id; return; }
+    if (acts.some((a) => a.id === hash)) state.current = hash;
+  }
+  applyHash();
+  window.addEventListener("hashchange", () => { applyHash(); render(); persist(); });
 
   /* ---------- start ---------- */
   render();

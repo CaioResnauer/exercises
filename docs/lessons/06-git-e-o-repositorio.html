@@ -7,19 +7,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="../assets/course.css">
 </head>
-<body data-lesson="06">
+<body data-lesson="06" data-base=".." data-delivery="pending">
 
 <header class="topbar">
   <div class="brand">
     <span class="brand-mark" aria-hidden="true">&gt;_</span>
-    <span class="brand-name">Trilha DE</span>
+    <span class="brand-name">Fluxo</span>
   </div>
   <div class="course">
     <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
-    <div class="rail-track">
-      <div class="bar"><i id="barFill"></i></div>
-      <span class="pct" id="barPct">0%</span>
-    </div>
   </div>
   <div class="topbar-end">
     <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
@@ -722,18 +718,13 @@ git branch -d feat/lesson05-memory</code></pre>
           <div class="lh-n">Git e o repositório</div>
         </div>
       </div>
-      <ul class="acts" id="actList"></ul>
-      <div class="locked">
-        <a class="locked-item" href="04-itertools-e-batching.html"><div><div class="lk-n">Aula 04</div><div class="lk-t">itertools e batching</div></div><span class="lk-c">publicada</span></a>
-        <a class="locked-item" href="05-memoria-na-pratica.html"><div><div class="lk-n">Aula 05</div><div class="lk-t">Memória na prática</div></div><span class="lk-c">publicada</span></a>
-      </div>
+      <ul class="tree" id="tree"></ul>
     </div>
 
     <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
       <h3>Desta aula</h3>
       <ul>
         <li><span class="res-static">exercises/python/lesson06.py<span class="rs">e o repositório arrumado</span></span></li>
-        <li><a href="../index.html">Índice do curso<span class="rs">as seis aulas da fase 1</span></a></li>
       </ul>
       <h3>Documentação</h3>
       <ul>
@@ -747,10 +738,6 @@ git branch -d feat/lesson05-memory</code></pre>
       <ul>
         <li><span class="res-static">Pro Git, 2ª ed. — caps. 2, 3 e 10<span class="rs">Chacon &amp; Straub · gratuito em git-scm.com</span></span></li>
       </ul>
-      <h3>Próximo passo</h3>
-      <ul>
-        <li><span class="res-static">Fase 2 — dados distribuídos<span class="rs">liberada depois das entregas da fase 1</span></span></li>
-      </ul>
     </div>
   </aside>
 </div>
@@ -758,6 +745,7 @@ git branch -d feat/lesson05-memory</code></pre>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../assets/course-data.js"></script>
 <script src="../assets/course.js"></script>
 </body>
 </html>
