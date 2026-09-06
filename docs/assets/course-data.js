@@ -17,6 +17,7 @@ window.COURSE = {
      página própria. Mostrado no índice e no aviso de pré-requisito. */
   gap: {
     lessons: ["02", "03"],
+    from: "04",
     needed: "mecânica de <code>yield</code>, generator expressions, " +
             "composição de estágios e esgotamento de generator"
   },
@@ -34,7 +35,7 @@ window.COURSE = {
     },
     {
       id: "03", title: "Pipelines de generators",
-      slug: null, acts: 12, published: false, delivery: "pending",
+      slug: null, acts: 12, published: false, delivery: "delivered",
       note: "aula ainda não escrita"
     },
     {

@@ -3,8 +3,14 @@ My personal exercises
 ## Fluxo — the course site (`docs/`)
 
 `docs/` holds **Fluxo**, a static course site published with GitHub Pages
-(branch `main`, folder `/docs`). The lesson prose is in Portuguese; everything
-else — file names, folders, code comments and this README — is in English.
+(branch `main`, folder `/docs`). Phase 1 is seventeen lessons covering advanced
+Python, advanced SQL and the software-engineering practices around them. The
+lesson prose is in Portuguese; everything else — file names, folders, code
+comments and this README — is in English.
+
+Every measurement printed in a lesson was executed: the timings, the
+`tracemalloc` peaks, the `EXPLAIN QUERY PLAN` output and the git command
+output are all real, not illustrative.
 
 ```
 docs/
@@ -15,14 +21,28 @@ docs/
 │   ├── course-data.js        # the manifest: every lesson, its state, the storage contract
 │   ├── course.css            # shared stylesheet for every page
 │   └── course.js             # shared behaviour: track tree, progress, stepper, keyboard
-├── lessons/                  # one page per lesson
+├── lessons/                  # one page per lesson, 01 to 17
 │   ├── 01-protocolo-de-iteracao.html
 │   ├── 04-itertools-e-batching.html
 │   ├── 05-memoria-na-pratica.html
-│   └── 06-git-e-o-repositorio.html
+│   ├── 06-git-e-o-repositorio.html
+│   ├── 07-estruturas-de-dados.html
+│   ├── 08-decorators-e-context-managers.html
+│   ├── 09-poo-para-pipelines.html
+│   ├── 10-testes-com-pytest.html
+│   ├── 11-ambiente-e-dependencias.html
+│   ├── 12-logging-estruturado.html
+│   ├── 13-sql-window-functions.html
+│   ├── 14-sql-ctes-recursivas.html
+│   ├── 15-sql-explain-e-indices.html
+│   ├── 16-git-em-equipe.html
+│   └── 17-projeto-da-fase-1.html
 └── reviews/                  # one page per graded delivery
     └── 04-revisao.html
 ```
+
+Lessons 02 and 03 (generators, pipelines) are not written; the index and
+lesson 04 say so and name what a reader needs to carry in from them.
 
 Lessons and reviews are both one directory deep, so every page reaches the
 shared assets the same way: `../assets/course.css`.

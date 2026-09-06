@@ -25,9 +25,9 @@
 <main class="home">
 
   <div class="home-hero">
-    <div class="home-kicker">Fase 1 &middot; seis aulas</div>
+    <div class="home-kicker">Fase 1 &middot; dezessete aulas</div>
     <h1 class="home-title">Python avançado para engenharia de dados</h1>
-    <p class="home-lead">Uma trilha curta sobre como o Python percorre dados sem carregar tudo na memória — iteração, generators, pipelines e <code>itertools</code> — construída do alicerce para cima, na ordem em que os conceitos se apoiam.</p>
+    <p class="home-lead">Fundamentos sólidos: Python avançado, SQL avançado e as práticas de engenharia que fazem um pipeline sobreviver — iteração e memória, testes, ambiente, log, janelas e planos de execução, versionamento. Construída do alicerce para cima, na ordem em que os conceitos se apoiam.</p>
 
     <div class="home-progress">
       <div class="hp-num"><b id="hpDone">0</b>/<span id="hpTotal">0</span></div>
@@ -102,9 +102,9 @@
     document.getElementById("gapTitle").textContent =
       faltando.length > 1 ? "Duas aulas ainda não escritas" : "Uma aula ainda não escrita";
     document.getElementById("gapBody").innerHTML =
-      `As aulas ${nomes} ainda não têm página, e as aulas 04 a 06 as declaram como ` +
-      `pré-requisito. Dá para seguir mesmo assim se você já domina ${COURSE.gap.needed} — ` +
-      `é só isso que as três seguintes assumem conhecido.`;
+      `As aulas ${nomes} ainda não têm página, e as aulas da ${COURSE.gap.from} em ` +
+      `diante as declaram como pré-requisito. Dá para seguir mesmo assim se você já ` +
+      `domina ${COURSE.gap.needed} — é só isso que as seguintes assumem conhecido.`;
     document.getElementById("homeGap").hidden = false;
   }
 
