@@ -31,6 +31,8 @@ a:hover{color:#C6D2FF}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 /* ============================ topbar ============================ */
+/* CONTRATO: exatamente tres filhos diretos (.brand, .course, .topbar-end).
+   Um quarto filho cria uma segunda linha de grid e quebra a altura de 64px. */
 .topbar{
   position:fixed; inset:0 0 auto 0; height:64px; z-index:40;
   background:var(--ground-2); border-bottom:1px solid var(--line);
@@ -58,7 +60,11 @@ a:hover{color:#C6D2FF}
 .topbar .rail-toggle{display:none!important}
 
 /* ============================ shell ============================ */
-.app{padding-top:64px;display:grid;grid-template-columns:minmax(0,1fr) var(--rail);min-height:100vh}
+/* O .rail e position:fixed, entao ele nao ocupa a segunda coluna — ela existe
+   so para reservar o espaco sob o rail. Numa pagina sem rail a coluna viraria
+   um vazio de 404px, entao ela so e criada quando o rail existe de fato. */
+.app{padding-top:64px;display:grid;grid-template-columns:minmax(0,1fr);min-height:100vh}
+.app:has(> .rail){grid-template-columns:minmax(0,1fr) var(--rail)}
 .stage{min-width:0;padding:52px 40px 96px 0}
 .reader{max-width:var(--measure);margin-left:clamp(24px,7vw,112px)}
 
@@ -175,14 +181,19 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:righ
 
 /* armadilhas numeradas */
 .traps{counter-reset:trap;margin-top:26px;display:flex;flex-direction:column;gap:2px}
+/* O contador e posicionado em absoluto, e nao ocupa uma celula de grid.
+   Isso deixa .trap indiferente a quantos filhos ele tem: <h3>+<p>+<p> soltos
+   e um <div> embrulhando tudo rendem o mesmo layout. A versao em grid quebrava
+   no primeiro caso, jogando o <p> para a coluna de 44px. */
 .trap{
-  display:grid;grid-template-columns:44px 1fr;gap:16px;padding:20px 20px 20px 0;
+  position:relative;padding:20px 20px 20px 44px;
   border-bottom:1px solid var(--line-soft)
 }
 .traps .trap:last-child{border-bottom:0}
 .trap::before{
   counter-increment:trap;content:counter(trap,decimal-leading-zero);
-  font:500 13px/1.5 var(--mono);color:var(--danger);padding-top:1px
+  position:absolute;left:0;top:21px;
+  font:500 13px/1.5 var(--mono);color:var(--danger)
 }
 .trap h3{margin:0 0 8px;font:500 16px/1.4 var(--ui);color:#F4F5F6}
 .trap p{margin:0;font-size:15px;line-height:1.68;color:#CFD4DC}
@@ -232,6 +243,8 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:righ
 .trace-head{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
 .trace-head h3{margin:0;font:500 14px/1.3 var(--ui);color:#F4F5F6}
 .trace-ctl{display:flex;gap:8px;align-items:center}
+/* CONTRATO: dois filhos diretos (.trace-code, .trace-state). O <script> de
+   configuracao do stepper fica em .trace, um nivel acima, justamente por isto. */
 .trace-body{display:grid;grid-template-columns:1fr 232px;gap:0}
 .trace-code{padding:18px 20px;font:400 13px/1.95 var(--mono);white-space:pre;overflow-x:auto;color:#8B929E;border-right:1px solid var(--line)}
 .trace-code .ln{display:block;padding:0 8px;margin:0 -8px;border-radius:4px;transition:background .18s,color .18s}
@@ -293,6 +306,7 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:righ
 
 .acts{list-style:none;margin:0;padding:0}
 .acts li{border-bottom:1px solid var(--line-soft)}
+/* CONTRATO: tres filhos diretos (.ic, .txt, .ck), gerados por course.js. */
 .acts button{
   width:100%;background:var(--panel);border:0;text-align:left;cursor:pointer;
   display:grid;grid-template-columns:22px 1fr 22px;gap:14px;align-items:start;
