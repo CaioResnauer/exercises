@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SQL: window functions a fundo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="13" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 13 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: SQL básico e as aulas 01 a 12</div>
+  <div class="prose">
+    <p class="lead">Muda o assunto. Três aulas de SQL avançado, com o mesmo rigor das anteriores: tudo que aparece aqui foi executado, e você pode reproduzir com o <code>sqlite3</code> que já veio com o seu Python.</p>
+
+    <p>Window function é a construção que responde <em>"qual a posição desta linha dentro do grupo dela"</em> — sem colapsar as outras linhas, que é exatamente o que o <code>GROUP BY</code> faz.</p>
+
+    <h2>A diferença em uma frase</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th><code>GROUP BY</code></th><th><code>OVER (...)</code></th></tr></thead>
+        <tbody>
+          <tr><td>Linhas de saída</td><td>uma por grupo</td><td>uma por linha de entrada</td></tr>
+          <tr><td>Você perde</td><td>as linhas individuais</td><td>nada</td></tr>
+          <tr><td>Responde</td><td>"quanto vendeu cada região?"</td><td>"quanto esta venda representa da região dela?"</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>O que a aula cobre</h2>
+    <ul>
+      <li><code>ROW_NUMBER</code>, <code>RANK</code> e <code>DENSE_RANK</code> — e o empate que os separa;</li>
+      <li>total corrido, <code>PARTITION BY</code>, <code>LAG</code> e <code>LEAD</code>;</li>
+      <li>a cláusula de <em>frame</em>, que quase ninguém escreve e que muda o resultado;</li>
+      <li>deduplicação com <code>ROW_NUMBER</code> — o padrão mais útil da aula.</li>
+    </ul>
+
+    <div class="callout tip">
+      <div class="callout-title">Para acompanhar rodando</div>
+      <p>Tudo aqui roda em <code>sqlite3</code> puro, que suporta window functions desde a 3.25. A tabela de exemplo tem 24 vendas e está no <code>seed.sql</code> da aula. A sintaxe é padrão SQL:2003 — vale igual em PostgreSQL, BigQuery, Snowflake e Spark SQL.</p>
+    </div>
+
+    <h2>Tempo estimado</h2>
+    <p>50 min de leitura, 2 h de exercícios.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="A anatomia de um OVER" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 13 &middot; Atividade 02</span></div>
+  <h1 class="act-title">A anatomia de um <code style="font-size:.82em">OVER</code></h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Três peças, e só a primeira é obrigatória.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">SUM(amount) OVER (
+    PARTITION BY region      -- 1. em que grupo esta linha está
+    ORDER BY sale_date       -- 2. em que ordem, dentro do grupo
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW   -- 3. quais linhas entram na conta
+)</code></pre>
+    </div>
+
+    <div class="traps">
+      <div class="trap">
+        <h3><code>PARTITION BY</code> — reinicia a janela</h3>
+        <p>Sem ele, a janela é a tabela inteira. Com ele, tudo recomeça a cada valor novo: o ranking volta a 1, o total corrido zera. É o <code>GROUP BY</code> da janela, e não tem relação com o <code>GROUP BY</code> da query.</p>
+      </div>
+      <div class="trap">
+        <h3><code>ORDER BY</code> — dá sentido a "antes"</h3>
+        <p>Necessário para tudo que depende de posição: ranking, total corrido, <code>LAG</code>. E cuidado: ele também <strong>liga o frame padrão</strong>, que é o assunto da atividade 06.</p>
+      </div>
+      <div class="trap">
+        <h3>O frame — quais linhas a função enxerga</h3>
+        <p>Opcional, e é onde mora a surpresa. Sem <code>ORDER BY</code>, o frame é a partição inteira; com <code>ORDER BY</code>, ele muda para "do começo até a linha atual". Duas queries quase idênticas dão respostas diferentes por causa disso.</p>
+      </div>
+    </div>
+
+    <h2>Onde ele pode aparecer</h2>
+    <p>Só no <code>SELECT</code> e no <code>ORDER BY</code>. <strong>Nunca no <code>WHERE</code></strong> — e a razão é a ordem em que o banco resolve a query:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>ordem lógica de execução</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">FROM → WHERE → GROUP BY → HAVING → <b>janelas</b> → SELECT → DISTINCT → ORDER BY → LIMIT</code></pre>
+    </div>
+
+    <p>Quando o <code>WHERE</code> roda, a janela ainda não foi calculada. Por isso <code>WHERE ROW_NUMBER() OVER (...) = 1</code> é erro de sintaxe em todo banco — e por isso o padrão de deduplicação da atividade 09 precisa de uma CTE.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Nomeie a janela quando repetir</div>
+      <div class="code bare" style="margin-top:12px">
+        <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-sql">SELECT seller,
+       SUM(amount)  OVER w AS total,
+       AVG(amount)  OVER w AS media,
+       COUNT(*)     OVER w AS n
+FROM sales
+WINDOW w AS (PARTITION BY region ORDER BY sale_date)</code></pre>
+      </div>
+      <p>A cláusula <code>WINDOW</code> evita repetir a mesma definição três vezes — e evita o bug de mudar uma e esquecer as outras duas.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="ROW_NUMBER, RANK e DENSE_RANK" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 13 &middot; Atividade 03</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">ROW_NUMBER</code>, <code style="font-size:.82em">RANK</code> e <code style="font-size:.82em">DENSE_RANK</code></h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">As três numeram linhas e são idênticas — até aparecer um empate. Aqui há três vendas de 300,00 de propósito.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">SELECT seller, amount,
+       ROW_NUMBER() OVER (ORDER BY amount DESC) AS rn,
+       RANK()       OVER (ORDER BY amount DESC) AS rnk,
+       DENSE_RANK() OVER (ORDER BY amount DESC) AS dense
+FROM sales WHERE id &lt;= 6 ORDER BY amount DESC;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>seller | amount | rn | rnk | dense
+-------+--------+----+-----+------
+caio   | 327.87 | 1  | 1   | 1
+bruno  | 300.00 | 2  | 2   | 2
+caio   | 300.00 | 3  | 2   | 2
+dora   | 300.00 | 4  | 2   | 2
+bruno  | 290.08 | 5  | 5   | 3
+ana    | 252.66 | 6  | 6   | 4</div>
+    </div>
+
+    <p>Leia as três colunas nas linhas de 300,00:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Função</th><th>Nos empates</th><th>Depois do empate</th><th>Use para</th></tr></thead>
+        <tbody>
+          <tr><td><code>ROW_NUMBER</code></td><td>numera 2, 3, 4 — <strong>desempata arbitrariamente</strong></td><td>continua</td><td>deduplicar, paginar</td></tr>
+          <tr><td><code>RANK</code></td><td>todos ganham 2</td><td>pula para 5</td><td>classificação esportiva</td></tr>
+          <tr><td><code>DENSE_RANK</code></td><td>todos ganham 2</td><td>segue em 3</td><td>"quais são os três maiores valores"</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout bug">
+      <div class="callout-title">O <code>ROW_NUMBER</code> não determinístico</div>
+      <p>Nas três linhas de 300,00, qual recebeu o 2? <strong>Não está definido.</strong> O banco escolhe, e pode escolher diferente na próxima execução, depois de um <code>ANALYZE</code>, ou com paralelismo ligado.</p>
+      <p>Se você deduplica com <code>ROW_NUMBER() OVER (PARTITION BY id ORDER BY updated_at DESC)</code> e há dois registros com o mesmo <code>updated_at</code>, <strong>qual sobrevive muda entre execuções</strong>. O pipeline fica não determinístico e ninguém entende por quê.</p>
+      <p>A correção é uma coluna a mais no <code>ORDER BY</code>: algo garantidamente único, como a chave primária. <code>ORDER BY updated_at DESC, id DESC</code>.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Três maiores valores, não três maiores linhas</div>
+      <p><code>WHERE dense &lt;= 3</code> devolve todas as linhas dos três maiores <em>valores</em> — pode ser dez linhas. <code>WHERE rn &lt;= 3</code> devolve exatamente três linhas. São perguntas diferentes, e escolher a função errada dá uma resposta que parece certa.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="Total corrido e PARTITION BY" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 13 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Total corrido e <code style="font-size:.82em">PARTITION BY</code></h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">A mesma função de agregação que você já usa, com <code>OVER</code> atrás. E a linha individual continua ali.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">SELECT sale_date, amount,
+       SUM(amount) OVER (ORDER BY sale_date, id) AS acumulado,
+       SUM(amount) OVER ()                       AS total_geral
+FROM sales WHERE id &lt;= 6 ORDER BY sale_date, id;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>sale_date  | amount | acumulado | total_geral
+-----------+--------+-----------+------------
+2026-01-01 | 300.00 | 300.00    | 1770.61
+2026-01-02 | 300.00 | 600.00    | 1770.61
+2026-01-03 | 300.00 | 900.00    | 1770.61
+2026-01-04 | 252.66 | 1152.66   | 1770.61
+2026-01-05 | 290.08 | 1442.74   | 1770.61
+2026-01-06 | 327.87 | 1770.61   | 1770.61</div>
+    </div>
+
+    <p>Duas janelas na mesma query, e a diferença entre elas é só o <code>ORDER BY</code>. <code>OVER ()</code> sem nada enxerga a tabela inteira — daí o total repetido em toda linha. <code>OVER (ORDER BY ...)</code> enxerga do começo até a linha atual.</p>
+
+    <p>Essa segunda coluna é o que torna o percentual do total trivial: <code>amount * 100.0 / SUM(amount) OVER ()</code>. Com <code>GROUP BY</code>, a mesma conta exige uma subquery ou um <code>JOIN</code> com o agregado.</p>
+
+    <h2><code>PARTITION BY</code>: um ranking por grupo</h2>
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">SELECT region, seller, amount,
+       ROW_NUMBER() OVER (PARTITION BY region ORDER BY amount DESC) AS pos_na_regiao
+FROM sales WHERE id &lt;= 9 ORDER BY region, pos_na_regiao;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>region  | seller | amount | pos_na_regiao
+--------+--------+--------+--------------
+norte   | bruno  | 439.30 | 1
+norte   | caio   | 327.87 | 2
+norte   | dora   | 300.00 | 3
+sudeste | ana    | 401.12 | 1
+sudeste | caio   | 300.00 | 2
+sudeste | bruno  | 290.08 | 3
+sul     | dora   | 360.85 | 1
+sul     | bruno  | 300.00 | 2
+sul     | ana    | 252.66 | 3</div>
+    </div>
+
+    <p>O contador voltou para 1 em cada região. É o "top N por grupo", que sem janela exigiria uma subquery correlacionada por região — mais lenta e muito mais difícil de ler.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Janela e <code>GROUP BY</code> na mesma query</div>
+      <p>Podem conviver, e a ordem lógica explica como: a janela roda <strong>depois</strong> do <code>GROUP BY</code>, então ela enxerga as linhas já agregadas. <code>SUM(SUM(amount)) OVER (ORDER BY mes)</code> com <code>GROUP BY mes</code> é o total corrido do total mensal — parece estranho e está correto.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="video" data-title="LAG e LEAD: a linha vizinha" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 13 &middot; Atividade 05</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">LAG</code> e <code style="font-size:.82em">LEAD</code></h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Trazem o valor da linha anterior ou da seguinte para dentro da linha atual. É o <code>pairwise</code> da aula 04, em SQL.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">SELECT sale_date, amount,
+       LAG(amount) OVER (ORDER BY sale_date, id) AS anterior,
+       ROUND(amount - LAG(amount) OVER (ORDER BY sale_date, id), 2) AS delta
+FROM sales WHERE id &lt;= 6 ORDER BY sale_date, id;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>sale_date  | amount | anterior | delta
+-----------+--------+----------+-------
+2026-01-01 | 300.00 | None     | None
+2026-01-02 | 300.00 | 300.00   | 0.00
+2026-01-03 | 300.00 | 300.00   | 0.00
+2026-01-04 | 252.66 | 300.00   | -47.34
+2026-01-05 | 290.08 | 252.66   | 37.42
+2026-01-06 | 327.87 | 290.08   | 37.79</div>
+    </div>
+
+    <p>A primeira linha não tem anterior, então <code>LAG</code> devolve <code>NULL</code> — e o <code>delta</code> vira <code>NULL</code> junto, porque qualquer aritmética com <code>NULL</code> é <code>NULL</code>.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">O <code>NULL</code> da borda que estraga a soma</div>
+      <p><code>SUM(delta)</code> ignora <code>NULL</code> e funciona; <code>AVG(delta)</code> divide pelo número de valores <strong>não nulos</strong>, o que costuma ser o que você quer; mas um <code>COUNT(*)</code> conta a linha e um <code>delta &gt; 0</code> no <code>WHERE</code> descarta a primeira linha em silêncio. Sempre decida o que fazer com a borda.</p>
+      <p>O terceiro argumento resolve quando faz sentido: <code>LAG(amount, 1, 0)</code> devolve 0 em vez de <code>NULL</code>. Só use quando zero for de fato o valor certo — se não for, <code>NULL</code> é mais honesto.</p>
+    </div>
+
+    <h2>Os usos que aparecem sempre</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Pergunta</th><th>Expressão</th></tr></thead>
+        <tbody>
+          <tr><td>variação em relação à leitura anterior</td><td><code>amount - LAG(amount) OVER w</code></td></tr>
+          <tr><td>houve gap maior que 1 hora?</td><td><code>ts - LAG(ts) OVER w &gt; interval</code></td></tr>
+          <tr><td>o valor mudou nesta linha?</td><td><code>status IS DISTINCT FROM LAG(status) OVER w</code></td></tr>
+          <tr><td>quanto tempo até o próximo evento</td><td><code>LEAD(ts) OVER w - ts</code></td></tr>
+          <tr><td>primeiro e último do grupo</td><td><code>FIRST_VALUE(x) OVER w</code>, <code>LAST_VALUE(x) OVER w</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout bug">
+      <div class="callout-title">O <code>LAST_VALUE</code> que devolve a própria linha</div>
+      <p>Com <code>ORDER BY</code>, o frame padrão vai até a linha atual — então <code>LAST_VALUE</code> devolve o valor da <em>linha atual</em>, não do fim do grupo. É o erro mais comum de quem começa com janelas, e a correção é explicitar o frame: <code>LAST_VALUE(x) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)</code>. A próxima atividade é sobre isso.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="A cláusula de frame" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 13 &middot; Atividade 06</span></div>
+  <h1 class="act-title">A cláusula de frame</h1>
+  <div class="act-meta">07 min &middot; o núcleo da aula</div>
+  <div class="prose">
+    <p class="lead">A parte que quase ninguém escreve, e que o banco preenche por você com um padrão surpreendente.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b> <span style="color:var(--ink-3)">— sem empate, os dois concordam</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">SELECT id, amount,
+       SUM(amount) OVER (ORDER BY id) AS padrao_range,
+       SUM(amount) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS rows_explicito,
+       ROUND(AVG(amount) OVER (ORDER BY id ROWS BETWEEN 2 PRECEDING AND CURRENT ROW), 2) AS media_movel_3
+FROM sales WHERE id &lt;= 6 ORDER BY id;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>id | amount | padrao_range | rows_explicito | media_movel_3
+---+--------+--------------+----------------+--------------
+1  | 300.00 | 300.00       | 300.00         | 300.00
+2  | 300.00 | 600.00       | 600.00         | 300.00
+3  | 300.00 | 900.00       | 900.00         | 300.00
+4  | 252.66 | 1152.66      | 1152.66        | 284.22
+5  | 290.08 | 1442.74      | 1442.74        | 280.91
+6  | 327.87 | 1770.61      | 1770.61        | 290.20</div>
+    </div>
+
+    <p>As duas primeiras colunas batem. A terceira é uma média móvel de três linhas — <code>ROWS BETWEEN 2 PRECEDING AND CURRENT ROW</code> — e sai de graça.</p>
+
+    <h2>Agora com empate</h2>
+    <p>A mesma comparação, ordenando por <code>amount</code>, onde há três valores iguais:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">SELECT id, amount,
+       SUM(amount) OVER (ORDER BY amount) AS por_range,
+       SUM(amount) OVER (ORDER BY amount ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS por_rows
+FROM sales WHERE id &lt;= 4 ORDER BY amount, id;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>id | amount | por_range | por_rows
+---+--------+-----------+---------
+4  | 252.66 | 252.66    | 252.66
+1  | 300.00 | 1152.66   | 552.66
+2  | 300.00 | 1152.66   | 852.66
+3  | 300.00 | 1152.66   | 1152.66</div>
+    </div>
+
+    <p>As colunas divergem inteiras. E o padrão — o que você escreve quando <strong>não</strong> escreve o frame — é a coluna da esquerda.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th><code>RANGE</code> (padrão)</th><th><code>ROWS</code></th></tr></thead>
+        <tbody>
+          <tr><td>Conta por</td><td><strong>valor</strong> do <code>ORDER BY</code></td><td><strong>posição</strong> física</td></tr>
+          <tr><td>Nos empates</td><td>inclui todos os iguais de uma vez</td><td>inclui só até a linha atual</td></tr>
+          <tr><td>Resultado</td><td>igual para linhas empatadas</td><td>cresce linha a linha</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Qual dos dois você queria?</div>
+      <p>Para um <strong>total corrido</strong>, quase sempre <code>ROWS</code> — você quer o acumulado linha a linha, e o <code>RANGE</code> dá o mesmo número para as três linhas empatadas. Para um <strong>total por valor</strong> — "quanto foi vendido até este preço, inclusive" — <code>RANGE</code> é o certo.</p>
+      <p>Se as duas coisas parecem iguais no seu caso, é porque você não tem empates <em>hoje</em>. A regra prática: <strong>escreva o frame sempre</strong>. Cinco palavras a mais, e a query para de depender de uma coincidência nos dados.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O vocabulário do frame</div>
+      <div class="code bare" style="margin-top:12px">
+        <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-sql">ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW      -- acumulado
+ROWS BETWEEN 6 PRECEDING AND CURRENT ROW              -- janela de 7 dias
+ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING              -- centrada
+ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING      -- do aqui até o fim
+ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING  -- o grupo todo</code></pre>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="lab" data-title="Mão na massa: qual coluna você queria" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 13 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Qual coluna você queria</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Um requisito de verdade: <em>"para cada venda, mostre também o maior valor da região dela"</em>. Duas tentativas.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">-- A
+SELECT region, seller, amount,
+       MAX(amount) OVER (PARTITION BY region ORDER BY amount) AS maior_da_regiao
+FROM sales;
+
+-- B
+SELECT region, seller, amount,
+       MAX(amount) OVER (PARTITION BY region) AS maior_da_regiao
+FROM sales;</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="As duas dão o mesmo resultado? Se não, qual atende o requisito?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a resposta</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <p style="margin-top:18px"><strong>B atende, A não.</strong> E a diferença é uma cláusula que nem está escrita.</p>
+        <p>Em <strong>A</strong>, o <code>ORDER BY amount</code> liga o frame padrão — <code>RANGE UNBOUNDED PRECEDING AND CURRENT ROW</code>. O <code>MAX</code> passa a olhar só as linhas <em>até a atual na ordem crescente de amount</em>, então ele devolve... o próprio <code>amount</code> da linha. A coluna vira uma cópia de <code>amount</code>.</p>
+        <p>Em <strong>B</strong>, sem <code>ORDER BY</code>, o frame é a partição inteira. O <code>MAX</code> vê todas as vendas da região e devolve o maior de verdade.</p>
+        <div class="callout tip">
+          <div class="callout-title">A regra que sai daqui</div>
+          <p><strong>Não coloque <code>ORDER BY</code> numa janela que não precisa de ordem.</strong> Para <code>SUM</code>, <code>MAX</code>, <code>AVG</code> e <code>COUNT</code> sobre o grupo inteiro, o <code>ORDER BY</code> não organiza nada — ele silenciosamente encolhe o frame e muda a resposta.</p>
+          <p>É o mesmo mecanismo do <code>LAST_VALUE</code> da atividade anterior. Uma vez que você vê, passa a reconhecer em toda query.</p>
+        </div>
+        <p>E se você precisar dos dois — ordem <em>e</em> o grupo inteiro — escreva o frame: <code>OVER (PARTITION BY region ORDER BY amount ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)</code>.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="video" data-title="Deduplicar com ROW_NUMBER" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 13 &middot; Atividade 08</span></div>
+  <h1 class="act-title">Deduplicar com <code style="font-size:.82em">ROW_NUMBER</code></h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">O padrão mais útil desta aula. "Mantenha só a linha mais recente de cada chave" é um requisito de toda carga incremental.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-sql">WITH ranked AS (
+  SELECT *,
+         ROW_NUMBER() OVER (PARTITION BY seller ORDER BY sale_date DESC, id DESC) AS rn
+  FROM sales
+)
+SELECT id, seller, sale_date, amount
+FROM ranked
+WHERE rn = 1
+ORDER BY seller;</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>id | seller | sale_date  | amount
+---+--------+------------+-------
+24 | ana    | 2026-03-08 | 188.60
+21 | bruno  | 2026-03-05 | 478.57
+22 | caio   | 2026-03-06 | 114.15
+23 | dora   | 2026-03-07 | 156.28</div>
+    </div>
+
+    <p>Três detalhes que fazem esse padrão funcionar:</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>A CTE é obrigatória</h3>
+        <p>Não dá para escrever <code>WHERE ROW_NUMBER() OVER (...) = 1</code> — a janela só existe depois do <code>WHERE</code>, como a atividade 02 mostrou. A CTE cria um nível a mais para o filtro morar.</p>
+      </div>
+      <div class="trap">
+        <h3>O <code>, id DESC</code> não é decoração</h3>
+        <p>É o desempate determinístico da atividade 03. Sem ele, dois registros com a mesma data fazem o resultado mudar entre execuções.</p>
+      </div>
+      <div class="trap">
+        <h3><code>rn = 1</code>, e não <code>MIN</code>/<code>MAX</code></h3>
+        <p>Com agregação você consegue a data máxima, mas não <em>a linha</em> daquela data — teria que fazer um <code>JOIN</code> de volta, e ele traz duplicata quando há empate. O <code>ROW_NUMBER</code> devolve a linha inteira, garantidamente uma só.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">A variação que também vale guardar</div>
+      <div class="code bare" style="margin-top:12px">
+        <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-sql">-- "quais chaves têm duplicata?" — o diagnóstico antes da correção
+SELECT seller, COUNT(*) AS n
+FROM sales GROUP BY seller HAVING COUNT(*) &gt; 1;</code></pre>
+      </div>
+      <p>Rode este antes de deduplicar. Se a resposta for vazia, a deduplicação não é necessária — e se for grande, vale entender <em>por que</em> há duplicata antes de simplesmente descartar.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="note" data-title="Para saber mais: o custo de uma janela" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 13 &middot; Atividade 09</span></div>
+  <h1 class="act-title">O custo de uma janela</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Window function não é grátis, e o custo tem uma forma previsível.</p>
+
+    <p>Para calcular uma janela, o banco precisa das linhas <strong>ordenadas por <code>PARTITION BY</code> e depois por <code>ORDER BY</code></strong>. Se não houver índice que já entregue essa ordem, ele ordena — e ordenar é O(n log n) com uso de memória proporcional ao conjunto.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Situação</th><th>Custo</th></tr></thead>
+        <tbody>
+          <tr><td>índice cobrindo <code>(partition, order)</code></td><td>varredura ordenada, sem sort</td></tr>
+          <tr><td>sem índice</td><td>um sort por definição de janela distinta</td></tr>
+          <tr><td>três janelas com a <em>mesma</em> definição</td><td>um sort só</td></tr>
+          <tr><td>três janelas com definições diferentes</td><td>até três sorts</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>A terceira e a quarta linhas são a razão prática de usar a cláusula <code>WINDOW</code> nomeada: além de evitar repetição, ela deixa <strong>óbvio para você</strong> que as janelas são iguais — e o planejador reaproveita a ordenação.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">É a mesma conversa da aula 05</div>
+      <p>Um <code>SUM() OVER ()</code> sobre a tabela inteira é O(n) de memória no banco, exatamente como o <code>list()</code> era em Python. E um <code>ORDER BY</code> dentro da janela é o <code>sorted()</code> que a aula 05 classificou como irredutivelmente O(n). Muda a linguagem, não a física.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">O <code>PARTITION BY</code> que salva</div>
+      <p>Particionar reduz o custo: em vez de um sort de <code>n</code> linhas, são <code>k</code> sorts de <code>n/k</code> linhas — e cada partição pode ser processada e descartada. É o mesmo ganho do <code>groupby</code> sobre fonte ordenada que você mediu no exercício 4.4: 0,00 MB contra 11,70 MB.</p>
+    </div>
+
+    <p>A aula 15 mostra como ler isso no <code>EXPLAIN</code> — e como o índice certo faz o <code>SORT</code> desaparecer do plano.</p>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="note" data-title="Referência rápida" data-min="3" hidden>
+  <div class="kicker"><span class="tag is-note">Referência</span><span class="dot"></span><span>Aula 13 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Referência rápida</h1>
+  <div class="act-meta">03 min</div>
+  <div class="prose">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Função</th><th>Devolve</th><th>Precisa de <code>ORDER BY</code></th></tr></thead>
+        <tbody>
+          <tr><td><code>ROW_NUMBER()</code></td><td>1, 2, 3... sem empate</td><td>sim</td></tr>
+          <tr><td><code>RANK()</code></td><td>empata e pula</td><td>sim</td></tr>
+          <tr><td><code>DENSE_RANK()</code></td><td>empata e não pula</td><td>sim</td></tr>
+          <tr><td><code>NTILE(n)</code></td><td>divide em n baldes</td><td>sim</td></tr>
+          <tr><td><code>LAG(x, n, padrão)</code></td><td>o valor n linhas atrás</td><td>sim</td></tr>
+          <tr><td><code>LEAD(x, n, padrão)</code></td><td>o valor n linhas à frente</td><td>sim</td></tr>
+          <tr><td><code>FIRST_VALUE(x)</code></td><td>o primeiro do frame</td><td>sim</td></tr>
+          <tr><td><code>LAST_VALUE(x)</code></td><td>o último <em>do frame</em></td><td>sim — e escreva o frame</td></tr>
+          <tr><td><code>NTH_VALUE(x, n)</code></td><td>o n-ésimo do frame</td><td>sim</td></tr>
+          <tr><td><code>SUM/AVG/MIN/MAX/COUNT</code></td><td>a agregação sobre o frame</td><td>não — e <em>não coloque</em> se não precisar</td></tr>
+          <tr><td><code>PERCENT_RANK()</code>, <code>CUME_DIST()</code></td><td>posição relativa, 0 a 1</td><td>sim</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Os cinco erros desta aula, em uma lista</h2>
+    <ol>
+      <li><code>ORDER BY</code> numa janela de agregação que queria o grupo inteiro — encolhe o frame em silêncio;</li>
+      <li><code>LAST_VALUE</code> sem frame explícito — devolve a linha atual;</li>
+      <li><code>ROW_NUMBER</code> sem desempate único — resultado não determinístico;</li>
+      <li>window function no <code>WHERE</code> — erro de sintaxe; use CTE;</li>
+      <li>confiar no frame padrão <code>RANGE</code> quando existem empates.</li>
+    </ol>
+
+    <div class="callout tip">
+      <div class="callout-title">Como conferir uma janela que você acabou de escrever</div>
+      <p>Rode com <code>LIMIT 20</code> e <strong>a coluna que você está particionando e ordenando visível no <code>SELECT</code></strong>. Metade dos erros de janela aparece na hora quando você vê a partição e a ordem ao lado do resultado.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="lab" data-title="Hora da prática: 13.1 a 13.4" data-min="60" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 13 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Exercícios 13.1 a 13.4</h1>
+  <div class="act-meta">60 min &middot; arquivo <code>exercises/sql/lesson13.sql</code></div>
+  <div class="prose">
+
+    <div class="callout tip">
+      <div class="callout-title">Como rodar</div>
+      <p>Sem instalar nada: <code>python -m sqlite3 vendas.db</code>, ou um script Python com <code>sqlite3.connect</code>. Crie a tabela do <code>seed.sql</code> com pelo menos 200 linhas, várias regiões, vendedores repetidos e <strong>empates de propósito</strong> — sem empate, metade destes exercícios não mostra nada.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">13.1</span><h2>As três numerações</h2><span class="ex-kind">consulta</span></div>
+      <p>Reproduza a tabela da atividade 03 com os seus dados. Depois responda com uma query cada: quais são as três maiores <em>vendas</em> (três linhas) e quais são os três maiores <em>valores</em> (quantas linhas forem). Diga qual função usou em cada e por quê.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">13.2</span><h2>O ranking não determinístico</h2><span class="ex-kind">experimento</span></div>
+      <p>Crie dois registros com a mesma chave e o mesmo <code>updated_at</code>. Rode a deduplicação da atividade 08 <strong>sem</strong> o desempate por <code>id</code>, dez vezes, e mostre se o resultado varia. Depois acrescente <code>, id DESC</code> e rode de novo.</p>
+      <div class="callout warn">
+        <div class="callout-title">Se não variar, force</div>
+        <p>Num sqlite pequeno o plano é estável e o resultado pode não mudar. Force rodando <code>ANALYZE</code>, criando um índice sobre outra coluna, ou invertendo a ordem de inserção. O ponto é que <strong>nada garante</strong> a estabilidade — não que ela nunca aconteça.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">13.3</span><h2>Percentual do total, em três níveis</h2><span class="ex-kind">consulta</span></div>
+      <p>Numa query só, para cada venda: o valor, o percentual que ela representa do total da <strong>região</strong>, e o percentual do total <strong>geral</strong>. Use a cláusula <code>WINDOW</code> nomeada onde couber.</p>
+      <p>Depois escreva a mesma coisa <strong>sem</strong> window function, com subqueries ou <code>JOIN</code>. Compare o tamanho das duas e comente.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">13.4</span><h2>Média móvel e o frame</h2><span class="ex-kind">consulta</span></div>
+      <p>Calcule a média móvel de 7 dias do total diário. Depois calcule a mesma coisa com <code>RANGE</code> em vez de <code>ROWS</code> e explique a diferença quando houver dias sem venda nenhuma.</p>
+      <div class="callout tip">
+        <div class="callout-title">A pegadinha do dia faltante</div>
+        <p><code>ROWS BETWEEN 6 PRECEDING</code> conta <em>seis linhas</em>, não seis dias. Se faltarem dias na tabela, a "média de 7 dias" cobre duas semanas. Para uma janela realmente temporal é preciso <code>RANGE BETWEEN INTERVAL '6 days' PRECEDING</code> — que o sqlite não suporta. Diga como você resolveria, e qual seria a solução em PostgreSQL.</p>
+      </div>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 12 ==================== -->
+<article class="act" id="a12" data-kind="lab" data-title="Hora da prática: 13.5 a 13.7 e entrega" data-min="60" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 13 &middot; Atividade 12</span></div>
+  <h1 class="act-title">Exercícios 13.5 a 13.7 e entrega</h1>
+  <div class="act-meta">60 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">13.5</span><h2>O frame que muda a resposta</h2><span class="ex-kind">experimento</span></div>
+      <p>Reproduza a comparação <code>RANGE</code> contra <code>ROWS</code> da atividade 06 com os seus empates. Depois reproduza o caso da atividade 07: <code>MAX(...) OVER (PARTITION BY x ORDER BY y)</code> contra <code>OVER (PARTITION BY x)</code>, e mostre que a primeira devolve a própria linha.</p>
+      <p>Escreva, em duas frases, a regra que você usaria em revisão de código para pegar esse erro.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">13.6</span><h2>Sessões de usuário</h2><span class="ex-kind">desafio</span></div>
+      <p>Dada uma tabela de eventos <code>(user_id, ts)</code>, agrupe eventos em <strong>sessões</strong>: uma sessão nova começa quando o intervalo desde o evento anterior do mesmo usuário passa de 30 minutos. Produza <code>session_id</code> por usuário.</p>
+      <div class="callout tip">
+        <div class="callout-title">O padrão tem nome: <em>gaps and islands</em></div>
+        <p>São três passos, todos com janela: <code>LAG</code> para o intervalo, um <code>CASE</code> que vira 1 quando há gap, e um <code>SUM() OVER (PARTITION BY user_id ORDER BY ts)</code> desse indicador — o total corrido de uma coluna de zeros e uns é exatamente o número da sessão. Vale entender esse truque; ele reaparece em toda análise de log.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">13.7</span><h2>Desafio: a carga incremental</h2><span class="ex-kind">desafio</span></div>
+      <p>Simule uma tabela de staging com o histórico de mudanças de pedidos: o mesmo <code>order_id</code> aparece várias vezes com <code>updated_at</code> diferente, e alguns com <code>deleted = 1</code>.</p>
+      <p>Escreva a query que produz o estado atual: uma linha por <code>order_id</code>, a mais recente, <strong>excluindo</strong> os que foram apagados. Depois:</p>
+      <ul>
+        <li>prove que o resultado é determinístico rodando dez vezes;</li>
+        <li>rode <code>EXPLAIN QUERY PLAN</code> e guarde a saída — a aula 15 vai pedir de volta.</li>
+      </ul>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>lesson13.sql</code> com as queries comentadas e a saída de cada uma, mais o <code>seed.sql</code> que gera os dados. Toda query tem que ser reproduzível a partir do seed.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de commitar</div>
+      <ul>
+        <li>Todo <code>ROW_NUMBER</code> de deduplicação tem desempate único?</li>
+        <li>Toda janela de agregação sobre o grupo inteiro está <strong>sem</strong> <code>ORDER BY</code>?</li>
+        <li>Todo <code>LAST_VALUE</code> tem frame explícito?</li>
+        <li>Todo total corrido usa <code>ROWS</code> e não o <code>RANGE</code> padrão?</li>
+        <li>O seed tem empates, para os exercícios mostrarem alguma coisa?</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 14: CTEs recursivas</div>
+      <p>A construção que faz SQL responder perguntas sobre hierarquia e grafo: quem se reporta a quem, qual o caminho até a raiz, quais nós são alcançáveis. E a query que nunca termina porque os dados tinham um ciclo — medida, com o processo travando.</p>
+    </div>
+
+  </div>
+</article>
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/12</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 13</div>
+          <div class="lh-n">Window functions a fundo</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/sql/lesson13.sql<span class="rs">o arquivo que você entrega</span></span></li>
+        <li><span class="res-static">exercises/sql/seed.sql<span class="rs">a tabela de exemplo, em sqlite</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://www.sqlite.org/windowfunctions.html" target="_blank" rel="noopener">SQLite — window functions<span class="rs">referência curta e completa</span></a></li>
+        <li><a href="https://www.postgresql.org/docs/current/tutorial-window.html" target="_blank" rel="noopener">PostgreSQL — window functions<span class="rs">a melhor explicação de frame</span></a></li>
+        <li><a href="https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS" target="_blank" rel="noopener">A cláusula de frame<span class="rs">ROWS, RANGE e GROUPS</span></a></li>
+        <li><a href="https://modern-sql.com/feature/over" target="_blank" rel="noopener">modern-sql.com — OVER<span class="rs">o que cada banco suporta</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">SQL Performance Explained<span class="rs">Winand · e o site use-the-index-luke.com</span></span></li>
+        <li><span class="res-static">SQL for Data Analysis<span class="rs">Tanimura · janelas aplicadas a análise</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
