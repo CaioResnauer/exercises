@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Estruturas de dados na prática</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="07" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Python avançado para engenharia de dados &middot; Fase 1</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula 07 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aulas 01 a 06</div>
+  <div class="prose">
+    <p class="lead">A aula 05 ensinou a medir. Esta usa a régua o tempo todo: cada estrutura de dados do Python tem um custo diferente para cada operação, e escolher errado é a forma mais comum de um pipeline correto ficar lento.</p>
+
+    <p>Você já sabe escrever <code>for</code>, <code>list</code> e <code>dict</code>. O que muda aqui é passar a escolher entre eles <strong>pelo custo da operação que você vai fazer mais vezes</strong>, e não pelo que veio primeiro à cabeça.</p>
+
+    <h2>As perguntas que a aula responde com número</h2>
+    <ul>
+      <li>Quanto custa <code>x in lista</code> comparado a <code>x in conjunto</code> — e por que a diferença cresce;</li>
+      <li>Por que <code>lista.insert(0, x)</code> é uma armadilha e o que usar no lugar;</li>
+      <li>Quanto de memória você paga por escolher <code>dict</code> em vez de <code>dataclass(slots=True)</code> para representar um registro;</li>
+      <li>Como pegar os 10 maiores de um milhão sem ordenar o milhão.</li>
+    </ul>
+
+    <div class="callout tip">
+      <div class="callout-title">O que não é esta aula</div>
+      <p>Não é uma tabela de complexidade para decorar. É a <strong>medição</strong> de cada caso, com o raciocínio que faz a tabela ser óbvia depois. Se você entender por que o <code>set</code> não fica mais lento quando cresce, não precisa lembrar que ele é O(1).</p>
+    </div>
+
+    <h2>Tempo estimado</h2>
+    <p>45 min de leitura, 1 h 30 de exercícios. Todas as medições foram executadas; o que importa é a forma da curva, não o valor absoluto na sua máquina.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="list contra set: a mesma pergunta" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 07 &middot; Atividade 02</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">list</code> contra <code style="font-size:.82em">set</code>: a mesma pergunta</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">"Este id já apareceu?" é a pergunta mais frequente de um pipeline de deduplicação. Feita na estrutura errada, ela é a linha mais cara do programa.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">xs = list(range(100_000))
+st = set(xs)
+alvo = 99_999
+
+# a mesma pergunta, duas estruturas
+alvo in xs
+alvo in st</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>x in list (100,000 itens):     591.5 µs
+x in set  (100,000 itens):       0.052 µs   -> <b>11.375x</b></div>
+    </div>
+
+    <p>Onze mil vezes. E o número isolado importa menos que o próximo, que é o da aula 05: <strong>meça em três escalas</strong>.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>timeit</b> <span style="color:var(--ink-3)">— o mesmo teste, entrada crescendo 10x</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">n=  1,000 | list      5.4 µs | set  0.054 µs
+n= 10,000 | list     55.3 µs | set  0.054 µs
+n=100,000 | list    575.6 µs | set  0.056 µs</code></pre>
+    </div>
+
+    <p>Leia por coluna. A do <code>list</code> multiplica por dez junto com a entrada: é <strong>O(n)</strong>, porque a única forma de saber se um valor está numa lista é olhar item por item. A do <code>set</code> não se move: é <strong>O(1)</strong>.</p>
+
+    <h2>Por que o set não precisa procurar</h2>
+    <p>Porque ele não guarda os valores em fila. Ele calcula <code>hash(x)</code>, transforma o número num endereço, e vai <em>direto</em> nesse endereço conferir. O tamanho do conjunto não muda o cálculo do endereço — daí a reta horizontal.</p>
+
+    <p>É o mesmo mecanismo do <code>dict</code>: um <code>set</code> é, para efeitos práticos, um dict só com chaves.</p>
+
+    <div class="callout bug">
+      <div class="callout-title">O <code>in</code> que ninguém percebe</div>
+      <div class="code bare" style="margin-top:14px">
+        <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--danger)">— O(n) dentro de um laço O(n)</span></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">vistos = []
+for record in records:            # n vezes
+    if record["id"] not in vistos:   # cada uma custa O(n)
+        vistos.append(record["id"])
+        yield record</code></pre>
+      </div>
+      <p>Isso é O(n²). Com 100 mil registros são cinco bilhões de comparações. Trocar <code>vistos = []</code> por <code>vistos = set()</code> e <code>append</code> por <code>add</code> resolve — uma palavra de diferença, e o pipeline sai de horas para segundos.</p>
+    </div>
+
+    <h2>Quando a lista ainda é a resposta certa</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Você precisa de</th><th>Use</th><th>Por quê</th></tr></thead>
+        <tbody>
+          <tr><td>Ordem, repetição, índice</td><td><code>list</code></td><td>set não tem nenhuma das três</td></tr>
+          <tr><td>Perguntar "já vi?"</td><td><code>set</code></td><td>O(1) contra O(n)</td></tr>
+          <tr><td>Associar chave a valor</td><td><code>dict</code></td><td>mesmo O(1), com carga</td></tr>
+          <tr><td>Percorrer uma vez e descartar</td><td>generator</td><td>O(1) de memória (aulas 02 e 05)</td></tr>
+          <tr><td>Itens não <em>hasheáveis</em></td><td><code>list</code></td><td>set exige <code>__hash__</code>; dict e list não têm</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">O que não entra num set</div>
+      <p>Só objetos imutáveis: <code>str</code>, <code>int</code>, <code>tuple</code> de imutáveis, <code>frozenset</code>. Um <code>dict</code> ou uma <code>list</code> levantam <code>TypeError: unhashable type</code>. Para deduplicar registros, use uma <strong>chave</strong> extraída deles — <code>(r["id"], r["date"])</code> — e não o registro inteiro.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="lab" data-title="Mão na massa: onde está o O(n²)" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula 07 &middot; Atividade 03</span></div>
+  <h1 class="act-title">Onde está o O(n²)</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Três funções que fazem a mesma coisa: juntar cada pedido ao usuário dele. Uma delas não escala. Ache antes de rodar.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">def join_a(orders, users):
+    for order in orders:
+        user = next(u for u in users if u["id"] == order["user_id"])
+        yield {**order, "city": user["city"]}
+
+def join_b(orders, users):
+    by_id = {u["id"]: u for u in users}
+    for order in orders:
+        yield {**order, "city": by_id[order["user_id"]]["city"]}
+
+def join_c(orders, users):
+    for order in orders:
+        for user in users:
+            if user["id"] == order["user_id"]:
+                yield {**order, "city": user["city"]}
+                break</code></pre>
+    </div>
+
+    <div class="predict" data-predict="p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="Qual é O(n·m) e qual é O(n+m)? E quanto isso custa com 50.000 usuários?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a resposta</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <p style="margin-top:18px"><strong>A e C são a mesma função.</strong> O <code>next(u for u in users if ...)</code> do A é um laço escrito de outro jeito — ele varre <code>users</code> até achar, exatamente como o <code>for</code> aninhado do C. As duas são O(n·m).</p>
+        <p><strong>B é O(n+m):</strong> paga uma varredura para construir o índice e depois cada busca é O(1). Com 50 mil usuários e 50 mil pedidos, A e C fazem até 2,5 bilhões de comparações; B faz 100 mil operações.</p>
+        <div class="callout tip">
+          <div class="callout-title">O padrão a memorizar</div>
+          <p><strong>Toda vez que você procura dentro de um laço, construa um índice antes do laço.</strong> Uma linha — <code>by_id = {u["id"]: u for u in users}</code> — troca a complexidade da função inteira. É o mesmo movimento que um banco de dados faz quando cria um índice, e é literalmente o assunto da aula 15.</p>
+        </div>
+        <p>A pegadinha do A é que ele <em>parece</em> lazy e enxuto. Comprimento de código não tem relação nenhuma com complexidade.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="deque: a lista tem duas pontas e só uma é barata" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 07 &middot; Atividade 04</span></div>
+  <h1 class="act-title">A lista tem duas pontas e só uma é barata</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Uma <code>list</code> do Python é um vetor contíguo. Acrescentar no fim é quase de graça; inserir no começo obriga a empurrar todo o resto uma casa para a direita.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>timeit</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">n= 1,000 | list.insert(0,x)    0.47 µs | deque.appendleft  0.04 µs -> 12x
+n=10,000 | list.insert(0,x)    3.37 µs | deque.appendleft  0.04 µs -> 84x</code></pre>
+    </div>
+
+    <p>De novo a mesma leitura: a coluna do <code>deque</code> não se move, a da <code>list</code> cresce com <code>n</code>. Um <code>deque</code> é uma lista duplamente ligada em blocos — ele tem ponteiro para as duas pontas, então as duas custam O(1).</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Operação</th><th><code>list</code></th><th><code>deque</code></th></tr></thead>
+        <tbody>
+          <tr><td><code>append(x)</code></td><td class="num">O(1)</td><td class="num">O(1)</td></tr>
+          <tr><td><code>pop()</code></td><td class="num">O(1)</td><td class="num">O(1)</td></tr>
+          <tr><td><code>insert(0, x)</code> / <code>appendleft</code></td><td class="num">O(n)</td><td class="num">O(1)</td></tr>
+          <tr><td><code>pop(0)</code> / <code>popleft</code></td><td class="num">O(n)</td><td class="num">O(1)</td></tr>
+          <tr><td><code>x[i]</code></td><td class="num">O(1)</td><td class="num">O(n)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>A última linha é o preço: o <code>deque</code> não tem acesso por índice barato. Ele é a estrutura certa para <strong>fila</strong> e para <strong>janela deslizante</strong>, não para acesso aleatório.</p>
+
+    <h2>Onde isso aparece em ETL</h2>
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ok)">— janela deslizante com tamanho fixo</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from collections import deque
+
+def moving_average(values, window: int):
+    """Yield the mean of the last `window` values, in constant memory."""
+    buffer = deque(maxlen=window)      # ele mesmo descarta o mais antigo
+    for value in values:
+        buffer.append(value)
+        if len(buffer) == window:
+            yield sum(buffer) / window</code></pre>
+    </div>
+
+    <p>O <code>maxlen</code> é o detalhe: ao encher, cada <code>append</code> empurra o item mais antigo para fora automaticamente. Sem ele você teria que escrever o descarte à mão — e é aí que aparece o <code>pop(0)</code> que custa O(n).</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Fila de tarefas</div>
+      <p><code>deque</code> é a fila do <code>collections</code>, e <code>popleft()</code> é O(1). Se você já escreveu <code>fila.pop(0)</code> num laço de processamento, aquilo era O(n²) disfarçado.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="video" data-title="Quanto pesa um registro" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 07 &middot; Atividade 05</span></div>
+  <h1 class="act-title">Quanto pesa um registro</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Um pipeline manipula milhões de registros de três campos. A escolha de <em>como</em> representar esses três campos muda o consumo por um fator de dois.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>tracemalloc</b> <span style="color:var(--ink-3)">— 200.000 registros de (id, amount, city)</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">dict              :   47.3 MB
+dataclass         :   30.5 MB
+namedtuple        :   27.5 MB
+tupla pura        :   25.9 MB
+dataclass(slots)  :   22.9 MB</code></pre>
+    </div>
+
+    <p>Do topo à base, <strong>2,1×</strong>. Num pipeline que carrega dez milhões de linhas, é a diferença entre caber e não caber.</p>
+
+    <h2>Por que o dict é o mais caro</h2>
+    <p>Porque cada dict carrega a própria tabela hash e as próprias chaves. Duzentos mil registros com os mesmos três nomes de campo guardam esses nomes duzentas mil vezes — e a estrutura que permite acrescentar um quarto campo a qualquer momento tem que existir em todos eles.</p>
+
+    <p>Uma <code>dataclass</code> normal guarda os atributos num <code>__dict__</code> por instância, então ainda paga parte disso. Com <code>slots=True</code>, o Python troca o dict por um vetor de posições fixas: os nomes dos campos passam a viver <strong>uma vez, na classe</strong>.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass(slots=True)
+class Order:
+    id: int
+    amount: float
+    city: str</code></pre>
+    </div>
+
+    <p>Uma palavra, 52% menos memória que o dict, e de quebra o atributo errado vira erro:</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">order = Order(1, 10.0, "sp")
+order.citty = "rj"      # typo</code></pre>
+      <div class="out"><span class="out-label">Saída real</span>AttributeError: 'Order' object has no attribute 'citty'</div>
+    </div>
+
+    <p>Com <code>dict</code>, <code>record["citty"] = "rj"</code> cria a chave e segue em silêncio — e o campo certo continua com o valor velho. É o mesmo formato de falha da aula 01: nada reclama, e o resultado sai errado.</p>
+
+    <h2>Como escolher</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Situação</th><th>Escolha</th></tr></thead>
+        <tbody>
+          <tr><td>Fronteira do sistema: JSON que chega, JSON que sai</td><td><code>dict</code></td></tr>
+          <tr><td>Registro que atravessa o pipeline, com campos conhecidos</td><td><code>dataclass(slots=True)</code></td></tr>
+          <tr><td>Registro que precisa ser chave de dict ou entrar num set</td><td><code>frozen=True</code> junto</td></tr>
+          <tr><td>Milhões de linhas, campos posicionais, só leitura</td><td><code>tuple</code> ou <code>namedtuple</code></td></tr>
+          <tr><td>Schema desconhecido em tempo de escrita</td><td><code>dict</code>, sem alternativa</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">O limite do <code>slots</code></div>
+      <p>Com <code>slots=True</code> você não pode acrescentar atributos em tempo de execução, e herança múltipla fica restrita. Nenhum dos dois costuma importar num registro de pipeline — mas se o seu código faz <code>setattr</code> dinâmico, o <code>slots</code> vai quebrá-lo, e o erro é claro.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="note" data-title="Para saber mais: por que uma tupla pesa menos que um objeto" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula 07 &middot; Atividade 06</span></div>
+  <h1 class="act-title">Por que uma tupla pesa menos que um objeto</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Vale abrir a conta, porque ela explica os cinco números da atividade anterior de uma vez.</p>
+
+    <p>Todo objeto Python carrega um cabeçalho fixo: contador de referências e ponteiro para o tipo. Em CPython de 64 bits, 16 bytes. O que muda entre as estruturas é <strong>o que vem depois do cabeçalho</strong>:</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Tupla: cabeçalho + n ponteiros</h3>
+        <p>Tamanho fixo, decidido na criação. Nada de espaço sobrando, nada de nomes. É o piso do que dá para pagar guardando três referências.</p>
+      </div>
+      <div class="trap">
+        <h3>Objeto com <code>__slots__</code>: cabeçalho + n ponteiros</h3>
+        <p>Praticamente uma tupla com nomes. Os nomes ficam na classe, uma vez só; a instância guarda só os valores, em posições fixas. Daí ele empatar quase com a tupla e ainda dar acesso por atributo.</p>
+      </div>
+      <div class="trap">
+        <h3>Objeto normal: cabeçalho + ponteiro para um <code>__dict__</code></h3>
+        <p>Some um dict inteiro por instância. O CPython otimiza compartilhando as chaves entre instâncias da mesma classe, e é por isso que a dataclass normal (30,5 MB) não chega ao custo do dict solto (47,3 MB).</p>
+      </div>
+      <div class="trap">
+        <h3><code>dict</code> solto: tabela hash com folga</h3>
+        <p>Uma tabela hash precisa de espaço vazio para não colidir — tipicamente um terço a mais que o necessário. E, sem a otimização de chaves compartilhadas, cada dict guarda a própria cópia da tabela de chaves.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">A regra prática</div>
+      <p>Quanto mais o Python precisa deixar em aberto sobre o objeto, mais ele custa. <code>dict</code> deixa tudo em aberto — nomes, quantidade, tipos — e cobra por isso. <code>slots</code> fecha a quantidade e os nomes. <code>tuple</code> fecha até a identidade dos campos.</p>
+    </div>
+
+    <p>E o mesmo raciocínio dá a ponte com a fase 2: um DataFrame do pandas ou uma tabela Parquet fecham também o <em>tipo</em> de cada coluna e guardam os valores lado a lado, sem cabeçalho por item. É por isso que um milhão de inteiros num <code>ndarray</code> ocupa 8 MB e num <code>list</code> de objetos ocupa dezenas.</p>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="video" data-title="Contar coisas: Counter e defaultdict" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 07 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Contar coisas</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Contar ocorrências e agrupar por chave são as duas agregações mais frequentes de um pipeline. O <code>collections</code> tem as duas prontas, e a versão pronta é mais rápida.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>timeit</b> <span style="color:var(--ink-3)">— contar 200.000 valores em 50 categorias</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">d[w] = d.get(w, 0) + 1     14.3 ms
+defaultdict(int)           13.7 ms
+Counter(palavras)           9.7 ms</code></pre>
+    </div>
+
+    <p>O <code>Counter</code> ganha porque o laço dele roda em C. Mas a razão principal de usá-lo não é velocidade — é o que ele diz a quem lê:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from collections import Counter
+
+por_cidade = Counter(r["city"] for r in records)
+print(por_cidade.most_common(5))          # os 5 maiores, já ordenados
+print(por_cidade["cidade-que-nao-existe"]) # 0, não KeyError</code></pre>
+    </div>
+
+    <h2>defaultdict: o agrupador</h2>
+    <p><code>Counter</code> conta; <code>defaultdict</code> acumula qualquer coisa. É a resposta para o "agrupar sem ordenar" da aula 04:</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">from collections import defaultdict
+
+por_regiao = defaultdict(list)
+for record in records:
+    por_regiao[record["region"]].append(record)   # sem checar se a chave existe
+
+totais = defaultdict(float)
+for record in records:
+    totais[record["region"]] += record["amount"]</code></pre>
+    </div>
+
+    <div class="callout bug">
+      <div class="callout-title">O defaultdict que cria chave sem você pedir</div>
+      <div class="code bare" style="margin-top:14px">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">d = defaultdict(list)
+if d["norte"]:            # só queria consultar...
+    ...
+print(dict(d))            # {'norte': []}  <- a chave foi criada</code></pre>
+      </div>
+      <p>Ler uma chave ausente de um <code>defaultdict</code> <strong>cria</strong> a chave. Num relatório por região isso inventa regiões vazias que ninguém entende de onde vieram. Para só consultar, use <code>d.get(k)</code> ou <code>k in d</code>.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">E lembre da aula 04</div>
+      <p><code>defaultdict</code> é O(n) de memória: ele segura tudo antes de responder qualquer coisa. Se a fonte já vem ordenada pela chave, <code>itertools.groupby</code> faz o mesmo agrupamento em O(1) — foi a medição de 0,00 MB contra 11,70 MB do exercício 4.4.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="video" data-title="Top-N sem ordenar tudo" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula 07 &middot; Atividade 08</span></div>
+  <h1 class="act-title">Top-N sem ordenar tudo</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">"Os 10 maiores pedidos do mês" é um requisito banal, e a implementação óbvia faz mil vezes mais trabalho do que precisa.</p>
+
+    <div class="code has-out">
+      <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— 1.000.000 de valores</span></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">sorted(dados, reverse=True)[:10]      323.8 ms   pico  11.4 MB
+heapq.nlargest(10, dados)              18.8 ms   pico   0.2 KB</code></pre>
+    </div>
+
+    <p><strong>17× mais rápido e 58 mil vezes menos memória.</strong> A diferença não é otimização de micro-detalhe: são dois algoritmos diferentes.</p>
+
+    <p><code>sorted</code> resolve um problema maior do que o pedido — ele ordena o milhão inteiro, O(n log n), materializando uma lista nova de um milhão de itens — e depois joga 999.990 fora. O <code>nlargest</code> mantém um <em>heap</em> de dez elementos e percorre a fonte uma vez: O(n log 10), com dez itens na memória.</p>
+
+    <div class="code">
+      <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+      <pre><code class="language-python">import heapq
+
+# funciona sobre qualquer iterável — inclusive um generator que lê do disco
+maiores = heapq.nlargest(10, read_jsonl(path), key=lambda r: r["amount"])
+menores = heapq.nsmallest(10, read_jsonl(path), key=lambda r: r["amount"])</code></pre>
+    </div>
+
+    <p>Repare que ele aceita um generator. Isso o coloca na lista curta de agregações O(1) de memória da aula 05 — junto com <code>sum</code>, <code>min</code> e <code>max</code>, e ao contrário de <code>sorted</code> e da mediana.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Onde ele deixa de compensar</div>
+      <p>Quando N se aproxima de n. <code>nlargest(500_000, dados)</code> sobre um milhão é mais lento que ordenar, porque o heap passa a ter meio milhão de elementos. A documentação sugere a regra: para N pequeno use <code>nlargest</code>; para N próximo de n use <code>sorted</code>; para N igual a 1 use <code>max</code>, que é O(1) e mais claro.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="note" data-title="A tabela de custos" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-note">Referência</span><span class="dot"></span><span>Aula 07 &middot; Atividade 09</span></div>
+  <h1 class="act-title">A tabela de custos</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Agora que cada linha foi medida, a tabela deixa de ser decoreba e vira consulta.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Operação</th><th><code>list</code></th><th><code>deque</code></th><th><code>set</code>/<code>dict</code></th></tr></thead>
+        <tbody>
+          <tr><td>acessar por índice</td><td class="num">O(1)</td><td class="num">O(n)</td><td>—</td></tr>
+          <tr><td>acessar por chave</td><td>—</td><td>—</td><td class="num">O(1)</td></tr>
+          <tr><td><code>x in ...</code></td><td class="num">O(n)</td><td class="num">O(n)</td><td class="num">O(1)</td></tr>
+          <tr><td>inserir no fim</td><td class="num">O(1)</td><td class="num">O(1)</td><td class="num">O(1)</td></tr>
+          <tr><td>inserir no começo</td><td class="num">O(n)</td><td class="num">O(1)</td><td>—</td></tr>
+          <tr><td>remover do meio</td><td class="num">O(n)</td><td class="num">O(n)</td><td class="num">O(1)</td></tr>
+          <tr><td>percorrer tudo</td><td class="num">O(n)</td><td class="num">O(n)</td><td class="num">O(n)</td></tr>
+          <tr><td>manter ordenado</td><td class="num">O(n log n)</td><td>—</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>As três perguntas que resolvem a escolha</h2>
+    <ol>
+      <li><strong>Qual operação eu faço mais vezes?</strong> Otimize essa, ignore as outras.</li>
+      <li><strong>Preciso de ordem?</strong> Se não, quase sempre é <code>set</code> ou <code>dict</code>.</li>
+      <li><strong>Preciso disso tudo na memória ao mesmo tempo?</strong> Se não, é generator — nenhuma linha desta tabela se aplica.</li>
+    </ol>
+
+    <div class="callout tip">
+      <div class="callout-title">O que quase sempre está errado</div>
+      <p>Uma <code>list</code> usada como conjunto (<code>if x in lista</code>) e uma <code>list</code> usada como fila (<code>lista.pop(0)</code>). São os dois O(n) escondidos mais comuns em código Python de dados, e os dois têm substituto de uma palavra.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Antes de trocar qualquer coisa</div>
+      <p>Meça. Um <code>in</code> sobre uma lista de dez itens não é problema de ninguém — trocar por set ali só deixa o código mais estranho. A tabela vale quando <code>n</code> cresce, e "cresce" é uma afirmação que precisa de número, como na aula 05.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="lab" data-title="Hora da prática: 7.1 a 7.4" data-min="50" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 07 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Exercícios 7.1 a 7.4</h1>
+  <div class="act-meta">50 min &middot; arquivo <code>exercises/python/lesson07.py</code></div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">7.1</span><h2>A curva de cada estrutura</h2><span class="ex-kind">medição</span></div>
+      <p>Reproduza a tabela da atividade 02 com as suas medições: <code>x in list</code> contra <code>x in set</code> em <code>n</code> = 1.000, 10.000 e 100.000. Depois acrescente uma quarta coluna: <code>x in tuple</code>. Ela se parece com qual das duas, e por quê?</p>
+      <div class="callout tip">
+        <div class="callout-title">Cuidado com o alvo</div>
+        <p>Procure sempre o <strong>último</strong> elemento. Se você procurar o primeiro, a lista responde em O(1) por acidente e a curva some.</p>
+      </div>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">7.2</span><h2>Conserte o O(n²)</h2><span class="ex-kind">refactor</span></div>
+      <p>Pegue a função <code>join_a</code> da atividade 03, meça-a com 20.000 pedidos e 20.000 usuários, reescreva como <code>join_b</code> e meça de novo. Reporte os dois tempos e diga qual é a complexidade de cada uma.</p>
+      <p>Depois responda: existe alguma situação em que <code>join_a</code> seria preferível? (Existe. Pense em memória e em quantos pedidos você realmente vai consumir.)</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">7.3</span><h2>O peso de um registro</h2><span class="ex-kind">medição</span></div>
+      <p>Reproduza a medição da atividade 05 com um registro seu de cinco campos, nas cinco representações: <code>dict</code>, <code>dataclass</code>, <code>dataclass(slots=True)</code>, <code>namedtuple</code> e <code>tuple</code>. Use o <code>measure</code> que você escreveu no exercício 5.1.</p>
+      <p>Comente qual você usaria no <code>read_jsonl</code> da aula 04 e por quê — lembrando que ele devolve o que veio do JSON.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">7.4</span><h2>Janela deslizante com <code>deque</code></h2><span class="ex-kind">implementação</span></div>
+      <p>Escreva <code>rolling_stats(values, window)</code> que produza, para cada posição, a média e o máximo dos últimos <code>window</code> valores — em memória O(window), não O(n). Prove com <code>tracemalloc</code> em três escalas que o pico não depende de <code>n</code>.</p>
+      <div class="callout warn">
+        <div class="callout-title">O detalhe que custa</div>
+        <p><code>max(buffer)</code> a cada passo é O(window), então a função inteira vira O(n·window). Para janelas grandes existe um algoritmo O(n) usando um <code>deque</code> de índices. Implemente a versão simples, meça, e comente onde ela deixaria de servir.</p>
+      </div>
+    </div>
+
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="lab" data-title="Hora da prática: 7.5 a 7.7 e entrega" data-min="40" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula 07 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Exercícios 7.5 a 7.7 e entrega</h1>
+  <div class="act-meta">40 min</div>
+  <div class="prose">
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">7.5</span><h2>Top-N em streaming</h2><span class="ex-kind">medição</span></div>
+      <p>Sobre o arquivo JSONL de 1 milhão de linhas da aula 05, obtenha os 10 maiores <code>amount</code> de duas formas: <code>sorted(...)[:10]</code> e <code>heapq.nlargest(10, ...)</code>. Meça tempo e pico das duas.</p>
+      <p>Depois ache o ponto de virada: para qual N o <code>nlargest</code> deixa de compensar? Teste N = 10, 100, 1.000, 10.000, 100.000.</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">7.6</span><h2>Deduplicar sem estourar a memória</h2><span class="ex-kind">análise</span></div>
+      <p>Escreva <code>dedupe(records, key)</code> que remove duplicatas em streaming, mantendo a primeira ocorrência. Meça o pico com 1 milhão de registros e 50 mil chaves distintas.</p>
+      <p>Depois responda com número: qual é a complexidade de memória dessa função em relação a <code>n</code> e em relação ao número de chaves distintas? E o que você faria se as chaves distintas não coubessem na memória?</p>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">7.7</span><h2>Desafio: o perfil de uma estrutura errada</h2><span class="ex-kind">desafio</span></div>
+      <p>Este código está correto e é lento. Ache as <strong>duas</strong> estruturas erradas, meça antes e depois, e reporte o ganho:</p>
+      <div class="code bare" style="margin-top:14px">
+        <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+        <pre><code class="language-python">def enrich(orders, users, blocked_ids):
+    """Attach the user's city and drop blocked users, newest first."""
+    out = []
+    for order in orders:
+        if order["user_id"] in blocked_ids:        # blocked_ids e uma list
+            continue
+        for user in users:                         # users e uma list
+            if user["id"] == order["user_id"]:
+                out.insert(0, {**order, "city": user["city"]})
+                break
+    return out</code></pre>
+      </div>
+      <p>São três problemas, na verdade — o <code>out.insert(0, ...)</code> também. Diga qual dos três dominava o tempo, e como você descobriu isso em vez de supor.</p>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>lesson07.py</code> com as tabelas de medição nos comentários. Toda afirmação de complexidade precisa das três escalas por trás — é a regra que a aula 05 estabeleceu e que vale daqui para frente.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de commitar</div>
+      <ul>
+        <li>Toda função definida é <strong>chamada</strong> no <code>main()</code>?</li>
+        <li>Você leu cada saída e conferiu contra o que esperava?</li>
+        <li>Toda afirmação de complexidade tem três escalas medidas?</li>
+        <li>Sobrou algum <code>import</code> não usado?</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; 08: Decorators e context managers</div>
+      <p>Duas construções que envolvem o seu código em vez de mudá-lo: uma para acrescentar comportamento a uma função, outra para garantir que a limpeza aconteça mesmo quando dá errado. Você já usou as duas sem saber — <code>@dataclass</code> é um decorator e <code>with open()</code> é um context manager.</p>
+    </div>
+
+  </div>
+</article>
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/11</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula 07</div>
+          <div class="lh-n">Estruturas de dados na prática</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/python/lesson07.py<span class="rs">o arquivo que você entrega</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://wiki.python.org/moin/TimeComplexity" target="_blank" rel="noopener">TimeComplexity<span class="rs">o custo de cada operação, por tipo</span></a></li>
+        <li><a href="https://docs.python.org/3/library/collections.html" target="_blank" rel="noopener">collections<span class="rs">deque, Counter, defaultdict</span></a></li>
+        <li><a href="https://docs.python.org/3/library/dataclasses.html" target="_blank" rel="noopener">dataclasses<span class="rs">slots, frozen, field</span></a></li>
+        <li><a href="https://docs.python.org/3/library/heapq.html" target="_blank" rel="noopener">heapq<span class="rs">nlargest sem ordenar tudo</span></a></li>
+        <li><a href="https://docs.python.org/3/reference/datamodel.html#slots" target="_blank" rel="noopener">__slots__<span class="rs">por que economiza memória</span></a></li>
+      </ul>
+      <h3>Livros da trilha</h3>
+      <ul>
+        <li><span class="res-static">Fluent Python, 2ª ed. — caps. 2, 3 e 5<span class="rs">Ramalho · sequências, dicts e classes de dados</span></span></li>
+        <li><span class="res-static">High Performance Python, 2ª ed. — cap. 4<span class="rs">Gorelick & Ozsvald · dicionários e conjuntos</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>

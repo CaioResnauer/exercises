@@ -52,6 +52,11 @@ window.COURSE = {
       id: "06", title: "Git e o repositório",
       slug: "lessons/06-git-e-o-repositorio.html",
       acts: 10, published: true, delivery: "pending"
+    },
+    {
+      id: "07", title: "Estruturas de dados na prática",
+      slug: "lessons/07-estruturas-de-dados.html",
+      acts: 11, published: true, delivery: "pending"
     }
   ],
 
