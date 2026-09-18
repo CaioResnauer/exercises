@@ -227,6 +227,8 @@ def main():
 
     #peak was 0.0MB on single loop, 56.1MB on tee.
     #tee solution does not seem appropriate in this case.
+    #it creates the entire dataset in memory since the first iterator is exhausted before the second start being consumed
+    
 
 
 if __name__ == "__main__":
