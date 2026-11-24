@@ -1,0 +1,961 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IPv6 e IP como dado</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="R02" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Redes para dados de infraestrutura &middot; Trilha extra</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula R02 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aula R01</div>
+  <div class="prose">
+    <p class="lead">A primeira metade é IPv6 do jeito que ele aparece num inventário: o mesmo endereço escrito de várias formas, sub-redes que nunca enchem, máquinas com cinco endereços. A segunda é a parte de engenharia: como guardar IP num banco e como fazer o join "este IP está nesta rede" sem que ele vire o gargalo do pipeline.</p>
+
+    <p>Ao terminar, você responde:</p>
+    <ul>
+      <li><strong>Esses dois textos são o mesmo endereço?</strong> E por que um <code>COUNT(DISTINCT ipv6)</code> em texto mente;</li>
+      <li><strong>Esse IPv6 diz alguma coisa sobre o equipamento?</strong> Às vezes diz o MAC dele;</li>
+      <li><strong>Que tipo de coluna eu uso?</strong> <code>inet</code>, inteiro, bytes ou texto, e o que cada um custa no join.</li>
+    </ul>
+
+    <div class="callout tip">
+      <div class="callout-title">Os endereços desta aula</div>
+      <p>Todo IPv6 de exemplo está dentro de <code>2001:db8::/32</code>, o bloco reservado para documentação (RFC 3849), o mesmo que o projeto <code>network-inventory</code> usa. Nenhum deles existe na internet, de propósito.</p>
+    </div>
+
+    <p><strong>Tempo estimado:</strong> 60 min de leitura, 1 h 30 de exercícios. Os exemplos de Postgres rodaram num PostgreSQL 16 de verdade; os de DuckDB, no DuckDB 2.0.1. Arquivo de entrega: <code>exercises/python/net02.py</code>.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="128 bits e as muitas formas de escrever um endereço" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R02 &middot; Atividade 02</span></div>
+  <h1 class="act-title">128 bits e as muitas formas de escrever um endereço</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Um IPv6 é um inteiro de 128 bits, escrito em oito grupos de 16 bits em hexadecimal. A ideia é a mesma do IPv4; o que muda é que a escrita tem regras de abreviação, e cada sistema aplica as regras de um jeito.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import ipaddress
+
+forms = ["2001:0DB8:0010:0020:0000:0000:0000:0025", "2001:db8:10:20:0:0:0:25",
+         "2001:db8:10:20::25", "2001:DB8:10:20::0025"]
+addresses = {ipaddress.ip_address(f) for f in forms}
+print(len(forms), "textos,", len(addresses), "endereço")
+
+ip = ipaddress.ip_address("2001:db8:10:20::25")
+print(ip.compressed)
+print(ip.exploded)
+print(int(ip))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>4 textos, 1 endereço
+2001:db8:10:20::25
+2001:0db8:0010:0020:0000:0000:0000:0025
+42540766411301936260313629377154777125</div>
+</div>
+
+    <p>Quatro textos diferentes, um endereço só. As duas abreviações permitidas são:</p>
+    <ul>
+      <li><strong>Zeros à esquerda de cada grupo podem sumir</strong>: <code>0db8</code> vira <code>db8</code>, <code>0025</code> vira <code>25</code>;</li>
+      <li><strong>Uma sequência de grupos inteiros de zero vira <code>::</code></strong>, uma única vez por endereço. Duas vezes seria ambíguo: não daria para saber quantos zeros vão em cada lado.</li>
+    </ul>
+
+    <p>E como hexadecimal não liga para maiúscula, <code>DB8</code> e <code>db8</code> também são iguais. Para não depender de cada ferramenta, existe uma forma canônica (RFC 5952): minúsculas, sem zero à esquerda, e o <code>::</code> na <strong>maior</strong> sequência de zeros, a primeira se houver empate, nunca para um grupo só.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">for text in ("2001:db8:0:0:1:0:0:1", "2001:db8:0:1:0:0:0:1", "2001:db8:0:1:1:1:1:1"):
+    print(f"{text:&lt;24} -&gt; {ipaddress.ip_address(text)}")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>2001:db8:0:0:1:0:0:1     -&gt; 2001:db8::1:0:0:1
+2001:db8:0:1:0:0:0:1     -&gt; 2001:db8:0:1::1
+2001:db8:0:1:1:1:1:1     -&gt; 2001:db8:0:1:1:1:1:1</div>
+</div>
+
+    <p>É isso que o <code>compressed</code> do <code>ipaddress</code> produz, e o <code>exploded</code> faz o contrário: os 32 dígitos, sem abreviação nenhuma.</p>
+
+    <div class="callout bug">
+      <div class="callout-title">Como isso vira número errado</div>
+      <p>O CMDB grava o que o discovery leu do Windows (<code>2001:DB8:10:20::25</code>), o DHCPv6 exporta outra forma, o firewall outra. Um <code>COUNT(DISTINCT ip)</code> sobre a coluna de texto conta o mesmo servidor três vezes, e um join entre as fontes não acha nada. Nenhum erro, só um inventário com o triplo de endereços e zero reconciliação. É o exercício N2.1.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">A regra, de novo</div>
+      <p>Mesma regra da R01, com mais motivo: converta na entrada. Se a coluna precisa ser texto (um CSV, uma chave de cache), grave <code>compressed</code> e nunca outra coisa.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="O /64 e a sub-rede que nunca enche" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R02 &middot; Atividade 03</span></div>
+  <h1 class="act-title">O /64 e a sub-rede que nunca enche</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Em IPv4 você escolhe o tamanho da sub-rede pela quantidade de hosts. Em IPv6, uma rede de usuários é <code>/64</code> sempre, tenha ela três máquinas ou três mil.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import ipaddress
+
+lan = ipaddress.ip_network("2001:db8:10:20::/64")
+site = lan.supernet(new_prefix=48)
+print("site      ", site)
+print("lan       ", lan)
+print("endereços ", f"{lan.num_addresses:,}")
+print("/64 por /48", f"{2 ** (64 - 48):,}")
+
+host = ipaddress.ip_address("2001:db8:10:20:21a:2bff:fe3c:4d5e")
+groups = host.exploded.split(":")
+print("prefixo global", ":".join(groups[:3]), "| sub-rede", groups[3], "| interface", ":".join(groups[4:]))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>site       2001:db8:10::/48
+lan        2001:db8:10:20::/64
+endereços  18,446,744,073,709,551,616
+/64 por /48 65,536
+prefixo global 2001:0db8:0010 | sub-rede 0020 | interface 021a:2bff:fe3c:4d5e</div>
+</div>
+
+    <p>O desenho típico de uma empresa: o provedor ou o registro entrega um <code>/48</code> por site; os 16 bits seguintes numeram as sub-redes (65.536 por site); os 64 bits finais são o <strong>identificador de interface</strong>, a parte do host. O endereço se lê em três pedaços fixos, sem número mágico: os três primeiros grupos são o site, o quarto é a sub-rede, os quatro últimos são o host.</p>
+
+    <h2>Por que sempre /64</h2>
+    <p>Porque a autoconfiguração (SLAAC, atividade 05) precisa de exatamente 64 bits para o host montar o próprio endereço. Uma LAN com prefixo diferente de /64 quebra esse mecanismo. Prefixos mais longos aparecem em casos específicos, como <code>/127</code> em link entre roteadores e <code>/128</code> em loopback, que são o equivalente do <code>/31</code> e do <code>/32</code> da aula anterior.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Quando a métrica de utilização NÃO ajuda</div>
+      <p>Uma <code>/64</code> tem 18 quintilhões de endereços. Com 3.000 máquinas a utilização é 0,000000000000016%, e com 30 mil continua zero para qualquer arredondamento. Copiar o <code>mart_subnet_utilization</code> de IPv4 para IPv6 produz uma coluna de zeros. Em IPv6 o que se acompanha é outra coisa: <strong>quantas /64 de cada /48 já foram alocadas</strong>, quantos hosts ativos por /64 (para dimensionar tabela de vizinhos no switch) e quantos endereços cada host usa.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="Os tipos de endereço que aparecem no inventário" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R02 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Os tipos de endereço que aparecem no inventário</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Em IPv4 o tipo do endereço é exceção. Em IPv6 toda interface tem pelo menos dois tipos ao mesmo tempo, e confundir um com o outro estraga a reconciliação.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Bloco</th><th>Tipo</th><th>Num inventário</th></tr></thead>
+        <tbody>
+          <tr><td><code>2000::/3</code></td><td>global unicast</td><td>o endereço "de verdade", roteável</td></tr>
+          <tr><td><code>fe80::/10</code></td><td>link-local</td><td>toda interface tem; só vale no próprio enlace; <strong>não identifica o equipamento</strong></td></tr>
+          <tr><td><code>fc00::/7</code> (na prática <code>fd00::/8</code>)</td><td>ULA, unique local</td><td>o equivalente do RFC 1918: interno, não roteado na internet</td></tr>
+          <tr><td><code>ff00::/8</code></td><td>multicast</td><td>grupos; num log de origem, é ruído ou erro</td></tr>
+          <tr><td><code>::1/128</code></td><td>loopback</td><td>a própria máquina</td></tr>
+          <tr><td><code>::ffff:0:0/96</code></td><td>IPv4 mapeado</td><td>um IPv4 escrito como IPv6 (atividade 07)</td></tr>
+          <tr><td><code>2001:db8::/32</code></td><td>documentação</td><td>exemplos; em produção, dado de teste</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>IPv6 não tem broadcast. O que fazia esse papel agora é multicast, e por isso não existe "endereço de broadcast" a descontar da sub-rede.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">seen = ["2001:db8:10:20::25", "fe80::21a:2bff:fe3c:4d5e", "fd12:3456:789a:1::10",
+        "ff02::1", "::1", "::ffff:10.20.1.7", "2606:4700:4700::1111"]
+
+for text in seen:
+    ip = ipaddress.ip_address(text)
+    flags = [name for name in ("is_global", "is_private", "is_link_local", "is_multicast",
+                               "is_loopback") if getattr(ip, name)]
+    print(f"{text:&lt;26} {' '.join(flags):&lt;26} mapped={ip.ipv4_mapped}")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>2001:db8:10:20::25         is_private                 mapped=None
+fe80::21a:2bff:fe3c:4d5e   is_private is_link_local   mapped=None
+fd12:3456:789a:1::10       is_private                 mapped=None
+ff02::1                    is_global is_multicast     mapped=None
+::1                        is_private is_loopback     mapped=None
+::ffff:10.20.1.7           is_private                 mapped=10.20.1.7
+2606:4700:4700::1111       is_global                  mapped=None</div>
+</div>
+
+    <p>Duas leituras desta saída. A primeira: o <code>fe80::...</code> é a forma link-local do mesmo host do primeiro exemplo da atividade 03 (repare no final <code>21a:2bff:fe3c:4d5e</code>); o discovery costuma trazer os dois, e só o global serve para reconciliar. A segunda: <code>ff02::1</code>, que é multicast de escopo de enlace, sai com <code>is_global=True</code>. As propriedades do <code>ipaddress</code> seguem o registro da IANA, e o registro não foi feito para classificar inventário.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">A regra, igual à da R01</div>
+      <p>Para classificar, use uma lista ordenada de <code>(tipo, bloco)</code> e teste pertinência. As flags servem como conferência, não como classificador. É o exercício N2.3.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="video" data-title="SLAAC, EUI-64 e o host com cinco endereços" data-min="8" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R02 &middot; Atividade 05</span></div>
+  <h1 class="act-title">SLAAC, EUI-64 e o host com cinco endereços</h1>
+  <div class="act-meta">08 min</div>
+  <div class="prose">
+    <p class="lead">Em IPv4 quem dá o endereço é o DHCP, e o lease fica registrado. Em IPv6 o host pode montar o próprio endereço sozinho, e aí não existe lease nenhum para o seu relatório ler.</p>
+
+    <h2>Como o host se configura</h2>
+    <p>O roteador anuncia periodicamente o prefixo da rede (Router Advertisement). O host pega o <code>/64</code> anunciado e completa os 64 bits do identificador de interface por conta própria. Isso é a SLAAC, autoconfiguração sem estado (RFC 4862). Existem três jeitos de completar esses 64 bits:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Método</th><th>Identificador vem de</th><th>Consequência para os dados</th></tr></thead>
+        <tbody>
+          <tr><td>EUI-64</td><td>o MAC da placa</td><td>estável; dá para <strong>recuperar o MAC</strong> a partir do IPv6</td></tr>
+          <tr><td>Estável e opaco</td><td>hash de prefixo e segredo do host</td><td>estável na rede, mas não revela o MAC</td></tr>
+          <tr><td>Temporário (privacidade)</td><td>aleatório, troca periodicamente</td><td>o mesmo notebook aparece com endereços novos ao longo do dia</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Servidores e equipamentos de rede costumam usar endereço fixo ou DHCPv6 com reserva. Notebooks e celulares, com Windows, macOS, iOS e Android modernos, usam endereços temporários por padrão. É isso que faz um único host ter cinco IPv6 numa tabela de vizinhos.</p>
+
+    <h2>O EUI-64, montado à mão</h2>
+    <p>O método é mecânico: parte o MAC de 48 bits ao meio, enfia <code>ff:fe</code> no meio para chegar a 64 bits, e inverte o sétimo bit do primeiro byte (o bit universal/local).</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">def slaac_eui64(prefix: str, mac: str) -&gt; ipaddress.IPv6Address:
+    """Build the SLAAC address a host derives from its MAC (modified EUI-64)."""
+    octets = bytearray(int(part, 16) for part in mac.split(":"))
+    octets[0] ^= 0x02                                  # flip the universal/local bit
+    interface_id = bytes(octets[:3]) + b"\xff\xfe" + bytes(octets[3:])
+    network = ipaddress.ip_network(prefix)
+    return network.network_address + int.from_bytes(interface_id, "big")
+
+print(slaac_eui64("2001:db8:10:20::/64", "a4:5e:60:d1:22:9f"))
+print(slaac_eui64("fe80::/64", "a4:5e:60:d1:22:9f"))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>2001:db8:10:20:a65e:60ff:fed1:229f
+fe80::a65e:60ff:fed1:229f</div>
+</div>
+
+    <p>O MAC <code>a4:5e:60:d1:22:9f</code> virou <code>a65e:60ff:fed1:229f</code>: o <code>a4</code> virou <code>a6</code> por causa do bit invertido, e o <code>ff:fe</code> está no meio. O mesmo identificador aparece no global e no link-local, só o prefixo muda.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Por que isso interessa a quem reconcilia inventário</div>
+      <p>O caminho de volta também é mecânico. Se um IPv6 tem <code>ff</code> e <code>fe</code> no meio do identificador de interface (os bytes 11 e 12, contando do zero), você extrai o MAC, e o MAC é a chave que liga o endereço ao CMDB e à porta do switch. É uma reconciliação de graça que pouca gente conhece; o exercício N2.2 pede a função inversa.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Quando NÃO funciona</div>
+      <p>Endereço temporário e endereço estável-opaco não carregam MAC: o <code>ff:fe</code> não está lá e não há o que extrair. E mesmo quando está, o MAC pode ser aleatório: celulares e notebooks modernos usam MAC privado por rede, e o bit local ligado denuncia isso. Um MAC extraído com segundo dígito hexadecimal 2, 6, A ou E é administrado localmente e provavelmente não bate com nada no CMDB.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="lab" data-title="Mão na massa: prever o endereço SLAAC" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula R02 &middot; Atividade 06</span></div>
+  <h1 class="act-title">Prever o endereço SLAAC</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Uma impressora com MAC <code>00:1a:2b:3c:4d:5e</code> entra na rede <code>2001:db8:10:20::/64</code> e usa EUI-64. Escreva o endereço global dela na forma canônica.</p>
+
+    <p>Dois cuidados: o bit invertido muda o primeiro byte, e a forma canônica tira os zeros à esquerda de cada grupo.</p>
+
+    <div class="predict" data-predict="r02-p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="2001:db8:10:20:____:____:____:____"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a saída</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div style="margin-top:18px">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— slaac_eui64("2001:db8:10:20::/64", "00:1a:2b:3c:4d:5e")</span></span><button class="copy">Copiar</button></div>
+  <pre><code>2001:db8:10:20:21a:2bff:fe3c:4d5e</code></pre>
+</div>
+        </div>
+        <p style="margin-top:16px">O primeiro byte <code>00</code> com o bit universal/local invertido vira <code>02</code>, e o grupo <code>021a</code> perde o zero à esquerda: <code>21a</code>. O resto é o MAC com <code>ff:fe</code> no meio: <code>2bff</code>, <code>fe3c</code>, <code>4d5e</code>.</p>
+        <p>Os dois erros mais comuns são esquecer o bit (e escrever <code>1a:2bff:...</code>, que é outro endereço) e colocar o <code>fffe</code> no lugar errado, depois dos três primeiros <em>grupos</em> em vez dos três primeiros <em>bytes</em> do MAC. É o mesmo endereço do primeiro host da atividade 03: agora você sabe de onde ele veio.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="video" data-title="Dual-stack e o IPv4 disfarçado de IPv6" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R02 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Dual-stack e o IPv4 disfarçado de IPv6</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Quase nenhuma rede corporativa é só IPv6. O normal é dual-stack: cada equipamento tem IPv4 e IPv6 ao mesmo tempo, o DNS responde os dois, e o cliente prefere IPv6 quando consegue.</p>
+
+    <h2>O que muda no modelo de dados</h2>
+    <p>Um dispositivo deixa de ter "um IP". Tem zero ou um IPv4, zero a vários IPv6 globais, um link-local por interface e, num notebook, uma coleção de temporários que muda ao longo do dia. Duas colunas <code>ipv4</code> e <code>ipv6</code> no cadastro do equipamento não comportam isso. O modelo que comporta é uma tabela de endereços com uma linha por <code>(dispositivo, interface, endereço)</code>, a família, a origem (DHCP, SLAAC, estático, temporário) e o período em que foi visto. É o exercício N2.4, que é de modelagem e por escrito.</p>
+
+    <h2>O IPv4 que chega escrito como IPv6</h2>
+    <p>Um servidor dual-stack que escuta num socket IPv6 recebe as conexões IPv4 como endereços mapeados, <code>::ffff:</code> seguido do IPv4. Muita aplicação grava isso no log assim mesmo:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">inventory = {ipaddress.ip_address("10.20.1.7"), ipaddress.ip_address("10.20.1.8")}
+log = ["::ffff:10.20.1.7", "::ffff:10.20.1.8", "2001:db8:10:20::25"]   # dual-stack web server
+
+raw = [ipaddress.ip_address(x) for x in log]
+print("casam sem normalizar:", sum(ip in inventory for ip in raw))
+
+normal = [ip.ipv4_mapped or ip for ip in raw]
+print("casam normalizando  :", sum(ip in inventory for ip in normal))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>casam sem normalizar: 0
+casam normalizando  : 2</div>
+</div>
+
+    <p>O log do servidor web tinha dois clientes do inventário, e o join achou zero. O <code>ipv4_mapped</code> devolve o IPv4 de dentro, ou <code>None</code> se o endereço não é mapeado, e o <code>or ip</code> mantém os IPv6 de verdade como estão.</p>
+
+    <div class="callout bug">
+      <div class="callout-title">O mesmo erro, em SQL</div>
+      <p>No Postgres, <code>'::ffff:10.20.1.7'::inet &lt;&lt; '10.20.0.0/16'::cidr</code> é falso (atividade 09): são famílias diferentes, e o banco não converte sozinho. Quem conta "acessos vindos da rede do site" sobre o log cru conta zero para os clientes IPv4 e não percebe, porque os clientes IPv6 continuam aparecendo.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="video" data-title="Guardar IP num banco: inteiro, bytes ou texto" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R02 &middot; Atividade 08</span></div>
+  <h1 class="act-title">Guardar IP num banco: inteiro, bytes ou texto</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Se o banco tem um tipo de rede, use. Se não tem, as alternativas são inteiro, bytes ou texto canônico, e cada uma quebra num lugar diferente.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">for text in ("10.20.1.7", "192.168.1.1", "255.255.255.255"):
+    ip = ipaddress.ip_address(text)
+    as_signed = struct.unpack("!i", ip.packed)[0]      # what a signed 32-bit INT column holds
+    print(f"{text:&lt;16} {int(ip):&gt;13,}   int32 com sinal: {as_signed:&gt;14,}")
+
+v6 = ipaddress.ip_address("2001:db8:10:20::25")
+print(f"\nIPv6: {int(v6).bit_length()} bits, BIGINT vai até {2**63 - 1:,}")
+print("packed:", len(ipaddress.ip_address("10.20.1.7").packed), "bytes e", len(v6.packed), "bytes")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>10.20.1.7          169,083,143   int32 com sinal:    169,083,143
+192.168.1.1      3,232,235,777   int32 com sinal: -1,062,731,519
+255.255.255.255  4,294,967,295   int32 com sinal:             -1
+
+IPv6: 126 bits, BIGINT vai até 9,223,372,036,854,775,807
+packed: 4 bytes e 16 bytes</div>
+</div>
+
+    <p>Três fatos saem daqui. Um IPv4 cabe em 32 bits, mas <strong>sem sinal</strong>: de <code>128.0.0.0</code> para cima ele passa de 2.147.483.647, o limite de um <code>INTEGER</code> com sinal. O Postgres recusa o insert, o que é bom. Pior é a ferramenta que converte em silêncio: o <code>192.168.1.1</code> vira um número negativo, e a ordenação quebra.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">ips = ["10.20.1.7", "127.0.0.1", "172.16.0.5", "192.168.1.1"]
+as_int32 = {ip: struct.unpack("!i", ipaddress.ip_address(ip).packed)[0] for ip in ips}
+print(sorted(ips, key=as_int32.get))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>['172.16.0.5', '192.168.1.1', '10.20.1.7', '127.0.0.1']</div>
+</div>
+
+    <p>Ordenado pelo inteiro com sinal, <code>172.16.0.5</code> e <code>192.168.1.1</code> vêm antes de <code>10.20.1.7</code>. O segundo fato: um IPv6 tem 128 bits e não cabe em <code>BIGINT</code> nenhum. O terceiro: em bytes, os dois têm tamanho fixo (4 e 16), o que torna <code>BINARY(16)</code> uma coluna única para as duas famílias.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Formato</th><th>Ordena certo?</th><th>Range join</th><th>Quando</th></tr></thead>
+        <tbody>
+          <tr><td><code>inet</code>/<code>cidr</code> (Postgres), <code>INET</code> (DuckDB)</td><td>sim</td><td>operadores nativos, índice GiST</td><td>sempre que existir</td></tr>
+          <tr><td>IPv4 em <code>BIGINT</code></td><td>sim</td><td><code>BETWEEN</code> em inteiros</td><td>banco sem tipo de rede, ou Spark</td></tr>
+          <tr><td>IPv6 em dois <code>BIGINT</code> (alto, baixo)</td><td>sim, com deslocamento de 2<sup>63</sup></td><td>para <code>/64</code>, vira join de igualdade na parte alta</td><td>volume grande de IPv6 sem tipo nativo</td></tr>
+          <tr><td><code>BINARY(16)</code></td><td>sim, comparação byte a byte</td><td><code>BETWEEN</code> em bytes</td><td>uma coluna só para as duas famílias</td></tr>
+          <tr><td>texto canônico</td><td><strong>não</strong></td><td>não</td><td>chave de exibição e de export, nunca de cálculo</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">A linha que mais rende</div>
+      <p>A terceira. Como toda LAN IPv6 é <code>/64</code>, todos os endereços de uma sub-rede têm os mesmos 64 bits altos. "Este IPv6 está em qual <code>/64</code>?" deixa de ser range join e vira join de <strong>igualdade</strong> na parte alta, que qualquer motor executa com hash. O exercício N2.7 mede isso.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="video" data-title="inet e cidr no Postgres" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R02 &middot; Atividade 09</span></div>
+  <h1 class="act-title"><code style="font-size:.82em">inet</code> e <code style="font-size:.82em">cidr</code> no Postgres</h1>
+  <div class="act-meta">07 min &middot; rodado em PostgreSQL 16</div>
+  <div class="prose">
+    <p class="lead">O Postgres tem os dois tipos que o <code>ipaddress</code> chama de <code>ip_interface</code> e <code>ip_network</code>, com os operadores de pertinência prontos. É a forma mais curta de escrever um relatório de inventário em SQL.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>sql</b> <span style="color:var(--ink-3)">— try_cidr é uma função auxiliar que devolve o erro como texto</span></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-sql">SELECT '10.20.1.7/22'::inet           AS como_inet,
+       try_cidr('10.20.1.7/22')       AS como_cidr,
+       '10.20.0.0/22'::cidr           AS rede,
+       host('10.20.1.7/22'::inet)     AS host,
+       network('10.20.1.7/22'::inet)  AS network,
+       masklen('10.20.1.7/22'::inet)  AS masklen;</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>  como_inet   |                como_cidr                 |     rede     |   host    |   network    | masklen 
+--------------+------------------------------------------+--------------+-----------+--------------+---------
+ 10.20.1.7/22 | ERRO: invalid cidr value: "10.20.1.7/22" | 10.20.0.0/22 | 10.20.1.7 | 10.20.0.0/22 |      22</div>
+</div>
+
+    <p><code>inet</code> guarda um host com a máscara da rede dele, exatamente o <code>ip_interface</code> da R01. <code>cidr</code> é uma rede e recusa bits de host, como o <code>ip_network</code> estrito. <code>host()</code>, <code>network()</code> e <code>masklen()</code> extraem as partes.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>sql</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-sql">SELECT '10.20.5.77'::inet &lt;&lt;  '10.20.4.0/23'::cidr  AS "IP dentro (&lt;&lt;)",
+       '10.20.4.0/23'::cidr &lt;&lt;= '10.20.4.0/23'::cidr AS "dentro ou igual (&lt;&lt;=)",
+       '10.20.0.0/16'::cidr &gt;&gt;  '10.20.4.0/23'::cidr AS "contém (&gt;&gt;)",
+       '10.20.7.0/25'::cidr &amp;&amp; '10.20.7.64/26'::cidr AS "sobrepõe (&amp;&amp;)",
+       '::ffff:10.20.1.7'::inet &lt;&lt; '10.20.0.0/16'::cidr AS "mapeado dentro?";
+
+SELECT ip, family(ip) FROM (VALUES ('2001:db8::25'::inet), ('10.20.1.100'), ('10.20.1.9'),
+                                   ('fe80::1'), ('9.9.9.9')) t(ip)
+ORDER BY ip;</code></pre>
+  <div class="out"><span class="out-label">Saída real</span> IP dentro (&lt;&lt;) | dentro ou igual (&lt;&lt;=) | contém (&gt;&gt;) | sobrepõe (&amp;&amp;) | mapeado dentro? 
+----------------+-----------------------+-------------+---------------+-----------------
+ t              | t                     | t           | t             | f
+
+      ip      | family 
+--------------+--------
+ 9.9.9.9      |      4
+ 10.20.1.9    |      4
+ 10.20.1.100  |      4
+ 2001:db8::25 |      6
+ fe80::1      |      6</div>
+</div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Operador</th><th>Lê-se</th><th>Uso típico</th></tr></thead>
+        <tbody>
+          <tr><td><code>&lt;&lt;</code></td><td>está estritamente dentro de</td><td>IP do lease dentro da sub-rede</td></tr>
+          <tr><td><code>&lt;&lt;=</code></td><td>dentro ou igual</td><td>sub-rede dentro do bloco do site, incluindo o próprio bloco</td></tr>
+          <tr><td><code>&gt;&gt;</code>, <code>&gt;&gt;=</code></td><td>contém</td><td>o mesmo, lido do lado da rede</td></tr>
+          <tr><td><code>&amp;&amp;</code></td><td>se sobrepõe</td><td>conflitos de IPAM (o N1.18 em uma linha)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Repare em duas linhas da saída. O IPv4 mapeado não está dentro de <code>10.20.0.0/16</code>, como a atividade 07 avisou. E o <code>ORDER BY</code> num <code>inet</code> ordena numericamente e põe todo IPv4 antes de todo IPv6: <code>9.9.9.9</code> vem antes de <code>10.20.1.9</code>, que vem antes de <code>10.20.1.100</code>. É a ordem que a coluna de texto da R01 não conseguia dar.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">E o DuckDB?</div>
+      <p>O DuckDB tem um tipo <code>INET</code> numa extensão oficial (<code>INSTALL inet; LOAD inet;</code>), com <code>host()</code>, <code>netmask()</code>, <code>network()</code>, <code>broadcast()</code> e os operadores <code>&lt;&lt;=</code> e <code>&gt;&gt;=</code>. <strong>Ela não rodou aqui</strong>: o ambiente desta aula não baixa extensões, e o <code>INSTALL</code> falhou com erro de rede. Na sua máquina, com internet, é uma linha. Por isso a próxima atividade mostra o DuckDB com a técnica que funciona em qualquer banco: inteiros.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="note" data-title="Para saber mais: o range join em três motores" data-min="9" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula R02 &middot; Atividade 10</span></div>
+  <h1 class="act-title">O range join em três motores</h1>
+  <div class="act-meta">09 min &middot; o mesmo join da R01, agora em SQL</div>
+  <div class="prose">
+    <p class="lead">50 mil leases, 1.200 sub-redes <code>/24</code>, a pergunta "cada lease está em qual sub-rede?". O mesmo problema da atividade 09 da R01, medido em SQLite, Postgres e DuckDB.</p>
+
+    <h2>Postgres: o plano conta a história</h2>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>sql</b> <span style="color:var(--ink-3)">— EXPLAIN ANALYZE, sem e com índice GiST</span></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-sql">EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF)
+SELECT count(*) FROM lease l JOIN subnet s ON l.ip &lt;&lt; s.net;
+
+CREATE INDEX ix_subnet_net ON subnet USING gist (net inet_ops);
+VACUUM ANALYZE subnet;
+
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF)
+SELECT count(*) FROM lease l JOIN subnet s ON l.ip &lt;&lt; s.net;</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   -&gt;  Nested Loop (actual rows=50000 loops=1)
+         Join Filter: (l.ip &lt;&lt; (s.net)::inet)
+         Rows Removed by Join Filter: 59950000
+         -&gt;  Seq Scan on lease l (actual rows=50000 loops=1)
+         -&gt;  Materialize (actual rows=1200 loops=50000)
+               -&gt;  Seq Scan on subnet s (actual rows=1200 loops=1)
+ Planning Time: 0.239 ms
+ Execution Time: 1699.990 ms
+
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   -&gt;  Nested Loop (actual rows=50000 loops=1)
+         -&gt;  Seq Scan on lease l (actual rows=50000 loops=1)
+         -&gt;  Index Only Scan using ix_subnet_net on subnet s (actual rows=1 loops=50000)
+               Index Cond: (net &gt;&gt; l.ip)
+               Heap Fetches: 0
+ Planning Time: 0.314 ms
+ Execution Time: 577.122 ms</div>
+</div>
+
+    <p>Sem índice, o plano é um <code>Nested Loop</code> que testou <strong>60 milhões</strong> de pares e jogou fora 59.950.000. Com um índice GiST sobre o <code>cidr</code> (a classe de operadores <code>inet_ops</code>), cada lease vira uma busca no índice que devolve exatamente uma linha: <code>actual rows=1 loops=50000</code>. Os tempos variam a cada execução; a forma do plano não.</p>
+
+    <h2>SQLite: o índice que não basta</h2>
+    <p>Sem tipo de rede, com IP em inteiro e um índice em <code>net_start</code>:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— 50.000 leases, 1.200 sub-redes</span></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">db = sqlite3.connect(":memory:")
+db.execute("CREATE TABLE subnet (cidr TEXT, net_start INTEGER, net_end INTEGER)")
+db.execute("CREATE TABLE lease (ip INTEGER)")
+db.executemany("INSERT INTO subnet VALUES (?, ?, ?)",
+               [(str(n), int(n.network_address), int(n.broadcast_address)) for n in subnets])
+db.executemany("INSERT INTO lease VALUES (?)", [(ip,) for ip in leases])
+db.execute("CREATE INDEX ix_subnet_start ON subnet (net_start)")
+
+between = """SELECT count(*) FROM lease l
+             JOIN subnet s ON l.ip BETWEEN s.net_start AND s.net_end"""
+t0 = time.perf_counter()
+print("BETWEEN  :", db.execute(between).fetchone()[0], f"{time.perf_counter() - t0:.2f} s")
+for row in db.execute("EXPLAIN QUERY PLAN " + between):
+    print("   plano:", row[-1])</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>BETWEEN  : 50000 1.98 s
+   plano: SCAN l
+   plano: SEARCH s USING INDEX ix_subnet_start (net_start&lt;?)</div>
+</div>
+
+    <p>O plano usa o índice, mas só para <code>net_start &lt; ?</code>: para cada lease ele percorre todas as sub-redes que começam antes do IP, metade da tabela em média, e testa o fim de cada uma. Um índice B-tree resolve uma desigualdade, não duas. A saída é reescrever a pergunta: "qual é a <em>última</em> sub-rede que começa antes deste IP?" é uma busca de uma linha só, e depois basta conferir se o IP não passou do fim dela.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— a mesma contagem, como busca do piso</span></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">floor = """SELECT count(*) FROM (
+             SELECT l.ip,
+                    (SELECT s.rowid FROM subnet s WHERE s.net_start &lt;= l.ip
+                     ORDER BY s.net_start DESC LIMIT 1) AS candidate
+             FROM lease l) c
+           JOIN subnet s ON s.rowid = c.candidate AND c.ip &lt;= s.net_end"""
+t0 = time.perf_counter()
+print("floor    :", db.execute(floor).fetchone()[0], f"{time.perf_counter() - t0:.2f} s")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>floor    : 50000 0.02 s</div>
+</div>
+
+    <p>Mesmo resultado, quase cem vezes mais rápido. É a busca binária da R01 escrita em SQL: <code>ORDER BY net_start DESC LIMIT 1</code> sobre um índice é o <code>bisect</code>.</p>
+
+    <h2>DuckDB: o motor que já sabe</h2>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— IP como UBIGINT, sem índice nenhum</span></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">query = """SELECT count(*) FROM lease l
+           JOIN subnet s ON l.ip BETWEEN s.net_start AND s.net_end"""
+t0 = time.perf_counter()
+print("DuckDB BETWEEN:", con.execute(query).fetchone()[0], f"{time.perf_counter() - t0:.3f} s")
+
+plan = con.execute("EXPLAIN " + query).fetchall()[0][1]
+print("operador:", [line.strip("╭─ ┴┬╮") for line in plan.splitlines() if "Join ─" in line])</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>DuckDB BETWEEN: 50000 0.021 s
+operador: ['IE Join']</div>
+</div>
+
+    <p>O DuckDB reconhece duas desigualdades no join e escolhe um <code>IE Join</code>, um algoritmo de join por desigualdade baseado em ordenação. Você escreve o <code>BETWEEN</code> ingênuo e ele faz o trabalho do piso sozinho.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Quando a técnica do piso NÃO serve</div>
+      <p>Ela supõe sub-redes que não se sobrepõem, exatamente como o <code>bisect</code>. Com a hierarquia do IPAM (bloco do site contendo as sub-redes), a última que começa antes do IP pode ser uma <code>/24</code> vizinha, e o <code>LEFT JOIN</code> devolve "sem sub-rede" para um IP que estava no <code>/16</code>. Filtre a hierarquia antes (só as folhas) ou use o GiST, que entende contenção.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Na fase 2</div>
+      <p>No Spark não existe IE Join nem GiST. Um <code>BETWEEN</code> entre dois DataFrames grandes vira <code>BroadcastNestedLoopJoin</code> ou produto cartesiano. As saídas são as mesmas ideias desta atividade: transmitir a tabela de sub-redes se ela é pequena, ou criar uma chave de igualdade grosseira (o <code>/16</code> em IPv4, os 64 bits altos em IPv6) para o join e filtrar o intervalo depois.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="note" data-title="Armadilhas: IPv6 e IP no banco" data-min="7" hidden>
+  <div class="kicker"><span class="tag is-note">Armadilhas</span><span class="dot"></span><span>Aula R02 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Armadilhas: IPv6 e IP no banco</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Começando por um relatório de "IPs duplicados" que só acha falso positivo:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python"># interface table exported from three routers: (device, interface, ipv6)
+interfaces = [("rtr-atl-01", "Gi0/0", "fe80::1"), ("rtr-atl-01", "Gi0/1", "fe80::1"),
+              ("rtr-mex-01", "Gi0/0", "fe80::1"), ("rtr-atl-01", "Gi0/0", "2001:db8:10:1::1"),
+              ("rtr-mex-01", "Gi0/0", "2001:db8:30:1::1")]
+
+counts = collections.Counter(ipaddress.ip_address(ip) for _, _, ip in interfaces)
+print("'IPs duplicados':", {str(ip): n for ip, n in counts.items() if n &gt; 1})
+
+real = collections.Counter(ipaddress.ip_address(ip) for _, _, ip in interfaces
+                           if not ipaddress.ip_address(ip).is_link_local)
+print("sem link-local  :", {str(ip): n for ip, n in real.items() if n &gt; 1})</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>'IPs duplicados': {'fe80::1': 3}
+sem link-local  : {}</div>
+</div>
+
+    <p>Todo roteador usa <code>fe80::1</code> em várias interfaces, e isso é correto: link-local só precisa ser único dentro do próprio enlace. Um relatório de duplicidade que não filtra link-local acusa um conflito por interface de roteador da empresa, e a equipe de rede para de olhar o relatório.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Link-local tratado como endereço do equipamento</h3>
+        <p>É o caso acima, e o mesmo vale para reconciliação: um <code>fe80::</code> no CMDB não liga o equipamento a nada fora do enlace. Filtre antes de deduplicar e antes de reconciliar.</p>
+      </div>
+      <div class="trap">
+        <h3>Texto não canônico</h3>
+        <p><code>COUNT(DISTINCT)</code>, <code>GROUP BY</code> e join sobre IPv6 em texto multiplicam o mesmo endereço por cada forma de escrita (atividade 02). Os números sobem, nenhum erro aparece.</p>
+      </div>
+      <div class="trap">
+        <h3>IPv4 mapeado no log</h3>
+        <p>O cliente IPv4 de um servidor dual-stack chega como <code>::ffff:10.20.1.7</code> e não casa com o inventário IPv4 (atividade 07). Normalize com <code>ipv4_mapped</code> antes do join.</p>
+      </div>
+      <div class="trap">
+        <h3>IPv4 num inteiro de 32 bits com sinal</h3>
+        <p>De <code>128.0.0.0</code> para cima vira negativo, e a ordenação e o <code>BETWEEN</code> quebram para metade do espaço de endereços (atividade 08). Use <code>BIGINT</code> ou inteiro sem sinal.</p>
+      </div>
+      <div class="trap">
+        <h3>A zona do link-local</h3>
+        <p>Um link-local pode vir com o nome da interface, <code>fe80::1%eth0</code>. Para o <code>ipaddress</code> ele é diferente de <code>fe80::1</code>:</p>
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import ipaddress
+
+a = ipaddress.ip_address("fe80::1%eth0")
+b = ipaddress.ip_address("fe80::1")
+print(a == b, a.scope_id, b.scope_id)
+print({a, b})</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>False eth0 None
+{IPv6Address('fe80::1'), IPv6Address('fe80::1%eth0')}</div>
+</div>
+        <p>Num <code>set</code> ou num <code>GROUP BY</code>, as duas formas viram dois endereços. Decida se a zona importa para a pergunta e normalize antes.</p>
+      </div>
+      <div class="trap">
+        <h3>Utilização de <code>/64</code></h3>
+        <p>Dá zero para sempre (atividade 03). Um painel que mostra isso ao lado das sub-redes IPv4 sugere que o IPv6 não está sendo usado, quando a métrica é que não se aplica.</p>
+      </div>
+    </div>
+
+    <p>E o bug barulhento, para comparar. Ordenar uma lista com as duas famílias levanta exceção, que é o comportamento certo:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">seen = [ipaddress.ip_address(x) for x in ("2001:db8::25", "10.20.1.9", "fe80::1", "9.9.9.9")]
+try:
+    sorted(seen)
+except TypeError as error:
+    print("TypeError:", error)
+
+print([str(ip) for ip in sorted(seen, key=lambda ip: (ip.version, int(ip)))])</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>TypeError: 10.20.1.9 and 2001:db8::25 are not of the same version
+['9.9.9.9', '10.20.1.9', '2001:db8::25', 'fe80::1']</div>
+</div>
+
+    <p>A chave <code>(version, int(ip))</code> reproduz a ordem do <code>inet</code> do Postgres: todo IPv4 antes, depois todo IPv6, numericamente dentro de cada família.</p>
+  </div>
+</article>
+
+<!-- ==================== 12 ==================== -->
+<article class="act" id="a12" data-kind="lab" data-title="Hora da prática: N2.1 a N2.8 e entrega" data-min="90" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula R02 &middot; Atividade 12</span></div>
+  <h1 class="act-title">Exercícios N2.1 a N2.8 e entrega</h1>
+  <div class="act-meta">90 min &middot; arquivo <code>exercises/python/net02.py</code></div>
+  <div class="prose">
+    <p class="lead">Quatro exercícios de IPv6 e quatro de IP no banco. Só biblioteca padrão: <code>sqlite3</code> faz o papel do banco. O N2.8 é opcional e é o único que pede Postgres ou DuckDB.</p>
+
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— crie como exercises/python/net02_data.py</span></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python"># exercises/python/net02_data.py — inputs for N2.1 to N2.4
+
+CMDB_IPV6 = ["2001:DB8:10:20::25", "2001:db8:10:20:0:0:0:25", "2001:0db8:0010:0020::0025",
+             "2001:db8:10:20::26", "2001:db8:10:20::1a", "2001:db8:10:20::1A",
+             "fe80::21a:2bff:fe3c:4d5e", "FE80::21A:2BFF:FE3C:4D5E", "2001:db8:10:21::25"]
+
+NEIGHBORS = ["2001:db8:10:20:21a:2bff:fe3c:4d5e", "2001:db8:10:20:a65e:60ff:fed1:229f",
+             "2001:db8:10:20:5c4d:91e2:7a03:b6f1", "2001:db8:10:20::25",
+             "2001:db8:10:20:3a2c:4aff:fe11:9b07", "2001:db8:30:1:fc1e:2ff:fe00:4c01"]
+LEASE_MACS = {"00:1a:2b:3c:4d:5e", "38:2c:4a:11:9b:07", "f0:9f:c2:10:aa:01"}
+
+SEEN_V6 = ["2001:db8:10:20::25", "2606:4700:4700::1111", "fd12:3456:789a:1::10",
+           "fe80::1", "ff02::1", "ff05::1:3", "::1", "::ffff:10.20.1.7",
+           "2a00:1450:4001:82a::200e", "fd00::53", "2001:db8:30:1::1"]
+
+DEVICE_IPS = [("lap-0141", "10.20.4.18"), ("lap-0141", "2001:db8:10:20:5c4d:91e2:7a03:b6f1"),
+              ("lap-0141", "2001:db8:10:20:9e1:44d0:12aa:73c2"), ("srv-db-02", "10.20.6.20"),
+              ("srv-db-02", "2001:db8:10:60::20"), ("prn-0007", "10.20.8.9"),
+              ("cam-0310", "2001:db8:10:70::31"), ("lap-0188", "10.20.4.77"),
+              ("lap-0188", "fe80::8c3:11ff:fe20:4a1b")]</code></pre>
+</div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N2.1</span><h2>Canonizar e contar</h2><span class="ex-kind">normalização</span></div>
+      <p>Para <code>CMDB_IPV6</code>, imprima quantos valores distintos existem como texto e como endereço, e liste cada endereço que aparece escrito de mais de uma forma, com quantas formas.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— o que deve sair</span></span><button class="copy">Copiar</button></div>
+  <pre><code>distintos como texto   : 9
+distintos como endereço: 5
+2001:db8:10:20::25           &lt;- 3 formas
+2001:db8:10:20::1a           &lt;- 2 formas
+fe80::21a:2bff:fe3c:4d5e     &lt;- 2 formas</code></pre>
+</div>
+          <p>Nove textos, cinco endereços. O escorregão comum é normalizar com <code>.lower()</code> e achar que resolveu: isso junta <code>1a</code> com <code>1A</code>, mas não junta <code>2001:db8:10:20:0:0:0:25</code> com <code>2001:db8:10:20::25</code>. Só o parse resolve as duas abreviações e a caixa de uma vez.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N2.2</span><h2>Do IPv6 de volta ao MAC</h2><span class="ex-kind">reconciliação</span></div>
+      <p>Escreva <code>eui64_to_mac(address) -&gt; str | None</code>, o inverso do <code>slaac_eui64</code> da atividade 05, devolvendo <code>None</code> quando o endereço não é EUI-64. Aplique em <code>NEIGHBORS</code> e diga, para cada um, se o MAC extraído está em <code>LEASE_MACS</code>.</p>
+      <p>Por escrito: um dos MACs extraídos é administrado localmente. Qual, e como você sabe sem consultar nada?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— endereço, MAC extraído, resultado</span></span><button class="copy">Copiar</button></div>
+  <pre><code>2001:db8:10:20:21a:2bff:fe3c:4d5e      00:1a:2b:3c:4d:5e  lease encontrado
+2001:db8:10:20:a65e:60ff:fed1:229f     a4:5e:60:d1:22:9f  sem lease
+2001:db8:10:20:5c4d:91e2:7a03:b6f1     -                  
+2001:db8:10:20::25                     -                  
+2001:db8:10:20:3a2c:4aff:fe11:9b07     38:2c:4a:11:9b:07  lease encontrado
+2001:db8:30:1:fc1e:2ff:fe00:4c01       fe:1e:02:00:4c:01  sem lease</code></pre>
+</div>
+          <p>O teste de EUI-64 é olhar os bytes 11 e 12 do endereço (contando do zero), os do meio do identificador de interface: precisam ser <code>ff</code> e <code>fe</code>. O último MAC, <code>fe:1e:02:00:4c:01</code>, tem o bit local ligado (o segundo dígito hexadecimal é <code>e</code>): é um MAC privado ou virtual, e não é falha da sua função ele não bater com o DHCP.</p>
+          <p>Onde escorregam: esquecer de desinverter o bit universal/local e devolver <code>02:1a:2b:...</code>, que nunca bate com lease nenhum; e testar o texto: <code>"fffe" in address</code> nunca é verdadeiro, porque há um <code>:</code> no meio (<code>2ff:fe00</code>), e <code>"ff:fe" in address</code> acerta por sorte e aceita qualquer endereço que tenha essa sequência em outra posição. Teste os bytes.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N2.3</span><h2>Classificar IPv6 por tipo</h2><span class="ex-kind">classificação</span></div>
+      <p>Classifique <code>SEEN_V6</code> com os tipos da tabela da atividade 04 (<code>global_unicast</code>, <code>documentation</code>, <code>ula</code>, <code>link_local</code>, <code>multicast</code>, <code>loopback</code>, <code>ipv4_mapped</code>) e conte por tipo. Depois imprima quantos o <code>is_global</code> marcaria.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— contagem por tipo</span></span><button class="copy">Copiar</button></div>
+  <pre><code>documentation   2
+global_unicast  2
+ipv4_mapped     1
+link_local      1
+loopback        1
+multicast       2
+ula             2
+(is_global marcaria 4 como global)</code></pre>
+</div>
+          <p>A ordem das regras importa: <code>documentation</code> precisa vir antes de <code>global_unicast</code>, porque <code>2001:db8::/32</code> está dentro de <code>2000::/3</code>. Quem testa o bloco maior primeiro classifica os dois endereços de documentação como globais. E o <code>is_global</code> conta 4 porque inclui multicast, que a sua regra separa.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N2.4</span><h2>Dual-stack: contar e modelar</h2><span class="ex-kind">modelagem</span></div>
+      <p>A partir de <code>DEVICE_IPS</code>, ignorando link-local, conte quantos dispositivos são dual-stack, só IPv4 e só IPv6, e liste os que têm mais de um IPv6 global.</p>
+      <p>Por escrito, e esta é a parte principal: proponha a tabela <code>device_address</code> que guardaria isso num warehouse. Colunas, tipos, chave, e como você trataria os endereços temporários que mudam ao longo do dia sem que a tabela cresça sem limite.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— contagem</span></span><button class="copy">Copiar</button></div>
+  <pre><code>dual-stack 2
+só IPv4    2
+só IPv6    1
+com mais de um IPv6 global: ['lap-0141']</code></pre>
+</div>
+          <p>O <code>lap-0188</code> é o detalhe: ele tem um IPv6, mas é link-local, então é "só IPv4". Quem não filtra conta 3 dual-stack.</p>
+          <p>Para a tabela, o desenho que funciona é uma linha por <code>(device_id, interface, address, family, source)</code> com <code>first_seen</code> e <code>last_seen</code>, e <code>source</code> distinguindo <code>dhcp</code>, <code>slaac</code>, <code>static</code> e <code>temporary</code>. Os temporários entram com retenção curta ou agregados por dia ("quantos endereços temporários este host usou"), porque o valor deles é a contagem e o vínculo no período, não cada endereço para sempre. O erro mais comum é propor colunas <code>ipv4</code> e <code>ipv6</code> na tabela de dispositivo, que é exatamente o modelo que a atividade 07 mostra não caber.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N2.5</span><h2>IPv6 em dois <code>BIGINT</code> sem perder a ordem</h2><span class="ex-kind">armazenamento</span></div>
+      <p>Escreva <code>split_v6(address) -&gt; tuple[int, int]</code> e <code>join_v6(hi, lo)</code>. Os dois inteiros precisam caber num inteiro de 64 bits <strong>com sinal</strong> (o <code>INTEGER</code> do SQLite) e ordenar o par <code>(hi, lo)</code> tem que dar a mesma ordem que ordenar os endereços. Prove as duas coisas com <code>assert</code> sobre 10 mil endereços aleatórios, e mostre o par de <code>::</code>, <code>fe80::1</code> e <code>ffff:...:ffff</code>.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— o que a solução de referência mostra</span></span><button class="copy">Copiar</button></div>
+  <pre><code>::                                        hi= -9223372036854775808  lo= -9223372036854775808
+2001:db8:10:20::25                        hi= -6917232468738179040  lo= -9223372036854775771
+fe80::1                                   hi=  9115285645797883904  lo= -9223372036854775807
+ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff   hi=  9223372036854775807  lo=  9223372036854775807
+ordem preservada em 10.000 endereços aleatórios; tudo cabe em BIGINT com sinal</code></pre>
+</div>
+          <p>A chave é subtrair 2<sup>63</sup> de cada metade: isso leva o intervalo [0, 2<sup>64</sup>) para [−2<sup>63</sup>, 2<sup>63</sup>) sem mudar a ordem. Quem só corta a metade alta em 64 bits funciona para <code>2001:db8::</code> (começa com 0x2, menor que 2<sup>63</sup>) e estoura para <code>fe80::</code> e <code>ff02::</code>. O teste com endereços aleatórios pega; o teste só com exemplos de documentação não pega, e é por isso que ele é pedido.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N2.6</span><h2>Atribuir sub-rede no SQLite, com buracos</h2><span class="ex-kind">SQL</span></div>
+      <p>Com os dados abaixo, carregue <code>SUBNETS_V4</code> e <code>LEASES_V4</code> num SQLite em memória, com IP em inteiro. Produza a contagem de leases por sub-rede <strong>e</strong> a de leases sem sub-rede, pela técnica do piso da atividade 10, e confira contra o <code>BETWEEN</code> com <code>assert</code>. Meça as duas.</p>
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— crie como exercises/python/net02_sql_data.py</span></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python"># exercises/python/net02_sql_data.py — inputs for N2.6 and N2.7
+import ipaddress
+import random
+
+random.seed(2026)
+# IPv4: 600 /24 subnets with gaps between them; some leases land in the gaps
+SUBNETS_V4 = [ipaddress.ip_network(f"10.{a}.{b}.0/24") for a in range(20, 26) for b in range(0, 200, 2)]
+LEASES_V4 = [ipaddress.ip_address(int(ipaddress.ip_address(f"10.{random.randint(20, 25)}."
+                                                          f"{random.randint(0, 199)}.0"))
+                                  + random.randint(1, 254)) for _ in range(40_000)]
+# IPv6: 300 /64 subnets under 2001:db8:10::/48 and 20,000 addresses
+SUBNETS_V6 = [ipaddress.ip_network(f"2001:db8:10:{i:x}::/64") for i in range(0, 600, 2)]
+LEASES_V6 = [ipaddress.ip_address(f"2001:db8:10:{random.randrange(0, 600):x}::")
+             + random.getrandbits(64) for _ in range(20_000)]</code></pre>
+</div>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— contagens e tempos</span></span><button class="copy">Copiar</button></div>
+  <pre><code>leases: 40000 | sem sub-rede: 20129 | sub-redes com lease: 600
+top 3: [('10.25.86.0/24', 50), ('10.21.90.0/24', 50), ('10.25.88.0/24', 49)]
+floor + LEFT JOIN: 0.02 s   BETWEEN: 0.83 s</code></pre>
+</div>
+          <p>Metade dos leases cai nos buracos entre as sub-redes, de propósito. A consulta da atividade 10 usa <code>JOIN</code> e simplesmente descarta esses leases, o que dá uma contagem por sub-rede certa e um total errado. Aqui o piso precisa de <code>LEFT JOIN</code> com a condição <code>ip &lt;= net_end</code> <strong>dentro do <code>ON</code></strong>: no <code>WHERE</code>, ela transforma o <code>LEFT</code> de volta em <code>INNER</code> e os 20 mil somem de novo. É o mesmo cuidado do calendário da aula 14: o <code>LEFT JOIN</code> só preserva as linhas se nada depois dele filtrar o lado direito.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N2.7</span><h2>Desafio: o <code>/64</code> como join de igualdade</h2><span class="ex-kind">desafio</span></div>
+      <p>Com <code>SUBNETS_V6</code> e <code>LEASES_V6</code> do mesmo arquivo e a sua <code>split_v6</code>, conte quantos endereços estão em alguma <code>/64</code> cadastrada e quantos não estão, <strong>sem nenhuma desigualdade no SQL</strong>. Confira contra uma contagem em Python. Depois, por escrito: por que isso funciona para <code>/64</code> e não funcionaria para uma sub-rede <code>/56</code>, e o que você faria para uma <code>/56</code>?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— contagem e tempo</span></span><button class="copy">Copiar</button></div>
+  <pre><code>em sub-rede: 10086  sem sub-rede: 9914  (0.004 s, join de igualdade em net_hi)</code></pre>
+</div>
+          <p>Todo endereço de uma <code>/64</code> tem a mesma metade alta, então <code>ON s.net_hi = l.ip_hi</code> é a pertinência inteira. Numa <code>/56</code> os últimos 8 bits da metade alta variam, e a igualdade deixa de valer. A saída é a mesma ideia com outra máscara: guarde também <code>ip_hi</code> com os 8 bits zerados (ou o prefixo <code>/56</code> calculado), e faça a igualdade nessa coluna. Uma chave de igualdade por tamanho de prefixo, que é o N1.20 de novo.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N2.8</span><h2>Opcional: o N2.6 com tipo de rede</h2><span class="ex-kind">em casa</span></div>
+      <p>No Postgres com <code>inet</code>/<code>cidr</code> e um índice GiST, ou no DuckDB com <code>INSTALL inet; LOAD inet;</code>, refaça o N2.6 usando <code>&lt;&lt;=</code> em vez de inteiros. Cole o <code>EXPLAIN</code> num comentário e diga qual operador de join cada motor escolheu. Não tem gabarito: o plano é a resposta.</p>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>net02.py</code> com as saídas em comentário e as respostas escritas do N2.2, N2.4 e N2.7. Os dois arquivos de dados ficam ao lado, como <code>net02_data.py</code> e <code>net02_sql_data.py</code>.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de entregar</div>
+      <ul>
+        <li>Toda comparação de IPv6 é entre objetos <code>ipaddress</code> ou inteiros, nunca texto?</li>
+        <li>Link-local foi filtrado onde a pergunta é sobre o equipamento?</li>
+        <li>O <code>split_v6</code> foi testado com endereços acima de <code>8000::</code>?</li>
+        <li>No N2.6, a condição do intervalo está no <code>ON</code> do <code>LEFT JOIN</code>?</li>
+        <li>Os tempos medidos estão no comentário, com o tamanho dos dados ao lado?</li>
+      </ul>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 13 ==================== -->
+<article class="act" id="a13" data-kind="recap" data-title="Fechamento" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-lab">Fechamento</span><span class="dot"></span><span>Aula R02 &middot; Atividade 13</span></div>
+  <h1 class="act-title">Fechamento</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">IPv6 não é mais difícil que IPv4 para quem trabalha com os dados. É mais fácil de calcular (sem número mágico) e mais fácil de errar na limpeza (muitas escritas, muitos endereços por host).</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ideia</th><th>Em uma linha</th></tr></thead>
+        <tbody>
+          <tr><td>Notação</td><td>várias escritas por endereço; canonize na entrada (<code>compressed</code>)</td></tr>
+          <tr><td>Estrutura</td><td><code>/48</code> por site, <code>/64</code> por LAN, 64 bits de host</td></tr>
+          <tr><td>Utilização</td><td>não se aplica a <code>/64</code>; meça alocação de <code>/64</code> e hosts ativos</td></tr>
+          <tr><td>Tipos</td><td>link-local em toda interface; só o global reconcilia</td></tr>
+          <tr><td>SLAAC</td><td>sem lease; EUI-64 revela o MAC, temporário não revela nada</td></tr>
+          <tr><td>Dual-stack</td><td>uma linha por endereço, não duas colunas; normalize o IPv4 mapeado</td></tr>
+          <tr><td>No banco</td><td><code>inet</code> se houver; senão <code>BIGINT</code> sem perder o sinal, ou dois <code>BIGINT</code> com deslocamento</td></tr>
+          <tr><td>Range join</td><td>GiST, IE Join ou a busca do piso; em <code>/64</code>, igualdade na metade alta</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Se perguntarem na entrevista</h2>
+    <p>"Como você reportaria utilização de IPv6?" é uma pergunta boa porque a resposta ingênua está errada. Uma resposta que mostra entendimento: <em>"percentual de endereços não faz sentido numa /64. Eu acompanharia quantas /64 de cada /48 estão alocadas, quantos hosts ativos tem cada /64, e quantos endereços cada host usa, porque os temporários mudam o tempo todo."</em></p>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; R03: DNS e zonas reversas</div>
+      <p>O banco de dados distribuído que traduz nomes: A, AAAA, CNAME e PTR, por que o PTR mora numa zona que lê o IP de trás para frente, e o relatório de higiene de DNS que encontra registros sem par. E o ponto final que, sozinho, zera um join.</p>
+    </div>
+  </div>
+</article>
+
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/13</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula R02</div>
+          <div class="lh-n">IPv6 e IP como dado</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/python/net02.py<span class="rs">o arquivo que você entrega</span></span></li>
+        <li><span class="res-static">net02_data.py e net02_sql_data.py<span class="rs">as entradas dos exercícios</span></span></li>
+      </ul>
+      <h3>Vídeos</h3>
+      <ul>
+        <li><a href="https://www.professormesser.com/network-plus/n10-009/n10-009-video/n10-009-training-course/" target="_blank" rel="noopener">Professor Messer, Network+ N10-009<span class="rs">1.8 IPv6 Addressing · 3.4 IPv6 and SLAAC</span></a></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://www.postgresql.org/docs/current/functions-net.html" target="_blank" rel="noopener">PostgreSQL: network address functions<span class="rs">os operadores &lt;&lt;, &lt;&lt;=, &gt;&gt;, &amp;&amp; e as funções host, network, masklen</span></a></li>
+        <li><a href="https://duckdb.org/docs/2.0/core_extensions/inet.html" target="_blank" rel="noopener">DuckDB: inet extension<span class="rs">o tipo INET, para o N2.8</span></a></li>
+        <li><a href="https://docs.python.org/3/howto/ipaddress.html" target="_blank" rel="noopener">An introduction to the ipaddress module<span class="rs">docs.python.org · IPv6 e as propriedades</span></a></li>
+        <li><a href="https://www.rfc-editor.org/rfc/rfc3849" target="_blank" rel="noopener">RFC 3849<span class="rs">o prefixo 2001:db8::/32 de documentação</span></a></li>
+        <li><span class="res-static">RFC 5952 e RFC 4862<span class="rs">forma canônica do texto e SLAAC · busque pelo número em rfc-editor.org</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>

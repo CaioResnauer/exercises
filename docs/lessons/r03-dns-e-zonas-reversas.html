@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DNS e zonas reversas</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="R03" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Redes para dados de infraestrutura &middot; Trilha extra</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula R03 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; pré-requisito: aulas R01 e R02</div>
+  <div class="prose">
+    <p class="lead">DNS é um banco de dados chave-valor distribuído, e para quem trabalha com inventário ele é mais uma fonte a reconciliar. Cada registro é uma linha: nome, tipo, valor. Os problemas são os de qualquer fonte: linhas sem par, chaves escritas de jeitos diferentes, dados que ninguém apagou.</p>
+
+    <p>Ao terminar, você sabe:</p>
+    <ul>
+      <li><strong>Ler um arquivo de zona</strong> e transformá-lo em tabela, incluindo a regra do ponto final que muda o significado de um nome;</li>
+      <li><strong>Por que o PTR mora em <code>in-addr.arpa</code></strong> e como ir do nome reverso ao IP e de volta, nas duas famílias;</li>
+      <li><strong>Montar um relatório de higiene de DNS</strong>: registro sem par reverso, PTR órfão, CNAME que aponta para o nada, e de onde cada um costuma vir.</li>
+    </ul>
+
+    <div class="callout tip">
+      <div class="callout-title">Onde isso encaixa</div>
+      <p>É o <code>mart_dns_hygiene</code> do projeto <code>network-inventory</code>. A atividade 11 fala do projeto, mas <strong>sem o SQL</strong>: ela dá as definições, as armadilhas e os números do gabarito para você conferir a sua query. Os exercícios em Python usam zonas de brinquedo, pequenas o bastante para você conferir à mão.</p>
+    </div>
+
+    <p><strong>Tempo estimado:</strong> 50 min de leitura, 1 h 20 de exercícios. Nada aqui consulta DNS de verdade: tudo roda sobre arquivos de zona, como um export que você receberia. Arquivo de entrega: <code>exercises/python/net03.py</code>.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="Zona, nome, tipo, TTL e valor" data-min="8" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R03 &middot; Atividade 02</span></div>
+  <h1 class="act-title">Zona, nome, tipo, TTL e valor</h1>
+  <div class="act-meta">08 min</div>
+  <div class="prose">
+    <p class="lead">Uma zona é o pedaço do DNS que um servidor responde com autoridade, e o arquivo de zona é o export dela em texto. É o formato mais comum em que DNS chega para análise.</p>
+
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>corp.example.com.zone</b> <span style="color:var(--ink-3)">— a zona de exemplo desta aula</span></span><button class="copy">Copiar</button></div>
+  <pre><code>$ORIGIN corp.example.com.
+$TTL 3600
+; forward zone (SOA omitted)
+@            IN NS    ns1
+ns1          IN A     10.20.6.53
+srv-db-02    IN A     10.20.6.20
+             IN AAAA  2001:db8:10:60::20
+srv-web-01   IN A     10.20.6.30
+srv-web-01   IN A     10.20.6.31
+www          IN CNAME srv-web-01
+app          IN CNAME www
+portal       IN CNAME app.corp.example.com.
+legacy       IN CNAME srv-old-09
+prn-0007 300 IN A     10.20.8.9
+cam-0310     IN AAAA  2001:db8:10:70::31
+reports      IN CNAME srv-bi-01.corp.example.com</code></pre>
+</div>
+
+    <p>Cada linha é um registro: <strong>dono</strong> (o nome), <strong>TTL</strong> opcional, classe (<code>IN</code>, quase sempre), <strong>tipo</strong> e <strong>valor</strong>. Três regras de leitura fazem toda a diferença:</p>
+    <ul>
+      <li><strong>Um nome que termina em ponto é absoluto</strong> (FQDN): <code>app.corp.example.com.</code> é exatamente isso.</li>
+      <li><strong>Um nome sem ponto final é relativo</strong> e ganha o <code>$ORIGIN</code> no fim: <code>www</code> vira <code>www.corp.example.com.</code>. O <code>@</code> é o próprio origin.</li>
+      <li><strong>Dono em branco repete o anterior</strong>: a linha <code>IN AAAA</code> sem nome pertence a <code>srv-db-02</code>. E sem TTL na linha, vale o <code>$TTL</code>.</li>
+    </ul>
+
+    <p>Aplicando as três regras, a zona vira uma tabela. Este é o resultado que o leitor do exercício N3.1 precisa produzir:</p>
+
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— nome, TTL, tipo, valor</span></span><button class="copy">Copiar</button></div>
+  <pre><code>corp.example.com.                  3600  NS    ns1.corp.example.com.
+ns1.corp.example.com.              3600  A     10.20.6.53
+srv-db-02.corp.example.com.        3600  A     10.20.6.20
+srv-db-02.corp.example.com.        3600  AAAA  2001:db8:10:60::20
+srv-web-01.corp.example.com.       3600  A     10.20.6.30
+srv-web-01.corp.example.com.       3600  A     10.20.6.31
+www.corp.example.com.              3600  CNAME srv-web-01.corp.example.com.
+app.corp.example.com.              3600  CNAME www.corp.example.com.
+portal.corp.example.com.           3600  CNAME app.corp.example.com.
+legacy.corp.example.com.           3600  CNAME srv-old-09.corp.example.com.
+prn-0007.corp.example.com.          300  A     10.20.8.9
+cam-0310.corp.example.com.         3600  AAAA  2001:db8:10:70::31
+reports.corp.example.com.          3600  CNAME srv-bi-01.corp.example.com.corp.example.com.</code></pre>
+</div>
+
+    <p>Leia a última linha com cuidado. O valor do CNAME de <code>reports</code> foi escrito como <code>srv-bi-01.corp.example.com</code>, <strong>sem ponto final</strong>. Pela regra, é relativo, ganha o origin, e o alvo vira <code>srv-bi-01.corp.example.com.corp.example.com.</code>, um nome que não existe. O servidor de DNS carrega a zona sem reclamar: a linha está sintaticamente certa. Esse é o bug de zona mais comum que existe, e ele volta na atividade 10.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">O TTL num relatório</div>
+      <p>O TTL diz por quantos segundos um resolvedor pode guardar a resposta em cache. A impressora com <code>300</code> foi configurada para mudanças rápidas. Para dados, ele explica atrasos: uma correção no DNS só chega a todos os clientes depois do TTL antigo expirar. Um TTL de um dia num registro que muda toda semana é um achado de higiene por si só.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="A e AAAA: nomes para endereços, muitos para muitos" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R03 &middot; Atividade 03</span></div>
+  <h1 class="act-title">A e AAAA: nomes para endereços, muitos para muitos</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead"><code>A</code> liga um nome a um IPv4; <code>AAAA</code>, a um IPv6. É a resolução direta ("forward"), a que o navegador faz. E a relação não é um para um.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">rows = load("corp.example.com.zone")          # load() is the reader you write in N3.1
+
+by_name = collections.defaultdict(list)
+by_ip = collections.defaultdict(list)
+for name, ttl, rtype, value in rows:
+    if rtype in ("A", "AAAA"):
+        by_name[name].append(value)
+        by_ip[value].append(name)
+
+for name, ips in by_name.items():
+    print(f"{name:&lt;30} {', '.join(ips)}")
+print(len(by_name), "nomes,", len(by_ip), "endereços")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>ns1.corp.example.com.          10.20.6.53
+srv-db-02.corp.example.com.    10.20.6.20, 2001:db8:10:60::20
+srv-web-01.corp.example.com.   10.20.6.30, 10.20.6.31
+prn-0007.corp.example.com.     10.20.8.9
+cam-0310.corp.example.com.     2001:db8:10:70::31
+5 nomes, 7 endereços</div>
+</div>
+
+    <p>Cinco nomes, sete endereços. O <code>srv-db-02</code> é dual-stack e tem um registro de cada tipo. O <code>srv-web-01</code> tem dois <code>A</code>, uma forma simples de distribuir carga: o servidor de DNS devolve os dois, e cada cliente usa um. E o contrário também acontece: o mesmo IP pode ter vários nomes, cada um com o seu <code>A</code>.</p>
+
+    <h2>O que isso muda no modelo de dados</h2>
+    <p>A chave de um registro de DNS não é o nome, nem o IP: é <code>(nome, tipo, valor)</code>. Uma tabela de "hosts" com uma coluna <code>ip</code> chaveada por nome perde o segundo <code>A</code> do <code>srv-web-01</code> e o <code>AAAA</code> do <code>srv-db-02</code> sem erro, porque o último a ser carregado sobrescreve o anterior. Em SQL, um join de nome para IP é muitos para muitos, e um <code>COUNT</code> depois dele conta pares, não hosts.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Quando o DNS NÃO serve de inventário</div>
+      <p>É tentador usar os <code>A</code> como lista de equipamentos ativos. Mas registro de DNS não expira sozinho quando o equipamento some (atividade 09), e muito equipamento nunca ganha nome (câmera, sensor, impressora com IP fixo esquecida). O DNS diz o que alguém <em>registrou</em>. Quem diz o que está na rede é DHCP, a tabela ARP e a porta do switch; o valor está em cruzar as fontes.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title="CNAME: o apelido e as regras dele" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R03 &middot; Atividade 04</span></div>
+  <h1 class="act-title">CNAME: o apelido e as regras dele</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Um <code>CNAME</code> diz "este nome é outro nome; pergunte por aquele". O valor é um nome, nunca um IP, e o resolvedor segue a cadeia até achar um <code>A</code> ou <code>AAAA</code>.</p>
+
+    <p>Na zona de exemplo, <code>portal</code> aponta para <code>app</code>, que aponta para <code>www</code>, que aponta para <code>srv-web-01</code>, que tem dois <code>A</code>. Três saltos. O uso legítimo é dar um nome de serviço estável (<code>portal</code>) a um servidor que pode ser trocado: troca-se o alvo do CNAME, e ninguém precisa saber o nome do servidor novo.</p>
+
+    <h2>As regras que viram verificação de qualidade</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Regra</th><th>Por quê</th><th>O que verificar nos dados</th></tr></thead>
+        <tbody>
+          <tr><td>Um nome com <code>CNAME</code> não pode ter nenhum outro registro</td><td>"este nome é outro" não combina com "este nome também tem um A" (RFC 1034)</td><td>nomes com <code>CNAME</code> e mais qualquer tipo</td></tr>
+          <tr><td>O alvo precisa existir</td><td>senão a resolução termina em "nome não existe"</td><td><strong>CNAME pendurado</strong> (dangling)</td></tr>
+          <tr><td>A cadeia precisa terminar</td><td><code>a → b → a</code> nunca chega a um endereço</td><td>laços e cadeias longas</td></tr>
+          <tr><td>Não pode estar no ápice da zona</td><td>o ápice precisa de SOA e NS, e o CNAME não admite companhia</td><td>CNAME em <code>@</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout bug">
+      <div class="callout-title">Por que o CNAME pendurado é mais que sujeira</div>
+      <p>Um CNAME que aponta para um recurso de nuvem apagado (um bucket, um app, um endereço de CDN) continua resolvendo para o nome do provedor. Se outra pessoa criar um recurso com aquele nome, ela passa a responder por um nome da sua empresa. Isso tem nome, <em>subdomain takeover</em>, e é o motivo de o relatório de higiene de DNS interessar à equipe de segurança, não só à de rede.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="lab" data-title="Mão na massa: prever a resolução" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula R03 &middot; Atividade 05</span></div>
+  <h1 class="act-title">Prever a resolução</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Volte à zona da atividade 02. Para cada nome abaixo, escreva o caminho da resolução e o resultado final: os endereços, ou "pendurado".</p>
+
+    <ol>
+      <li><code>portal.corp.example.com.</code></li>
+      <li><code>legacy.corp.example.com.</code></li>
+      <li><code>reports.corp.example.com.</code></li>
+    </ol>
+
+    <div class="predict" data-predict="r03-p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="portal -> ... -> ? | legacy -> ? | reports -> ?"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a saída</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div style="margin-top:18px">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— caminho e resultado de cada nome</span></span><button class="copy">Copiar</button></div>
+  <pre><code>portal.corp.example.com. -&gt; app.corp.example.com. -&gt; www.corp.example.com. -&gt; srv-web-01.corp.example.com.
+    ['10.20.6.30', '10.20.6.31']
+legacy.corp.example.com. -&gt; srv-old-09.corp.example.com.
+    dangling
+reports.corp.example.com. -&gt; srv-bi-01.corp.example.com.corp.example.com.
+    dangling</code></pre>
+</div>
+        </div>
+        <p style="margin-top:16px">O <code>portal</code> chega aos dois IPs do <code>srv-web-01</code> em três saltos. O <code>legacy</code> aponta para <code>srv-old-09</code>, que não tem <code>A</code> nenhum na zona: pendurado. E o <code>reports</code> também está pendurado, mas por outro motivo. O servidor <code>srv-bi-01</code> pode até existir; o CNAME é que aponta para um nome com o domínio repetido, por causa do ponto final que faltou.</p>
+        <p>Quem acerta os dois primeiros e erra o terceiro leu <code>srv-bi-01.corp.example.com</code> como absoluto, que é como uma pessoa lê. O servidor de DNS lê como relativo. Ao analisar uma zona, leia como o servidor.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="PTR e as zonas que leem o IP ao contrário" data-min="8" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R03 &middot; Atividade 06</span></div>
+  <h1 class="act-title">PTR e as zonas que leem o IP ao contrário</h1>
+  <div class="act-meta">08 min</div>
+  <div class="prose">
+    <p class="lead">A resolução reversa responde "que nome tem este IP?". É ela que transforma IPs em nomes no log do firewall, no <code>traceroute</code> e no SIEM. E como o DNS só sabe procurar nomes, o IP precisa virar um nome primeiro.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import ipaddress
+
+print(ipaddress.ip_address("10.20.6.20").reverse_pointer)
+print(ipaddress.ip_address("2001:db8:10:60::20").reverse_pointer)</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>20.6.20.10.in-addr.arpa
+0.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.6.0.0.0.1.0.0.8.b.d.0.1.0.0.2.ip6.arpa</div>
+</div>
+
+    <p>Para IPv4: os quatro octetos <strong>invertidos</strong>, seguidos de <code>in-addr.arpa</code>. Para IPv6: os 32 dígitos hexadecimais do endereço <strong>completo</strong>, um por rótulo, invertidos, seguidos de <code>ip6.arpa</code>. O registro que mora nesse nome é o <code>PTR</code>, e o valor dele é o nome do host.</p>
+
+    <h2>Por que de trás para frente</h2>
+    <p>Porque o DNS lê nomes da direita para a esquerda, do mais geral para o mais específico: <code>.com</code>, depois <code>example.com</code>, depois <code>corp.example.com</code>. Num IP é o contrário: o começo é o geral (a rede) e o fim é o específico (o host). Invertendo, o IP passa a ter a hierarquia que o DNS espera, e a delegação segue a rede: a zona <code>10.in-addr.arpa</code> responde por todo o <code>10.0.0.0/8</code>, a <code>20.10.in-addr.arpa</code> por <code>10.20.0.0/16</code>, a <code>6.20.10.in-addr.arpa</code> por <code>10.20.6.0/24</code>.</p>
+
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>10.in-addr.arpa.zone</b> <span style="color:var(--ink-3)">— a zona reversa do 10.0.0.0/8</span></span><button class="copy">Copiar</button></div>
+  <pre><code>$ORIGIN 10.in-addr.arpa.
+$TTL 3600
+53.6.20      IN PTR   ns1.corp.example.com.
+20.6.20      IN PTR   srv-db-02.corp.example.com.
+30.6.20      IN PTR   srv-web-01.corp.example.com.
+31.6.20      IN PTR   srv-web-01.corp.example.com.
+9.8.20       IN PTR   PRN-0007.corp.example.com.
+44.6.20      IN PTR   srv-old-09.corp.example.com.
+77.4.20      IN PTR   lap-0188.corp.example.com</code></pre>
+</div>
+
+    <p>Os donos são relativos ao origin, como antes: <code>20.6.20</code> nesta zona é <code>20.6.20.10.in-addr.arpa.</code>, ou seja, <code>10.20.6.20</code>. Lido pelas mesmas regras da atividade 02:</p>
+
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— dono e valor de cada PTR</span></span><button class="copy">Copiar</button></div>
+  <pre><code>53.6.20.10.in-addr.arpa.          PTR  ns1.corp.example.com.
+20.6.20.10.in-addr.arpa.          PTR  srv-db-02.corp.example.com.
+30.6.20.10.in-addr.arpa.          PTR  srv-web-01.corp.example.com.
+31.6.20.10.in-addr.arpa.          PTR  srv-web-01.corp.example.com.
+9.8.20.10.in-addr.arpa.           PTR  PRN-0007.corp.example.com.
+44.6.20.10.in-addr.arpa.          PTR  srv-old-09.corp.example.com.
+77.4.20.10.in-addr.arpa.          PTR  lap-0188.corp.example.com.10.in-addr.arpa.</code></pre>
+</div>
+
+    <p>Duas linhas para guardar. O <code>PRN-0007</code> está em maiúsculas: DNS não diferencia caixa, mas a sua comparação de texto diferencia. E o <code>lap-0188</code> perdeu o ponto final de novo, e agora o nome do host termina em <code>.10.in-addr.arpa.</code>.</p>
+
+    <h2>A versão IPv6</h2>
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>0.1.0.0.8.b.d.0.1.0.0.2.ip6.arpa.zone</b> <span style="color:var(--ink-3)">— a zona reversa de 2001:db8:10::/48</span></span><button class="copy">Copiar</button></div>
+  <pre><code>$ORIGIN 0.1.0.0.8.b.d.0.1.0.0.2.ip6.arpa.
+$TTL 3600
+; reverse zone for 2001:db8:10::/48 (one nibble per label)
+0.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.6.0.0  IN PTR  srv-db-02.corp.example.com.</code></pre>
+</div>
+    <p>Num <code>/48</code>, a zona já fixa 12 dígitos e o dono carrega os outros 20, um por rótulo. Ninguém escreve isso à mão: é gerado pelo IPAM ou pelo DHCPv6. Mas é você quem vai ter que convertê-lo de volta para IP para fazer o join, e é o exercício N3.2.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Quem é o dono da zona reversa</div>
+      <p>A zona direta é sua porque o domínio é seu. A reversa é de quem tem o bloco de IP: para endereços públicos, o provedor ou o registro regional delega a você (ou não). Para <code>10.0.0.0/8</code> você mesmo cria. Consequência para os dados: se a empresa não exportou uma zona reversa, todo IP daquela faixa vai parecer "sem PTR", e o problema é o export, não o DNS.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="note" data-title="Para saber mais: zona reversa fora do octeto" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula R03 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Zona reversa fora do octeto</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">A delegação reversa só funciona em fronteira de rótulo: de 8 em 8 bits no IPv4, de 4 em 4 no IPv6. Uma <code>/26</code> não tem rótulo próprio.</p>
+
+    <p>Em IPv4, as zonas possíveis são <code>/8</code>, <code>/16</code> e <code>/24</code>. Em IPv6, qualquer múltiplo de 4: <code>/32</code>, <code>/48</code> e <code>/64</code> são os comuns. O exercício N3.6 pede a função que calcula o nome da zona a partir do prefixo e recusa os que não caem na fronteira.</p>
+
+    <p>Quando um provedor entrega a um cliente uma <code>/26</code> pública e quer delegar o reverso só daquele pedaço, usa um truque descrito na RFC 2317: o provedor cria, na zona <code>/24</code> dele, um <code>CNAME</code> para cada um dos 64 endereços, apontando para uma zona com nome inventado que o cliente controla, como <code>64/26.9.20.10.in-addr.arpa</code>. A resolução reversa daquele IP passa por um CNAME antes de chegar ao PTR.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Por que isso importa para os dados</div>
+      <p>Porque um relatório de "PTR por IP" que só procura registros do tipo <code>PTR</code> não acha esses 64 endereços: no nome reverso deles há um <code>CNAME</code>. É raro em rede interna e comum em faixa pública de filial. Se aparecer um bloco inteiro de IPs públicos "sem PTR", olhe antes se há CNAMEs na zona reversa.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="video" data-title="Consistência entre a ida e a volta" data-min="8" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R03 &middot; Atividade 08</span></div>
+  <h1 class="act-title">Consistência entre a ida e a volta</h1>
+  <div class="act-meta">08 min &middot; o núcleo da aula</div>
+  <div class="prose">
+    <p class="lead">O ideal é que a ida e a volta fechem: o nome resolve para um IP, e o PTR daquele IP devolve o mesmo nome. Quando fecha, chama-se forward-confirmed reverse DNS. Quando não fecha, é um item no relatório de higiene.</p>
+
+    <p>Muitos servidores de e-mail recusam mensagens de quem não fecha os dois sentidos, ferramentas de auditoria usam o PTR para nomear origens, e um analista olhando um log com o nome errado investiga a máquina errada. Por isso as categorias são estas:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Categoria</th><th>Definição</th><th>Causa típica</th></tr></thead>
+        <tbody>
+          <tr><td>A/AAAA sem PTR</td><td>um endereço com registro direto e nenhum PTR</td><td>registro criado à mão sem o reverso; zona reversa não exportada</td></tr>
+          <tr><td>PTR sem A</td><td>um PTR cujo endereço não tem registro direto</td><td>equipamento desativado e só o direto foi apagado</td></tr>
+          <tr><td>PTR divergente</td><td>o endereço tem A e PTR, mas com nomes diferentes</td><td>renomeação feita só de um lado; IP reaproveitado</td></tr>
+          <tr><td>CNAME pendurado</td><td>o alvo não tem A nem AAAA</td><td>atividade 04</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>A forma do problema</h2>
+    <p>As três primeiras são operações de conjunto entre dois lados normalizados: os pares <code>(nome, IP)</code> que saem dos <code>A</code>/<code>AAAA</code>, e os pares que saem dos <code>PTR</code> depois de converter o nome reverso em IP. Com conjuntos pequenos dá para ver a ideia inteira:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— conjuntos de brinquedo, já normalizados</span></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">forward = {("srv-db-02.corp.example.com", "10.20.6.20"), ("srv-web-01.corp.example.com", "10.20.6.30"),
+           ("cam-0310.corp.example.com", "2001:db8:10:70::31")}
+ptr = {("10.20.6.20", "srv-db-02.corp.example.com"), ("10.20.6.30", "srv-web-01.corp.example.com"),
+       ("10.20.6.44", "srv-old-09.corp.example.com")}
+
+forward_ips = {ip for _, ip in forward}
+ptr_ips = {ip for ip, _ in ptr}
+print("A/AAAA sem PTR:", sorted(forward_ips - ptr_ips))
+print("PTR sem A     :", sorted(ptr_ips - forward_ips))
+print("pares que fecham nos dois sentidos:", len(forward &amp; {(name, ip) for ip, name in ptr}))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>A/AAAA sem PTR: ['2001:db8:10:70::31']
+PTR sem A     : ['10.20.6.44']
+pares que fecham nos dois sentidos: 2</div>
+</div>
+
+    <p>"Sem PTR" e "sem A" são diferenças de conjunto <strong>por endereço</strong>. "Fecham nos dois sentidos" é interseção <strong>por par</strong>. A diferença entre as duas comparações é a categoria do meio, a divergente. Em SQL, as duas primeiras são anti-joins (<code>NOT EXISTS</code>), e o projeto usa essa mesma definição por endereço.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">A parte difícil não é a diferença de conjuntos</div>
+      <p>É chegar aos dois conjuntos com as chaves comparáveis. O nome vem com e sem ponto final, em maiúsculas e minúsculas; o IP do lado PTR vem dentro de um nome invertido, e em IPv6 com 32 rótulos; o IPv6 do lado A vem abreviado de jeitos diferentes. Cada uma dessas diferenças, sem normalizar, produz uma linha falsa no relatório. A atividade 10 mostra o que cada uma faz.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Quando o relatório NÃO é confiável</div>
+      <p>Quando o lado reverso está incompleto. Se só a zona <code>10.in-addr.arpa</code> foi exportada e há endereços públicos com <code>A</code>, eles caem todos em "sem PTR" e o número não diz nada sobre higiene. Restrinja a comparação aos endereços cobertos pelas zonas reversas que você recebeu, e reporte à parte quantos ficaram fora.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="video" data-title="De onde vêm os registros, e por que eles envelhecem" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R03 &middot; Atividade 09</span></div>
+  <h1 class="act-title">De onde vêm os registros, e por que eles envelhecem</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Em rede corporativa, a maior parte dos registros não foi criada por uma pessoa. Foi o DHCP que criou, e o problema é quem apaga.</p>
+
+    <h2>DNS dinâmico</h2>
+    <p>Quando um notebook recebe lease, o servidor DHCP (ou o próprio Windows) cria o <code>A</code> e o <code>PTR</code> dele automaticamente. É o DNS dinâmico, DDNS. Num ambiente Windows, cada registro dinâmico guarda a data da última renovação. Registros que passam muito tempo sem renovar deveriam ser removidos por uma rotina chamada <em>scavenging</em>, que vem desligada por padrão.</p>
+
+    <p>O resultado é previsível: notebooks que saíram da empresa, IPs reaproveitados por outro host, e um <code>A</code> antigo apontando para o IP que agora é de outra máquina. O exercício N3.5 cruza DDNS com DHCP para achar exatamente isso.</p>
+
+    <h2>Como o DNS chega para análise</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Origem</th><th>Formato</th><th>Cuidado</th></tr></thead>
+        <tbody>
+          <tr><td>Arquivo de zona (BIND)</td><td>o texto da atividade 02</td><td>nomes relativos, dono em branco, <code>$ORIGIN</code></td></tr>
+          <tr><td>Transferência de zona (AXFR)</td><td>a zona inteira de um servidor</td><td>normalmente bloqueada; precisa de autorização</td></tr>
+          <tr><td>Windows DNS (PowerShell)</td><td>tabela com nome, tipo, dado e timestamp</td><td>timestamp vazio = registro estático</td></tr>
+          <tr><td>Plataforma DDI/IPAM (Infoblox, BlueCat)</td><td>export ou API, já com IP e sub-rede</td><td>é a melhor fonte quando existe</td></tr>
+          <tr><td>ServiceNow</td><td>registros descobertos e ligados a CIs</td><td>já é uma visão reconciliada por alguém, com as regras dele</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Para a conversa com a área de rede</div>
+      <p>"Quantos registros dinâmicos têm mais de 14 dias sem renovar, e quantos deles apontam para um IP que hoje é de outro host?" é uma pergunta que vale um gráfico. A primeira metade diz se o scavenging está ligado; a segunda diz quanto do DNS está mentindo agora.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="note" data-title="Armadilhas: o relatório de DNS que mente" data-min="8" hidden>
+  <div class="kicker"><span class="tag is-note">Armadilhas</span><span class="dot"></span><span>Aula R03 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Armadilhas: o relatório de DNS que mente</h1>
+  <div class="act-meta">08 min</div>
+  <div class="prose">
+    <p class="lead">Todas abaixo produzem um relatório que roda, tem números plausíveis e está errado. Começando pela que zera o join:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">a_names = {"srv-db-02.corp.example.com", "srv-web-01.corp.example.com"}      # from the CMDB export
+ptr_targets = {"srv-db-02.corp.example.com.", "SRV-WEB-01.corp.example.com."}  # from the zone file
+
+print("casam como veio   :", len(a_names &amp; ptr_targets))
+
+def normalize(name: str) -&gt; str:
+    return name.rstrip(".").lower()
+
+print("casam normalizando:", len({normalize(n) for n in a_names} &amp; {normalize(n) for n in ptr_targets}))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>casam como veio   : 0
+casam normalizando: 2</div>
+</div>
+
+    <p>O CMDB grava nomes sem ponto final, o arquivo de zona com. Comparados como texto, zero pares: todo servidor da empresa aparece como "sem PTR". Tirar o ponto final e passar para minúsculas, nos dois lados, antes de qualquer comparação.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Ponto final e caixa</h3>
+        <p>O caso acima. A versão mais perigosa é a parcial: se metade das fontes tem ponto e metade não, o relatório não zera, só fica com o dobro de pendências, e parece plausível.</p>
+      </div>
+      <div class="trap">
+        <h3>Nome sem ponto final dentro da zona</h3>
+        <p>O <code>reports</code> e o <code>lap-0188</code> desta aula: um valor absoluto escrito sem ponto vira relativo e ganha o origin (atividades 02 e 06). O registro existe, o servidor responde, e o alvo é um nome que ninguém criou. Procure valores que contêm o domínio duas vezes, ou PTRs cujo valor termina em <code>.arpa.</code>.</p>
+      </div>
+      <div class="trap">
+        <h3>Nome reverso montado sem inverter</h3>
+        <p>Montar o nome reverso concatenando o IP com o sufixo produz um nome que não existe em zona nenhuma:</p>
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">ip = "2001:db8:10:60::20"
+naive = ".".join(reversed(ip.replace(":", ""))) + ".ip6.arpa"
+print(naive)
+print(ipaddress.ip_address(ip).reverse_pointer)
+
+v4 = "10.20.6.20"
+print(f"{v4}.in-addr.arpa", "contra", ipaddress.ip_address(v4).reverse_pointer)</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>0.2.0.6.0.1.8.b.d.1.0.0.2.ip6.arpa
+0.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.6.0.0.0.1.0.0.8.b.d.0.1.0.0.2.ip6.arpa
+10.20.6.20.in-addr.arpa contra 20.6.20.10.in-addr.arpa</div>
+</div>
+        <p>No IPv6 o erro é duplo: além de não expandir os zeros, inverter o texto abreviado gera 13 rótulos em vez de 32. Use <code>reverse_pointer</code> para ir e a função do N3.2 para voltar.</p>
+      </div>
+      <div class="trap">
+        <h3><code>NOT IN</code> com um <code>NULL</code> do outro lado</h3>
+        <p>O anti-join mais natural em SQL é o mais perigoso. Basta um PTR com endereço nulo (um nome reverso que não converteu) para o <code>NOT IN</code> devolver zero linhas:</p>
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">db = sqlite3.connect(":memory:")
+db.executescript("""
+    CREATE TABLE dns (name TEXT, rtype TEXT, address TEXT);
+    INSERT INTO dns VALUES
+        ('srv-db-02', 'A', '10.20.6.20'), ('srv-new-07', 'A', '10.20.6.70'),
+        ('20.6.20.10.in-addr.arpa', 'PTR', '10.20.6.20'),
+        ('77.4.20.10.in-addr.arpa', 'PTR', NULL);        -- a PTR whose address failed to parse
+""")
+not_in = """SELECT count(*) FROM dns a WHERE a.rtype = 'A'
+            AND a.address NOT IN (SELECT address FROM dns WHERE rtype = 'PTR')"""
+not_exists = """SELECT count(*) FROM dns a WHERE a.rtype = 'A' AND NOT EXISTS (
+                  SELECT 1 FROM dns p WHERE p.rtype = 'PTR' AND p.address = a.address)"""
+print("NOT IN     :", db.execute(not_in).fetchone()[0])
+print("NOT EXISTS :", db.execute(not_exists).fetchone()[0])</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>NOT IN     : 0
+NOT EXISTS : 1</div>
+</div>
+        <p><code>x NOT IN (..., NULL)</code> nunca é verdadeiro, porque comparar com <code>NULL</code> dá desconhecido. O relatório de "A sem PTR" sai vazio, que é o resultado que todo mundo quer ver, e ninguém desconfia. Use <code>NOT EXISTS</code> ou <code>LEFT JOIN ... IS NULL</code>.</p>
+      </div>
+      <div class="trap">
+        <h3>Comparar fora das zonas exportadas</h3>
+        <p>Endereço sem zona reversa no export cai em "sem PTR" (atividade 08). O número sobe com cada faixa que ninguém exportou, e o relatório culpa o DNS por um buraco no pipeline.</p>
+      </div>
+      <div class="trap">
+        <h3>Seguir o CNAME um salto só</h3>
+        <p>Testar se o alvo do CNAME existe em <em>qualquer</em> registro dá "ok" para um CNAME que aponta para outro CNAME pendurado. A verificação certa segue a cadeia até um <code>A</code>/<code>AAAA</code> ou até o fim, com limite de saltos para não ficar presa num laço.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="lab" data-title="No projeto: o mart_dns_hygiene" data-min="40" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula R03 &middot; Atividade 11</span></div>
+  <h1 class="act-title">No projeto: o <code style="font-size:.82em">mart_dns_hygiene</code></h1>
+  <div class="act-meta">40 min &middot; no repositório <code>network-inventory</code>, em SQL</div>
+  <div class="prose">
+    <p class="lead">Esta atividade não tem solução, de propósito: a query é do seu portfólio. Ela tem as definições, as perguntas que você precisa responder antes de escrever, e os números para conferir.</p>
+
+    <h2>As definições do projeto</h2>
+    <p>São as do cabeçalho do <code>generate_data.py</code>, todas <strong>por endereço</strong>, sobre <code>raw.dns_records</code>:</p>
+    <ul>
+      <li><code>dns_without_ptr</code>: registro <code>A</code> ou <code>AAAA</code> sem nenhum <code>PTR</code> para o mesmo endereço;</li>
+      <li><code>ptr_without_a</code>: registro <code>PTR</code> cujo endereço não tem nenhum <code>A</code> ou <code>AAAA</code>;</li>
+      <li><code>dangling_cname</code>: <code>CNAME</code> cujo alvo não tem <code>A</code> nem <code>AAAA</code>.</li>
+    </ul>
+
+    <h2>Antes de escrever, responda</h2>
+    <ol>
+      <li>A tabela tem as colunas <code>record_name</code>, <code>record_value</code> e <code>address</code>. Qual delas você usa como chave de comparação em cada um dos três itens, e por quê? Vale a pena conferir, numa query separada, se o <code>address</code> de um PTR bate com o nome reverso dele (atividade 06)?</li>
+      <li>Qual a forma de anti-join que você vai usar, e o que acontece com ela se alguma linha tiver <code>address</code> nulo ou vazio? (Atividade 10, quarta armadilha.)</li>
+      <li>Os endereços IPv6 dos dois lados estão na mesma forma de texto? Como você <em>prova</em> isso com uma query, em vez de supor?</li>
+      <li>No CNAME pendurado, você segue a cadeia ou só o primeiro salto? Existe CNAME apontando para CNAME nesses dados?</li>
+    </ol>
+
+    <h2>Os números para conferir</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Item</th><th>Esperado (seed 42)</th><th>Observação</th></tr></thead>
+        <tbody>
+          <tr><td><code>dns_without_ptr</code></td><td class="num">15</td><td>inclui registros <code>AAAA</code>, não só <code>A</code></td></tr>
+          <tr><td><code>ptr_without_a</code></td><td class="num">5</td><td>hosts desativados que ninguém limpou</td></tr>
+          <tr><td><code>dangling_cname</code></td><td class="num">2</td><td>alvos que não existem mais</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Confira os registros, não só a contagem</div>
+      <p>Bater 15 não prova nada: dá para errar três e acertar três por acaso. O <code>expected.answer_key</code> tem uma linha por problema, com <code>anomaly_type</code> e o <code>record_key</code> (o <code>record_id</code> do registro). Compare o <em>conjunto</em> de <code>record_id</code> que a sua query devolve com o do gabarito, nos dois sentidos: o que você achou a mais e o que deixou de achar. Uma query de verificação assim é a semente do <code>90_checks.sql</code>.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Para o README</div>
+      <p>Escreva no README do mart, em duas frases, por que a definição é por endereço e não por par nome/IP, e o que o relatório deixaria de pegar por isso (a categoria "PTR divergente" da atividade 08). Saber dizer o que a sua métrica <em>não</em> mede é o tipo de coisa que um entrevistador nota.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 12 ==================== -->
+<article class="act" id="a12" data-kind="lab" data-title="Hora da prática: N3.1 a N3.6 e entrega" data-min="75" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula R03 &middot; Atividade 12</span></div>
+  <h1 class="act-title">Exercícios N3.1 a N3.6 e entrega</h1>
+  <div class="act-meta">75 min &middot; arquivo <code>exercises/python/net03.py</code></div>
+  <div class="prose">
+    <p class="lead">Seis exercícios sobre as três zonas desta aula. Copie os arquivos de zona das atividades 02 e 06 para <code>exercises/python/zones/</code> com os mesmos nomes, e o arquivo de dados abaixo para <code>net03_data.py</code>.</p>
+
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— crie como exercises/python/net03_data.py</span></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python"># exercises/python/net03_data.py — inputs for N3.2, N3.3 and N3.5
+import datetime as dt
+
+PTR_NAMES = ["20.6.20.10.in-addr.arpa.", "9.8.20.10.IN-ADDR.ARPA", "6.20.10.in-addr.arpa",
+             "300.6.20.10.in-addr.arpa", "srv-db-02.corp.example.com.",
+             "0.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.6.0.0.0.1.0.0.8.b.d.0.1.0.0.2.ip6.arpa.",
+             "2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.6.0.0.0.1.0.0.8.b.d.0.1.0.0.2.ip6.arpa"]
+
+EXTRA_CNAMES = [("loop-a.corp.example.com.", "loop-b.corp.example.com."),
+                ("loop-b.corp.example.com.", "loop-a.corp.example.com.")]
+
+TODAY = dt.date(2026, 11, 24)
+# dynamic A records written by DHCP (DDNS): (name, ip, timestamp of last refresh)
+DDNS_A = [("lap-0141.corp.example.com", "10.20.4.18", dt.date(2026, 11, 23)),
+          ("lap-0188.corp.example.com", "10.20.4.77", dt.date(2026, 10, 30)),
+          ("lap-0203.corp.example.com", "10.20.4.91", dt.date(2026, 9, 2)),
+          ("lap-0217.corp.example.com", "10.20.4.18", dt.date(2026, 8, 14)),
+          ("tab-0012.corp.example.com", "10.20.5.140", dt.date(2026, 11, 20)),
+          ("lap-0230.corp.example.com", "10.20.5.33", dt.date(2026, 11, 2))]
+# current DHCP leases: (ip, hostname, state)
+LEASES = [("10.20.4.18", "lap-0141", "Active"), ("10.20.4.77", "lap-0188", "Expired"),
+          ("10.20.5.140", "tab-0012", "Active"), ("10.20.5.33", "lap-0230", "Active")]</code></pre>
+</div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N3.1</span><h2>Ler arquivo de zona</h2><span class="ex-kind">parsing</span></div>
+      <p>Escreva <code>parse_zone(text) -&gt; list[tuple[str, int, str, str]]</code> que devolve <code>(nome absoluto, ttl, tipo, valor)</code> com as três regras da atividade 02: <code>$ORIGIN</code> e <code>@</code>, nome relativo contra absoluto (também no valor de <code>CNAME</code>, <code>PTR</code> e <code>NS</code>), dono em branco e <code>$TTL</code>. Ignore comentários depois de <code>;</code>. Leia as três zonas, conte por tipo e liste os registros suspeitos da segunda armadilha.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— o que deve sair</span></span><button class="copy">Copiar</button></div>
+  <pre><code>21 registros: {'A': 5, 'AAAA': 2, 'CNAME': 5, 'NS': 1, 'PTR': 8}
+suspeito: reports.corp.example.com. CNAME srv-bi-01.corp.example.com.corp.example.com.
+suspeito: 77.4.20.10.in-addr.arpa. PTR lap-0188.corp.example.com.10.in-addr.arpa.</code></pre>
+</div>
+          <p>O que mais derruba: aplicar a regra do relativo só ao dono e esquecer do valor (aí o <code>www</code> aponta para <code>srv-web-01</code> sem domínio e nada mais casa); tratar a linha com dono em branco como se o primeiro campo fosse o nome (o <code>IN</code> vira o dono); e cortar comentário com <code>split(";")</code> antes de perceber que um registro <code>TXT</code> pode ter <code>;</code> entre aspas. As zonas daqui não têm TXT, então anote a limitação num comentário em vez de resolvê-la.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N3.2</span><h2>Do nome reverso ao IP</h2><span class="ex-kind">conversão</span></div>
+      <p>Escreva <code>ptr_name_to_ip(name)</code> para as duas famílias, aceitando ponto final e qualquer caixa, e levantando <code>ValueError</code> com mensagem clara para nome incompleto, octeto inválido ou nome que não é reverso. Rode sobre <code>PTR_NAMES</code> e, para os que converterem, prove a volta com <code>reverse_pointer</code>.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— nome (cortado em 46 caracteres) e resultado</span></span><button class="copy">Copiar</button></div>
+  <pre><code>20.6.20.10.in-addr.arpa.                        10.20.6.20
+9.8.20.10.IN-ADDR.ARPA                          10.20.8.9
+6.20.10.in-addr.arpa                            ValueError: expected 4 octets
+300.6.20.10.in-addr.arpa                        ValueError: Octet 300 (&gt; 255) not permitted in '10.20.6.300'
+srv-db-02.corp.example.com.                     ValueError: not a reverse name
+0.2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.6.0.0.0.1.0.  2001:db8:10:60::20
+2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.6.0.0.0.1.0.0.  ValueError: expected 32 nibbles, got 31</code></pre>
+</div>
+          <p>O último caso é o que separa quem testou de quem não testou: 31 dígitos, um a menos. Juntar os rótulos e passar para o <code>ipaddress</code> sem contar produz um endereço <em>válido e errado</em>, deslocado 4 bits. Conte os rótulos antes. No IPv4, o octeto 300 o próprio <code>ipaddress</code> recusa; o nome com três octetos não, se você completar com zero, e é por isso que a contagem também vale lá.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N3.3</span><h2>Resolver CNAME com limite e laço</h2><span class="ex-kind">grafo</span></div>
+      <p>Escreva <code>resolve(name, records)</code> que segue a cadeia de CNAME e devolve o caminho e o resultado: a lista de endereços, <code>"dangling"</code> ou <code>"loop"</code>. Use os registros da zona direta mais <code>EXTRA_CNAMES</code>, e resolva <code>www</code>, <code>portal</code>, <code>legacy</code>, <code>loop-a</code> e <code>cam-0310</code>, mostrando quantos saltos cada um deu.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— nome, saltos e resultado</span></span><button class="copy">Copiar</button></div>
+  <pre><code>www.corp.example.com.        saltos=1  ['10.20.6.30', '10.20.6.31']
+portal.corp.example.com.     saltos=3  ['10.20.6.30', '10.20.6.31']
+legacy.corp.example.com.     saltos=1  dangling
+loop-a.corp.example.com.     saltos=2  loop
+cam-0310.corp.example.com.   saltos=0  ['2001:db8:10:70::31']</code></pre>
+</div>
+          <p>Guarde os nomes já visitados num conjunto e pare ao revisitar: um contador fixo de saltos também termina, mas reporta um laço como "cadeia longa demais" e perde a informação. É a mesma ideia de detectar ciclo da aula 14, num grafo em que cada nó tem no máximo uma aresta de saída. E <code>cam-0310</code> com zero saltos é o caso que quem começa pelo CNAME esquece: o nome já tem endereço.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N3.4</span><h2>Ida e volta nas zonas de brinquedo</h2><span class="ex-kind">reconciliação</span></div>
+      <p>Com o seu <code>parse_zone</code> e o seu <code>ptr_name_to_ip</code>, produza as três primeiras categorias da atividade 08 para as três zonas: A/AAAA sem PTR, PTR sem A/AAAA e PTR divergente. Depois rode de novo <strong>sem</strong> normalizar os nomes e diga quantas divergências falsas aparecem.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— as três categorias</span></span><button class="copy">Copiar</button></div>
+  <pre><code>A/AAAA sem PTR : ['2001:db8:10:70::31']
+PTR sem A/AAAA : ['10.20.4.77', '10.20.6.44']
+PTR com nome que não bate: []
+(sem normalizar o nome, não batem: 1 )</code></pre>
+</div>
+          <p>O IPv6 da câmera não tem PTR; os PTRs de <code>10.20.6.44</code> (<code>srv-old-09</code>, desativado) e <code>10.20.4.77</code> não têm direto. A divergência falsa sem normalizar é a da impressora, em maiúsculas no PTR. Repare no <code>lap-0188</code>: o nome dele está quebrado, mas ele cai em "PTR sem A" pelo endereço, não pelo nome, que é exatamente a vantagem da definição por endereço.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N3.5</span><h2>Registros dinâmicos velhos</h2><span class="ex-kind">qualidade de dado</span></div>
+      <p>Com <code>DDNS_A</code>, <code>LEASES</code> e <code>TODAY</code>, liste os registros dinâmicos com mais de 14 dias sem renovar e classifique cada um: sem lease ativo para aquele IP; IP agora é de outro host; ou lease ativo do mesmo host, só sem renovação no DNS.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— registro, IP, idade e classificação</span></span><button class="copy">Copiar</button></div>
+  <pre><code>lap-0188.corp.example.com  10.20.4.77     25 dias  sem lease ativo
+lap-0203.corp.example.com  10.20.4.91     83 dias  sem lease ativo
+lap-0217.corp.example.com  10.20.4.18    102 dias  IP agora é de lap-0141
+lap-0230.corp.example.com  10.20.5.33     22 dias  lease ativo do mesmo host: só não foi renovado no DNS</code></pre>
+</div>
+          <p>Os três tipos pedem ações diferentes, e é por isso que a classificação importa mais que a lista. Sem lease: apagar. IP de outro host: apagar com urgência, porque o nome está apontando para a máquina errada. Mesmo host sem renovar: não apagar, investigar por que o DDNS parou de atualizar. O escorregão é comparar <code>hostname</code> com o nome do registro inteiro, com domínio, e achar que nenhum bate.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N3.6</span><h2>Desafio: o nome da zona reversa de um prefixo</h2><span class="ex-kind">desafio</span></div>
+      <p>Escreva <code>reverse_zone(prefix)</code> que devolve o nome da zona reversa de uma rede, nas duas famílias, e levanta <code>ValueError</code> para prefixo fora da fronteira (atividade 07). Teste com <code>10.0.0.0/8</code>, <code>10.20.0.0/16</code>, <code>10.20.6.0/24</code>, <code>10.20.9.64/26</code>, <code>2001:db8::/32</code>, <code>2001:db8:10::/48</code>, <code>2001:db8:10:60::/64</code> e <code>2001:db8:10:60::/62</code>. Por escrito: o que você faria com a <code>/26</code>, se ela fosse uma faixa pública de filial?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— prefixo e zona</span></span><button class="copy">Copiar</button></div>
+  <pre><code>10.0.0.0/8             10.in-addr.arpa
+10.20.0.0/16           20.10.in-addr.arpa
+10.20.6.0/24           6.20.10.in-addr.arpa
+10.20.9.64/26          ValueError: /26 is not on an octet boundary
+2001:db8::/32          8.b.d.0.1.0.0.2.ip6.arpa
+2001:db8:10::/48       0.1.0.0.8.b.d.0.1.0.0.2.ip6.arpa
+2001:db8:10:60::/64    0.6.0.0.0.1.0.0.8.b.d.0.1.0.0.2.ip6.arpa
+2001:db8:10:60::/62    ValueError: /62 is not on a nibble boundary</code></pre>
+</div>
+          <p>O caminho curto é pegar o <code>reverse_pointer</code> do endereço de rede e manter só os últimos rótulos: <code>prefixo / 8</code> octetos no IPv4, <code>prefixo / 4</code> dígitos no IPv6, mais o sufixo. Quem tenta montar à mão costuma acertar o IPv4 e errar o IPv6 por usar o texto abreviado. Para a <code>/26</code>: é o caso da RFC 2317. A zona reversa continua sendo a <code>/24</code> do provedor, com CNAMEs para uma zona delegada sua; no relatório, essa faixa precisa seguir CNAME antes de procurar o PTR.</p>
+        </div>
+      </details>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>net03.py</code> com as saídas em comentário e a resposta escrita do N3.6. A atividade 11 é entregue no repositório do projeto, como commit, não aqui.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de entregar</div>
+      <ul>
+        <li>Todo nome é normalizado (sem ponto final, minúsculo) <strong>antes</strong> de qualquer comparação?</li>
+        <li>O <code>ptr_name_to_ip</code> conta os rótulos antes de converter?</li>
+        <li>O <code>resolve</code> termina num laço sem depender só de um limite de saltos?</li>
+        <li>Nenhum anti-join usa <code>NOT IN</code> sobre coluna que pode ser nula?</li>
+      </ul>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 13 ==================== -->
+<article class="act" id="a13" data-kind="recap" data-title="Fechamento e a conversa de quinta" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Fechamento</span><span class="dot"></span><span>Aula R03 &middot; Atividade 13</span></div>
+  <h1 class="act-title">Fechamento e a conversa de quinta</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">DNS, para quem trabalha com dados, é uma tabela com chave composta, duas direções que deveriam concordar e uma rotina de limpeza que quase nunca roda.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ideia</th><th>Em uma linha</th></tr></thead>
+        <tbody>
+          <tr><td>Registro</td><td><code>(nome, tipo, valor)</code> é a chave; nome para IP é muitos para muitos</td></tr>
+          <tr><td>Ponto final</td><td>com ponto é absoluto, sem ponto ganha o origin; normalize antes de comparar</td></tr>
+          <tr><td>CNAME</td><td>sozinho no nome, alvo precisa existir, cadeia precisa terminar</td></tr>
+          <tr><td>PTR</td><td>IP invertido em <code>in-addr.arpa</code>; IPv6 com 32 dígitos em <code>ip6.arpa</code></td></tr>
+          <tr><td>Higiene</td><td>sem PTR, sem A, divergente, pendurado; por endereço e dentro das zonas exportadas</td></tr>
+          <tr><td>Envelhecimento</td><td>DDNS cria, scavenging deveria apagar; cruze com DHCP</td></tr>
+          <tr><td>SQL</td><td>anti-join com <code>NOT EXISTS</code>, nunca <code>NOT IN</code> sobre coluna anulável</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Para quinta-feira</h2>
+    <p>Uma primeira conversa com um diretor raramente pede subnetting no quadro. O que ela costuma testar é se você entende o problema dele. As três aulas dão material para uma resposta curta e concreta a "como você abordaria a qualidade dos dados de rede?":</p>
+    <p><em>"Eu trataria cada fonte (CMDB, DHCP, DNS, switches) como uma tabela com as suas próprias chaves e defeitos, normalizaria IP, MAC e nome na entrada, e reconciliaria por pares. Os relatórios que saem disso são diretos: sub-redes acima de 80% com o denominador certo, equipamento no DHCP que não está no CMDB, DNS sem PTR e registros que ninguém limpou. E cada número viria com a definição escrita, para que dois relatórios nunca discordem por um gateway."</em></p>
+    <p>Se ele aprofundar, cada pedaço tem uma atividade por trás: o <code>/22</code> e o gateway (R01, 05), o IPv6 que não tem utilização (R02, 03), o ponto final que zera o join (R03, 10).</p>
+
+    <div class="callout next">
+      <div class="callout-title">Depois desta trilha</div>
+      <p>DHCP, VLANs e portas de acesso, que fecham o vocabulário da vaga, e de volta ao projeto: o <code>mart_dns_hygiene</code> da atividade 11 e o <code>mart_port_usage</code>.</p>
+    </div>
+  </div>
+</article>
+
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/13</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula R03</div>
+          <div class="lh-n">DNS e zonas reversas</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/python/net03.py<span class="rs">o arquivo que você entrega</span></span></li>
+        <li><span class="res-static">exercises/python/zones/<span class="rs">as três zonas das atividades 02 e 06</span></span></li>
+        <li><span class="res-static">network-inventory · mart_dns_hygiene<span class="rs">a atividade 11, no repositório do projeto</span></span></li>
+      </ul>
+      <h3>Vídeos</h3>
+      <ul>
+        <li><a href="https://www.professormesser.com/network-plus/n10-009/n10-009-video/n10-009-training-course/" target="_blank" rel="noopener">Professor Messer, Network+ N10-009<span class="rs">3.4 An Overview of DNS · DNS Records</span></a></li>
+      </ul>
+      <h3>Leitura</h3>
+      <ul>
+        <li><a href="https://www.cloudflare.com/learning/dns/dns-records/" target="_blank" rel="noopener">Cloudflare Learning: DNS records<span class="rs">A, AAAA, CNAME e os outros tipos</span></a></li>
+        <li><a href="https://www.cloudflare.com/learning/dns/dns-records/dns-ptr-record/" target="_blank" rel="noopener">Cloudflare Learning: PTR record<span class="rs">in-addr.arpa e ip6.arpa</span></a></li>
+        <li><span class="res-static">RFC 1034, RFC 1035 e RFC 2317<span class="rs">conceitos e formato do DNS, delegação reversa fora do octeto · busque pelo número em rfc-editor.org</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>

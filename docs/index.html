@@ -47,6 +47,12 @@
     <ul class="cards" id="cards"></ul>
   </section>
 
+  <section class="home-section" id="redesSection">
+    <h2>Trilha extra &middot; Redes</h2>
+    <p class="home-section-lead">IPv4, IPv6 e DNS do ponto de vista de quem modela, reconcilia e reporta dados de infraestrutura: sub-redes, inventário, CMDB, zonas reversas. Fora da sequência da fase 1, com progresso próprio.</p>
+    <ul class="cards" id="redesCards"></ul>
+  </section>
+
   <section class="home-section" id="reviewsSection" hidden>
     <h2>Revisões de entrega</h2>
     <ul class="cards" id="reviewCards"></ul>
@@ -81,16 +87,20 @@
     "14": "hierarquias, grafos, calendários — e a travessia que nunca termina porque os dados tinham um ciclo",
     "15": "<code>SCAN</code> contra <code>SEARCH</code>, ordem das colunas, cobertura — e o <code>substr()</code> que apaga o índice",
     "16": "branch, pull request e o conflito resolvido de um jeito que desfaz uma correção sem ninguém notar",
-    "17": "tudo junto: API paginada, validação, JSONL atômico, testes sem rede e um README que se sustenta"
+    "17": "tudo junto: API paginada, validação, JSONL atômico, testes sem rede e um README que se sustenta",
+    "R01": "o endereço como inteiro de 32 bits, prefixo e máscara, hosts por sub-rede, RFC 1918, subnetting de cabeça — e o <code>010</code> que vira 8",
+    "R02": "notação, o /64, link-local, SLAAC e dual-stack; IP guardado como inteiro, o range join e <code>inet</code> no Postgres",
+    "R03": "A, AAAA, CNAME e PTR, <code>in-addr.arpa</code> e <code>ip6.arpa</code>, consistência forward/reverse — e o ponto final que zera o join"
   };
 
   /* ---------- progresso do curso ---------- */
-  const total = COURSE.courseProgress();
+  const FASE1 = COURSE.inTrack("fase1");
+  const total = COURSE.courseProgress("fase1");
   document.getElementById("hpDone").textContent = total.done;
   document.getElementById("hpTotal").textContent = total.total;
   const pct = total.total ? Math.round((total.done / total.total) * 100) : 0;
   document.getElementById("hpFill").style.width = pct + "%";
-  const publicadas = COURSE.lessons.filter((l) => l.published).length;
+  const publicadas = FASE1.filter((l) => l.published).length;
   document.getElementById("hpLessons").textContent =
     `${pct}% das ${publicadas} aulas publicadas`;
 
@@ -114,7 +124,7 @@
     return `<span class="badge ${meta.cls}">${meta.label}</span>`;
   };
 
-  document.getElementById("cards").innerHTML = COURSE.lessons.map((lesson) => {
+  const card = (lesson) => {
     const desc = DESC[lesson.id] || "";
     const top = `<div class="card-top">
         <span class="card-n">${lesson.id}</span>
@@ -141,7 +151,9 @@
         ${review}
       </div>
     </a></li>`;
-  }).join("");
+  };
+  document.getElementById("cards").innerHTML = FASE1.map(card).join("");
+  document.getElementById("redesCards").innerHTML = COURSE.inTrack("redes").map(card).join("");
 
   /* ---------- revisões publicadas ---------- */
   const comRevisao = COURSE.lessons.filter((l) => l.review);

@@ -55,7 +55,7 @@
   }
 
   /* ---------- árvore da trilha ----------
-     O rail mostra as seis aulas, não só a atual: a aula aberta expandida nas
+     O rail mostra as aulas da trilha, não só a atual: a aula aberta expandida nas
      suas atividades, as outras clicáveis, as não publicadas visíveis e
      desabilitadas com o motivo. Tudo gerado a partir de window.COURSE, para
      que qualquer página — inclusive a aula 01 — receba a mesma navegação. */
@@ -66,9 +66,15 @@
 
   /* Aulas publicadas vizinhas: é o que permite o "Avançar" da última
      atividade sair da aula em vez de parar em "Concluir aula". */
-  const PUBLISHED = COURSE.lessons.filter((l) => l.published);
-  const HERE = PUBLISHED.findIndex((l) => l.id === OWNER_ID);
   const OWNER = COURSE.lessons.find((l) => l.id === OWNER_ID) || null;
+  /* Só as aulas da trilha desta página: a árvore e o anterior/próxima nunca
+     atravessam de uma trilha para outra. */
+  const TRACK = COURSE.trackOf ? COURSE.trackOf(OWNER) : "fase1";
+  const TRACK_LESSONS = COURSE.inTrack ? COURSE.inTrack(TRACK) : COURSE.lessons;
+  const TRACK_NAME = (COURSE.tracks && COURSE.tracks[TRACK] && COURSE.tracks[TRACK].name)
+    || COURSE.phase;
+  const PUBLISHED = TRACK_LESSONS.filter((l) => l.published);
+  const HERE = PUBLISHED.findIndex((l) => l.id === OWNER_ID);
   /* Numa revisão as duas pontas apontam para a aula corrigida: a revisão é um
      desvio, não um passo da trilha. */
   const PREV_LESSON = IS_REVIEW ? OWNER : (HERE > 0 ? PUBLISHED[HERE - 1] : null);
@@ -106,7 +112,7 @@
   const treeEl = document.getElementById("tree");
   function buildTree() {
     if (!treeEl) return;
-    treeEl.innerHTML = COURSE.lessons.map((lesson) => {
+    treeEl.innerHTML = TRACK_LESSONS.map((lesson) => {
       const current = lesson.id === OWNER_ID;
       const progress = lesson.published ? COURSE.progressOf(lesson.id) : null;
       const count = progress ? `<span class="ln-c">${progress.done}/${progress.total}</span>` : "";
@@ -361,7 +367,7 @@
      Anterior / índice / próxima, montado a partir do manifesto e acrescentado
      depois dos botões de atividade. */
   const footnav = document.querySelector(".footnav");
-  if (footnav && COURSE.lessons.length) {
+  if (footnav && TRACK_LESSONS.length) {
     const nav = document.createElement("nav");
     nav.className = "lessonnav";
     nav.setAttribute("aria-label", "Navegação entre aulas");
@@ -376,7 +382,7 @@
       link(PREV_LESSON, "prev", "&larr; anterior") +
       `<a class="lnav home" href="${COURSE.base() || "./"}index.html">
          <span class="lnav-k">índice</span>
-         <span class="lnav-t">${escapeHtml(COURSE.name)} &middot; ${escapeHtml(COURSE.phase)}</span></a>` +
+         <span class="lnav-t">${escapeHtml(COURSE.name)} &middot; ${escapeHtml(TRACK_NAME)}</span></a>` +
       link(NEXT_LESSON, "next", "próxima &rarr;");
     footnav.parentNode.insertBefore(nav, footnav.nextSibling);
   }
