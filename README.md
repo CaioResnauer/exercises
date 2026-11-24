@@ -4,7 +4,9 @@ My personal exercises
 
 `docs/` holds **Fluxo**, a static course site published with GitHub Pages
 (branch `main`, folder `/docs`). Phase 1 is seventeen lessons covering advanced
-Python, advanced SQL and the software-engineering practices around them. The
+Python, advanced SQL and the software-engineering practices around them. A
+separate track, **Redes** (lessons R01 to R03), covers IPv4, IPv6 and DNS from
+the point of view of network inventory data. The
 lesson prose is in Portuguese; everything else — file names, folders, code
 comments and this README — is in English.
 
@@ -36,7 +38,10 @@ docs/
 │   ├── 14-sql-ctes-recursivas.html
 │   ├── 15-sql-explain-e-indices.html
 │   ├── 16-git-em-equipe.html
-│   └── 17-projeto-da-fase-1.html
+│   ├── 17-projeto-da-fase-1.html
+│   ├── r01-ipv4-cidr-e-sub-redes.html   # Redes track
+│   ├── r02-ipv6-e-ip-como-dado.html
+│   └── r03-dns-e-zonas-reversas.html
 └── reviews/                  # one page per graded delivery
     └── 04-revisao.html
 ```
@@ -57,6 +62,18 @@ the delivery badges are all generated from it, so those facts are written once.
 A lesson page repeats two of them on `<body>` — `data-lesson` and
 `data-delivery` — because the page needs them before any script runs.
 `check.py` fails if the two ever disagree.
+
+### Tracks
+
+A lesson with no `track` field belongs to phase 1; the Redes lessons carry
+`track: "redes"` and ids `R01` to `R03`. `tracks` in the manifest names each
+track. The sidebar tree and the previous/next links only show lessons from the
+current page's track, so finishing lesson 17 never lands in R01 and the other
+way round. The index shows phase 1 progress in the hero and each extra track as
+its own section.
+
+To add a lesson to an existing track, set its `track` and give it an id that
+does not contain `-` (a `-` in `data-lesson` marks a review page).
 
 Each page also declares its depth in `data-base` (`.` at the root, `..` inside
 `lessons/` and `reviews/`), which is how links built from the manifest resolve

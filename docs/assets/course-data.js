@@ -13,6 +13,14 @@ window.COURSE = {
   tagline: "Python avançado para engenharia de dados",
   phase: "Fase 1",
 
+  /* Trilhas. Uma aula sem `track` pertence à fase 1. Cada trilha tem a sua
+     própria árvore no rail e a sua própria sequência de anterior/próxima: sair
+     da última aula da fase 1 não cai numa aula de redes, e vice-versa. */
+  tracks: {
+    fase1: { name: "Fase 1", title: "Python avançado para engenharia de dados" },
+    redes: { name: "Trilha extra · Redes", title: "Redes para dados de infraestrutura" }
+  },
+
   /* Assuntos que as aulas 04 a 06 assumem conhecidos e que ainda não têm
      página própria. Mostrado no índice e no aviso de pré-requisito. */
   gap: {
@@ -108,6 +116,23 @@ window.COURSE = {
       id: "17", title: "Projeto da fase 1: da API ao disco",
       slug: "lessons/17-projeto-da-fase-1.html",
       acts: 11, published: true, delivery: "pending"
+    },
+
+    /* ---------- trilha extra: redes ---------- */
+    {
+      id: "R01", track: "redes", title: "IPv4, CIDR e sub-redes",
+      slug: "lessons/r01-ipv4-cidr-e-sub-redes.html",
+      acts: 13, published: true, delivery: "pending"
+    },
+    {
+      id: "R02", track: "redes", title: "IPv6 e IP como dado",
+      slug: "lessons/r02-ipv6-e-ip-como-dado.html",
+      acts: 13, published: true, delivery: "pending"
+    },
+    {
+      id: "R03", track: "redes", title: "DNS e zonas reversas",
+      slug: "lessons/r03-dns-e-zonas-reversas.html",
+      acts: 13, published: true, delivery: "pending"
     }
   ],
 
@@ -141,8 +166,13 @@ window.COURSE = {
     return { done: Math.min(done, total), total };
   },
 
-  courseProgress() {
-    return this.lessons.reduce((acc, lesson) => {
+  trackOf(lesson) { return (lesson && lesson.track) || "fase1"; },
+  inTrack(track) { return this.lessons.filter((l) => this.trackOf(l) === track); },
+
+  /* Sem argumento soma o site inteiro; com uma trilha, só as aulas dela. */
+  courseProgress(track) {
+    const lessons = track ? this.inTrack(track) : this.lessons;
+    return lessons.reduce((acc, lesson) => {
       const p = lesson.published ? this.progressOf(lesson.id) : { done: 0, total: 0 };
       return { done: acc.done + p.done, total: acc.total + p.total };
     }, { done: 0, total: 0 });

@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IPv4, CIDR e sub-redes</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body data-lesson="R01" data-base=".." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Redes para dados de infraestrutura &middot; Trilha extra</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="3">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula R01 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">03 min &middot; trilha extra de redes &middot; nenhum pré-requisito de rede</div>
+  <div class="prose">
+    <p class="lead">Você não vai configurar roteador. Vai receber exports de IPAM, de DHCP, de CMDB e de firewall, e vai ter que dizer com número o que está certo, o que está cheio e o que está sobrando. Para isso, endereço IP precisa deixar de ser texto.</p>
+
+    <p>A trilha de redes tem três aulas, uma por dia. Esta é a de IPv4. Ao sair dela você responde sem calculadora, e depois confirma com código:</p>
+
+    <ul>
+      <li><strong>Que rede é esta?</strong> Dado <code>10.20.6.130/22</code>: endereço de rede, broadcast, primeiro e último host, quantos hosts cabem;</li>
+      <li><strong>Este IP pertence a qual sub-rede?</strong> A pergunta que vira o join mais caro de qualquer relatório de inventário;</li>
+      <li><strong>Esta sub-rede está cheia?</strong> E por que o denominador errado faz o alerta de 80% não disparar.</li>
+    </ul>
+
+    <div class="callout tip">
+      <div class="callout-title">Onde isso encaixa</div>
+      <p>É a base do <code>mart_subnet_utilization</code> do projeto <code>network-inventory</code> e do vocabulário que uma vaga de Network Data &amp; BI espera ouvir numa entrevista. Os exemplos usam o mesmo mundo do projeto (sites, sub-redes de usuários, impressoras, voz), mas <strong>nenhum exercício daqui é uma query do projeto</strong>: aquelas continuam suas.</p>
+    </div>
+
+    <h2>Como estudar</h2>
+    <p>Tudo usa só a biblioteca padrão: o módulo <code>ipaddress</code>. Cada saída mostrada foi executada em Python 3.13. Faça as previsões antes de revelar, e faça as contas de cabeça da atividade 11 <em>antes</em> de abrir o gabarito: em entrevista não tem <code>ipaddress</code>.</p>
+    <p><strong>Tempo estimado:</strong> 55 min de leitura, 1 h 30 de exercícios. O arquivo de entrega é <code>exercises/python/net01.py</code>.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="video" data-title="Um endereço IPv4 é um inteiro de 32 bits" data-min="6" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R01 &middot; Atividade 02</span></div>
+  <h1 class="act-title">Um endereço IPv4 é um inteiro de 32 bits</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead"><code>10.20.1.7</code> não é uma string com pontos. É o número 169.083.143 escrito em quatro pedaços de 8 bits, porque quatro números de 0 a 255 são mais fáceis de ditar ao telefone.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import ipaddress
+
+ip = ipaddress.ip_address("10.20.1.7")
+print(repr(ip))
+print(int(ip))
+print(".".join(f"{octet:08b}" for octet in ip.packed))
+print(ipaddress.ip_address(169083143))
+print(ip + 250, ip &lt; ipaddress.ip_address("10.20.1.10"))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>IPv4Address('10.20.1.7')
+169083143
+00001010.00010100.00000001.00000111
+10.20.1.7
+10.20.2.1 True</div>
+</div>
+
+    <p>Cada pedaço é um <strong>octeto</strong>: 8 bits, de 0 a 255. Juntos dão 32 bits, e daí vêm as 4.294.967.296 combinações possíveis do IPv4. O objeto <code>IPv4Address</code> se comporta como o número que ele é: soma, compara, ordena.</p>
+
+    <h2>Por que isso importa no primeiro dia</h2>
+    <p>Porque todo export que você recebe guarda o IP como texto, e texto ordena caractere por caractere:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">leases = ["10.20.1.9", "10.20.1.10", "10.20.1.100", "10.20.2.1", "9.9.9.9"]
+
+print(sorted(leases))
+print(sorted(leases, key=ipaddress.ip_address))
+print(max(leases), "contra", max(leases, key=ipaddress.ip_address))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>['10.20.1.10', '10.20.1.100', '10.20.1.9', '10.20.2.1', '9.9.9.9']
+['9.9.9.9', '10.20.1.9', '10.20.1.10', '10.20.1.100', '10.20.2.1']
+9.9.9.9 contra 10.20.2.1</div>
+</div>
+
+    <p>Na ordem de texto, <code>10.20.1.100</code> vem antes de <code>10.20.1.9</code>, e <code>9.9.9.9</code> é o "maior" endereço da lista. Nenhum erro, nenhum aviso: só um relatório com a ordem errada, um <code>MAX(ip)</code> que devolve o endereço errado, e um "último IP alocado da sub-rede" que não é o último.</p>
+
+    <div class="callout bug">
+      <div class="callout-title">Como isso aparece no SQL</div>
+      <p>Um <code>ORDER BY ip_address</code> numa coluna <code>VARCHAR</code> faz exatamente o mesmo. O mesmo vale para <code>BETWEEN '10.20.1.0' AND '10.20.1.255'</code>: compara texto, aceita <code>'10.20.1.1000'</code> e recusa nada. A aula R02 mostra as três formas de guardar IP num banco para que a comparação seja numérica.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">A regra</div>
+      <p>Converta para <code>ipaddress.ip_address</code> (ou para inteiro) <strong>na entrada</strong> do pipeline, no staging. Texto de IP só existe no raw e no relatório final.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="Prefixo, máscara e o bloco CIDR" data-min="8" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R01 &middot; Atividade 03</span></div>
+  <h1 class="act-title">Prefixo, máscara e o bloco CIDR</h1>
+  <div class="act-meta">08 min</div>
+  <div class="prose">
+    <p class="lead">Uma sub-rede é um intervalo contínuo de inteiros. O <code>/22</code> diz quantos bits do começo são fixos; os que sobram variam e numeram os hosts.</p>
+
+    <p><code>10.20.0.0/22</code> significa: os primeiros 22 bits são iguais para todo endereço da rede, os 10 últimos são livres. 2<sup>10</sup> = 1.024 endereços, de <code>10.20.0.0</code> a <code>10.20.3.255</code>.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import ipaddress
+
+net = ipaddress.ip_network("10.20.0.0/22")
+print("prefixo       ", net.prefixlen)
+print("máscara       ", net.netmask)
+print("wildcard      ", net.hostmask)
+print("rede          ", net.network_address)
+print("broadcast     ", net.broadcast_address)
+print("endereços     ", net.num_addresses)
+print("em binário    ", ".".join(f"{o:08b}" for o in net.netmask.packed))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>prefixo        22
+máscara        255.255.252.0
+wildcard       0.0.3.255
+rede           10.20.0.0
+broadcast      10.20.3.255
+endereços      1024
+em binário     11111111.11111111.11111100.00000000</div>
+</div>
+
+    <p>Três formas de escrever a mesma informação, e você vai encontrar as três em export:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Forma</th><th>Exemplo</th><th>Onde aparece</th></tr></thead>
+        <tbody>
+          <tr><td>Prefixo (CIDR)</td><td><code>/22</code></td><td>IPAM, cloud (VPC, subnet), Linux, quase tudo moderno</td></tr>
+          <tr><td>Máscara</td><td><code>255.255.252.0</code></td><td>Windows, DHCP do Windows Server, exports antigos</td></tr>
+          <tr><td>Wildcard</td><td><code>0.0.3.255</code></td><td>ACL de Cisco e OSPF: é a máscara invertida</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>A máscara em binário deixa claro por que ela é sempre uma sequência de 1s seguida de 0s: os 1s marcam a parte fixa. <code>255.255.255.0</code> é válida; <code>255.0.255.0</code> não é máscara de nada.</p>
+
+    <h2>Rede, broadcast e os bits de host</h2>
+    <p>O <strong>endereço de rede</strong> é o primeiro do intervalo (bits de host todos 0) e o <strong>broadcast</strong> é o último (bits de host todos 1). Nenhum dos dois vai para um computador. CIDR (Classless Inter-Domain Routing) é o nome do esquema: o prefixo pode ter qualquer tamanho, não só 8, 16 ou 24 como nas antigas "classes" A, B e C.</p>
+
+    <p>Agora o detalhe que mais causa confusão nos dados. Um CMDB costuma guardar <code>10.20.1.7/22</code>: um <em>host</em> com o prefixo da rede dele. Isso não é uma rede:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import ipaddress
+
+try:
+    ipaddress.ip_network("10.20.1.7/22")
+except ValueError as error:
+    print("ValueError:", error)
+
+print(ipaddress.ip_network("10.20.1.7/22", strict=False))
+
+iface = ipaddress.ip_interface("10.20.1.7/22")
+print(iface.ip, iface.network, iface.with_netmask)</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>ValueError: 10.20.1.7/22 has host bits set
+10.20.0.0/22
+10.20.1.7 10.20.0.0/22 10.20.1.7/255.255.252.0</div>
+</div>
+
+    <p><code>ip_network</code> recusa por padrão, porque <code>10.20.1.7</code> tem bits de host ligados. Com <code>strict=False</code> ela aceita e <strong>joga o host fora</strong>. O tipo certo para "um IP numa interface, com a rede dele" é <code>ip_interface</code>: guarda os dois.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Quando <code>strict=False</code> NÃO ajuda</div>
+      <p>Ele é útil para normalizar uma coluna de redes digitada à mão, em que alguém escreveu <code>10.20.0.1/22</code> querendo dizer a rede. É um desastre numa coluna de interfaces: você transforma 300 servidores diferentes em 300 cópias de <code>10.20.0.0/22</code>, e o join por IP passa a não achar nenhum deles. Saber qual das duas colunas você tem é uma pergunta para o dono do dado, não para o código.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="lab" data-title="Mão na massa: prever rede e broadcast" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula R01 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Prever rede e broadcast</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Um lease do DHCP diz que um notebook recebeu <code>10.20.6.130</code> numa sub-rede <code>/22</code>. Sem rodar nada, escreva a rede, o broadcast, o primeiro e o último host utilizável, e quantos hosts cabem.</p>
+
+    <p>Uma pista sem entregar o método (ele é a atividade 08): o <code>/22</code> só mexe no terceiro octeto. Os dois primeiros ficam iguais, e o quarto vai de 0 a 255 dentro de cada bloco.</p>
+
+    <div class="predict" data-predict="r01-p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="rede, broadcast, primeiro host, último host, quantos hosts utilizáveis"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a saída</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div style="margin-top:18px">
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import ipaddress
+
+iface = ipaddress.ip_interface("10.20.6.130/22")
+net = iface.network
+hosts = net.hosts()
+first = next(hosts)
+print("rede        ", net.network_address)
+print("broadcast   ", net.broadcast_address)
+print("primeiro    ", first)
+print("último      ", net.broadcast_address - 1)
+print("utilizáveis ", net.num_addresses - 2)</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>rede         10.20.4.0
+broadcast    10.20.7.255
+primeiro     10.20.4.1
+último       10.20.7.254
+utilizáveis  1022</div>
+</div>
+        </div>
+        <p style="margin-top:16px">O terceiro octeto <code>6</code> cai no bloco que começa em <code>4</code>, porque um /22 anda de 4 em 4 no terceiro octeto: 0, 4, 8, 12... O bloco do 4 termina antes do 8, então o broadcast é <code>10.20.7.255</code>.</p>
+        <p>Quem erra costuma escrever <code>10.20.6.0</code> como rede, que é a resposta de um <code>/24</code>. É o vício de achar que toda rede termina em <code>.0</code> e começa no octeto que você está olhando. Repare também que <code>10.20.6.255</code> e <code>10.20.7.0</code> são hosts normais aqui: nem todo <code>.255</code> é broadcast, nem todo <code>.0</code> é rede.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="video" data-title="Quantos hosts cabem, e o denominador da utilização" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R01 &middot; Atividade 05</span></div>
+  <h1 class="act-title">Quantos hosts cabem, e o denominador da utilização</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Endereços numa rede: 2<sup>(32 − prefixo)</sup>. Hosts utilizáveis: esse número menos 2, porque a rede e o broadcast não vão para ninguém. É a fórmula que você mais vai usar desta aula.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">print(" prefixo |     endereços |  utilizáveis | máscara")
+for prefix in (16, 20, 22, 23, 24, 25, 26, 27, 28, 29, 30):
+    net = ipaddress.ip_network(f"10.0.0.0/{prefix}")
+    print(f"     /{prefix} | {net.num_addresses:&gt;13,} | {net.num_addresses - 2:&gt;12,} | {net.netmask}")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span> prefixo |     endereços |  utilizáveis | máscara
+     /16 |        65,536 |       65,534 | 255.255.0.0
+     /20 |         4,096 |        4,094 | 255.255.240.0
+     /22 |         1,024 |        1,022 | 255.255.252.0
+     /23 |           512 |          510 | 255.255.254.0
+     /24 |           256 |          254 | 255.255.255.0
+     /25 |           128 |          126 | 255.255.255.128
+     /26 |            64 |           62 | 255.255.255.192
+     /27 |            32 |           30 | 255.255.255.224
+     /28 |            16 |           14 | 255.255.255.240
+     /29 |             8 |            6 | 255.255.255.248
+     /30 |             4 |            2 | 255.255.255.252</div>
+</div>
+
+    <p>Vale decorar quatro linhas: <strong>/24 = 254</strong>, <strong>/23 = 510</strong>, <strong>/22 = 1.022</strong> e <strong>/30 = 2</strong>. O resto você deriva dobrando ou dividindo por dois a cada bit.</p>
+
+    <h2>As duas exceções</h2>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import ipaddress
+
+for text in ("10.0.0.0/30", "10.0.0.0/31", "10.0.0.5/32"):
+    net = ipaddress.ip_network(text)
+    print(f"{text:&lt;12} num_addresses={net.num_addresses}  hosts()={[str(h) for h in net.hosts()]}")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>10.0.0.0/30  num_addresses=4  hosts()=['10.0.0.1', '10.0.0.2']
+10.0.0.0/31  num_addresses=2  hosts()=['10.0.0.0', '10.0.0.1']
+10.0.0.5/32  num_addresses=1  hosts()=['10.0.0.5']</div>
+</div>
+
+    <p>Um <code>/31</code> tem dois endereços e os dois são utilizáveis: é o padrão para link ponto a ponto entre dois roteadores (RFC 3021), onde não existe broadcast porque só há um vizinho. Um <code>/32</code> é um único host: aparece em loopback de roteador, em rota de host e em regra de firewall. O <code>hosts()</code> do Python já trata os dois casos; a fórmula <code>− 2</code> não, e devolve 0 e −1.</p>
+
+    <h2>Onde a fórmula vira número de relatório</h2>
+    <p>Utilização de sub-rede é <em>IPs em uso / IPs utilizáveis</em>. O denominador parece detalhe, até ele decidir se um alerta dispara:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python"># printers VLAN: a /28 with 12 IPs in use (leases + static + gateway)
+net = ipaddress.ip_network("10.20.8.0/28")
+used = 12
+
+wrong = used / net.num_addresses
+right = used / (net.num_addresses - 2)
+print(f"usando num_addresses: {wrong:.1%}")
+print(f"usando utilizáveis  : {right:.1%}")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>usando num_addresses: 75.0%
+usando utilizáveis  : 85.7%</div>
+</div>
+
+    <p>Numa <code>/28</code> de impressoras com 12 IPs em uso, dividir pelos 16 endereços dá 75% e o painel fica verde. Dividir pelos 14 utilizáveis dá 85,7%, acima do limite de 80%. Quanto menor a sub-rede, maior a distorção: numa <code>/24</code> com 200 IPs em uso a diferença é de menos de um ponto (78,1% contra 78,7%), numa <code>/29</code> com 5 em uso são vinte (62,5% contra 83,3%).</p>
+
+    <div class="callout warn">
+      <div class="callout-title">E o gateway?</div>
+      <p>O primeiro host (ou o último, depende do padrão da empresa) costuma ser o gateway do roteador. Ele está em uso, mas não aparece no DHCP nem, muitas vezes, no CMDB. Decida e <strong>escreva</strong> a regra: "em uso = leases ativos + IPs estáticos + gateway". Sem a regra escrita, dois relatórios da mesma sub-rede vão discordar por exatamente um IP, e alguém vai perder uma tarde atrás disso.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">Quando a métrica NÃO ajuda</div>
+      <p>Utilização em percentual compara mal sub-redes de tamanhos diferentes: 90% de uma <code>/29</code> são 5 hosts livres a menos de virar problema, 90% de uma <code>/20</code> são 409 livres. Um bom relatório mostra o percentual <em>e</em> os IPs livres em número absoluto. E em IPv6, como a próxima aula mostra, a métrica perde o sentido por completo.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="Faixas privadas e especiais" data-min="7" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R01 &middot; Atividade 06</span></div>
+  <h1 class="act-title">Faixas privadas e especiais</h1>
+  <div class="act-meta">07 min</div>
+  <div class="prose">
+    <p class="lead">Nem todo endereço é igual. Alguns blocos são reservados para uso interno, outros para testes, outros significam que algo deu errado. Reconhecer esses blocos num log é metade da análise.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Bloco</th><th>O que é</th><th>O que significa num dado</th></tr></thead>
+        <tbody>
+          <tr><td><code>10.0.0.0/8</code></td><td>privado (RFC 1918)</td><td>rede interna; o que as empresas mais usam</td></tr>
+          <tr><td><code>172.16.0.0/12</code></td><td>privado (RFC 1918)</td><td>vai de 172.16 a <strong>172.31</strong>; 172.32 já é público</td></tr>
+          <tr><td><code>192.168.0.0/16</code></td><td>privado (RFC 1918)</td><td>rede doméstica, laboratório, filial pequena</td></tr>
+          <tr><td><code>100.64.0.0/10</code></td><td>espaço compartilhado (RFC 6598)</td><td>CGNAT de operadora; não é RFC 1918</td></tr>
+          <tr><td><code>169.254.0.0/16</code></td><td>link-local (APIPA)</td><td>a máquina <strong>não conseguiu</strong> lease do DHCP e se autoatribuiu um IP</td></tr>
+          <tr><td><code>127.0.0.0/8</code></td><td>loopback</td><td>a própria máquina; num log de rede, ruído</td></tr>
+          <tr><td><code>192.0.2.0/24</code> e outros dois</td><td>documentação (RFC 5737)</td><td>exemplo de manual; em produção é dado de teste vazando</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>O <code>169.254</code> merece destaque: num relatório de inventário, um dispositivo com IP <code>169.254.x.x</code> é um sintoma, não um endereço. Ele diz que o DHCP falhou para aquela máquina (escopo cheio, VLAN errada, servidor fora). Contar quantos aparecem por site é um indicador de saúde de DHCP que quase ninguém olha.</p>
+
+    <h2>O <code>is_private</code> não é o RFC 1918</h2>
+    <p>O <code>ipaddress</code> tem propriedades para isso, e a tentação é usar <code>is_private</code> para separar tráfego interno de externo num log de firewall:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python"># source IPs seen in one hour of firewall logs
+sources = ["10.20.1.7", "172.31.255.9", "172.32.1.1", "192.168.0.15",
+           "100.64.12.5", "169.254.10.3", "127.0.0.1", "192.0.2.10", "8.8.8.8"]
+
+for text in sources:
+    ip = ipaddress.ip_address(text)
+    print(f"{text:&lt;14} is_private={ip.is_private!s:&lt;5}  is_global={ip.is_global!s:&lt;5}  "
+          f"is_link_local={ip.is_link_local}")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>10.20.1.7      is_private=True   is_global=False  is_link_local=False
+172.31.255.9   is_private=True   is_global=False  is_link_local=False
+172.32.1.1     is_private=False  is_global=True   is_link_local=False
+192.168.0.15   is_private=True   is_global=False  is_link_local=False
+100.64.12.5    is_private=False  is_global=False  is_link_local=False
+169.254.10.3   is_private=True   is_global=False  is_link_local=True
+127.0.0.1      is_private=True   is_global=False  is_link_local=False
+192.0.2.10     is_private=True   is_global=False  is_link_local=False
+8.8.8.8        is_private=False  is_global=True   is_link_local=False</div>
+</div>
+
+    <p>Leia a coluna <code>is_private</code> com atenção. Ela é <code>True</code> para loopback, para link-local e para o bloco de documentação, porque segue o registro de endereços de propósito especial da IANA, não a RFC 1918. E é <code>False</code> para <code>100.64.12.5</code>, que também não é <code>is_global</code>: o CGNAT fica no meio.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">RFC1918 = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]
+
+def is_rfc1918(ip):
+    return any(ip in block for block in RFC1918)
+
+ips = [ipaddress.ip_address(s) for s in sources]
+print("is_private :", sum(ip.is_private for ip in ips))
+print("RFC 1918   :", sum(is_rfc1918(ip) for ip in ips))
+print("172.16/12 vai até", RFC1918[1].broadcast_address)</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>is_private : 6
+RFC 1918   : 3
+172.16/12 vai até 172.31.255.255</div>
+</div>
+
+    <p>Nove origens, e as duas definições discordam em três. Num relatório de "tráfego interno por site", usar <code>is_private</code> soma loopback e APIPA às suas redes e infla o número sem que nada pareça errado.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">A regra</div>
+      <p>Quando a pergunta de negócio é "é da nossa rede?", a resposta certa nem é RFC 1918: é <strong>"está dentro de algum bloco do nosso IPAM?"</strong>. Uma empresa pode usar endereço público na rede interna, e um <code>192.168.0.15</code> pode ser a rede de casa de alguém na VPN. As propriedades do <code>ipaddress</code> servem para classificar o que sobrou depois desse teste.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="video" data-title="Dividir, agregar e achar sobreposição" data-min="8" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R01 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Dividir, agregar e achar sobreposição</h1>
+  <div class="act-meta">08 min</div>
+  <div class="prose">
+    <p class="lead">Um bloco CIDR se divide em dois blocos com um bit a mais de prefixo, e assim por diante. É assim que um /22 de um site vira as sub-redes de usuários, servidores e voz.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import ipaddress
+
+site = ipaddress.ip_network("10.20.0.0/22")
+print([str(n) for n in site.subnets(new_prefix=24)])
+print(len(list(site.subnets(new_prefix=26))), "sub-redes /26")
+print(ipaddress.ip_network("10.20.1.0/24").supernet(new_prefix=22))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>['10.20.0.0/24', '10.20.1.0/24', '10.20.2.0/24', '10.20.3.0/24']
+16 sub-redes /26
+10.20.0.0/22</div>
+</div>
+
+    <p>Cada bit a mais divide por dois: um /22 tem duas /23, quatro /24, dezesseis /26. O caminho inverso é <code>supernet</code>. Com isso dá para montar um plano de endereçamento com tamanhos diferentes por necessidade, o que se chama VLSM:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python"># one /22 per site, carved by need: users, servers, voice, management
+site = ipaddress.ip_network("10.20.4.0/22")
+users, rest = site.subnets(new_prefix=23)
+servers, last = rest.subnets(new_prefix=24)
+voice, tail = last.subnets(new_prefix=25)
+mgmt = next(tail.subnets(new_prefix=27))
+
+plan = {"users": users, "servers": servers, "voice": voice, "mgmt": mgmt}
+for name, net in plan.items():
+    print(f"{name:&lt;8} {str(net):&lt;17} {net.num_addresses - 2:&gt;4} hosts")
+
+free = tail.address_exclude(mgmt)
+print("livre   ", sorted(str(n) for n in free))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>users    10.20.4.0/23       510 hosts
+servers  10.20.6.0/24       254 hosts
+voice    10.20.7.0/25       126 hosts
+mgmt     10.20.7.128/27      30 hosts
+livre    ['10.20.7.160/27', '10.20.7.192/26']</div>
+</div>
+
+    <p>Repare na ordem: os blocos maiores primeiro, cada um alinhado no seu múltiplo. É essa ordem que evita buracos que não servem para nada.</p>
+
+    <h2>A propriedade que simplifica tudo</h2>
+    <p>Dois blocos CIDR <strong>nunca se sobrepõem parcialmente</strong>. Ou são disjuntos, ou um contém o outro inteiro. Não existe "metade de um /24 dentro de outro /24", porque os dois começam em múltiplos do próprio tamanho.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">voice = ipaddress.ip_network("10.20.7.0/25")
+printers = ipaddress.ip_network("10.20.7.64/26")   # registered later, by someone else
+
+print(voice.overlaps(printers), printers.subnet_of(voice), voice.supernet_of(printers))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>True True True</div>
+</div>
+
+    <p>Por isso, "achar sobreposição numa tabela de IPAM" é o mesmo que "achar uma sub-rede dentro de outra sub-rede". Uma sub-rede dentro de um bloco de site é hierarquia, esperado. Uma sub-rede de impressoras dentro da sub-rede de voz é conflito: os mesmos IPs podem ser entregues a dois equipamentos. O exercício N1.18 separa os dois casos.</p>
+
+    <h2>Agregar: o caminho de volta</h2>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import ipaddress
+
+routes = ["10.20.4.0/24", "10.20.5.0/24", "10.20.6.0/24", "10.20.7.0/24", "10.20.9.0/24"]
+nets = [ipaddress.ip_network(r) for r in routes]
+print([str(n) for n in ipaddress.collapse_addresses(nets)])
+
+big = ipaddress.ip_network("10.20.4.0/22")
+print([str(n) for n in big.address_exclude(ipaddress.ip_network("10.20.6.0/24"))])</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>['10.20.4.0/22', '10.20.9.0/24']
+['10.20.4.0/23', '10.20.7.0/24']</div>
+</div>
+
+    <p><code>collapse_addresses</code> junta o que pode ser juntado: as quatro /24 viram uma /22, a <code>10.20.9.0/24</code> fica sozinha. <code>address_exclude</code> faz o contrário: tira um pedaço e devolve o menor conjunto de blocos que cobre o resto. O primeiro serve para resumir rotas num relatório; o segundo, para calcular o espaço livre de um bloco.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Quando agregar NÃO funciona</div>
+      <p>Duas /23 vizinhas só viram uma /22 se a primeira começar num múltiplo de 4 no terceiro octeto. <code>10.20.4.0/23 + 10.20.6.0/23</code> agregam; <code>10.20.6.0/23 + 10.20.8.0/23</code>, igualmente vizinhas e do mesmo tamanho, não. É um dos itens do treino da atividade 11.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="note" data-title="Para saber mais: subnetting de cabeça" data-min="7" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula R01 &middot; Atividade 08</span></div>
+  <h1 class="act-title">Subnetting de cabeça: o número mágico</h1>
+  <div class="act-meta">07 min &middot; o método para usar sem computador</div>
+  <div class="prose">
+    <p class="lead">Converter para binário funciona, mas é lento e erra fácil. O método do número mágico pula o binário: você só faz conta em um octeto.</p>
+
+    <h2>Os três passos</h2>
+    <ol>
+      <li><strong>Ache o octeto interessante</strong>: aquele em que a máscara deixa de ser 255. Para /17 a /24 é o terceiro; para /25 a /32, o quarto; para /9 a /16, o segundo.</li>
+      <li><strong>Calcule o número mágico</strong>: 256 menos o valor da máscara nesse octeto. É o tamanho de cada bloco ali.</li>
+      <li><strong>Ache o múltiplo</strong>: a rede começa no maior múltiplo do número mágico que não passa do valor do octeto. O broadcast é o próximo múltiplo menos 1; os octetos depois do interessante viram 0 na rede e 255 no broadcast.</li>
+    </ol>
+
+    <p>Os valores possíveis da máscara num octeto são só oito. Vale saber a linha de baixo de cor:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>bits no octeto</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th></tr></thead>
+        <tbody>
+          <tr><td>máscara</td><td class="num">128</td><td class="num">192</td><td class="num">224</td><td class="num">240</td><td class="num">248</td><td class="num">252</td><td class="num">254</td><td class="num">255</td></tr>
+          <tr><td>número mágico</td><td class="num">128</td><td class="num">64</td><td class="num">32</td><td class="num">16</td><td class="num">8</td><td class="num">4</td><td class="num">2</td><td class="num">1</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>O exemplo da atividade 04, de cabeça</h2>
+    <p><code>10.20.6.130/22</code>. O /22 deixa 22 − 16 = 6 bits no terceiro octeto, máscara 252, número mágico 4. Múltiplos de 4: 0, 4, 8. O 6 cai no bloco do <strong>4</strong>. Rede <code>10.20.4.0</code>, broadcast "próximo múltiplo menos 1" = 7, com o quarto octeto em 255: <code>10.20.7.255</code>.</p>
+
+    <p>Um método de cabeça só vale se for certo sempre. Então ele foi provado contra o <code>ipaddress</code>:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">def network_by_hand(ip: str, prefix: int) -&gt; str:
+    """Magic-number method: only the 'interesting' octet needs arithmetic."""
+    octets = [int(o) for o in ip.split(".")]
+    index = prefix // 8                  # octet where the mask stops being 255
+    if index == 4:
+        return ip
+    mask_value = 256 - 2 ** (8 - prefix % 8)
+    magic = 256 - mask_value             # block size in that octet
+    octets[index] = octets[index] // magic * magic
+    return ".".join(str(o) for o in octets[: index + 1] + [0] * (3 - index))
+
+random.seed(7)
+for _ in range(10_000):
+    ip = str(ipaddress.ip_address(random.getrandbits(32)))
+    prefix = random.randint(1, 32)
+    expected = ipaddress.ip_network(f"{ip}/{prefix}", strict=False).network_address
+    assert network_by_hand(ip, prefix) == str(expected), (ip, prefix)
+print("10.000 casos aleatórios: o método bate com ipaddress em todos")
+print(network_by_hand("10.20.6.130", 22), network_by_hand("172.16.45.200", 20))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>10.000 casos aleatórios: o método bate com ipaddress em todos
+10.20.4.0 172.16.32.0</div>
+</div>
+
+    <p>Dez mil endereços e prefixos aleatórios, de /1 a /32, nenhuma divergência. O código é a tradução literal dos três passos: <code>index</code> é o octeto interessante, <code>magic</code> é o número mágico, e a divisão inteira seguida de multiplicação acha o múltiplo.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Treinando a velocidade</div>
+      <p>O curso do Professor Messer (link em Recursos) tem dois vídeos sobre isso: "Magic Number Subnetting" e "Seven Second Subnetting". Assista depois de tentar as 14 contas da atividade 11, não antes. Em entrevista para essa vaga, a pergunta típica é "quantos hosts cabem num /26?" ou "esse IP está nessa rede?": o objetivo é responder em segundos e explicar o raciocínio em voz alta.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="video" data-title="A qual sub-rede este IP pertence?" data-min="8" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula R01 &middot; Atividade 09</span></div>
+  <h1 class="act-title">A qual sub-rede este IP pertence?</h1>
+  <div class="act-meta">08 min &middot; o join que não é de igualdade</div>
+  <div class="prose">
+    <p class="lead">Lease do DHCP, IP do CMDB, origem do firewall: todo relatório de inventário começa ligando um IP à sub-rede dele. Não existe coluna em comum para um join de igualdade. A ligação é "está dentro do intervalo".</p>
+
+    <p>Em Python, o teste é o operador <code>in</code>. E como o IPAM tem hierarquia, um IP costuma estar em várias redes ao mesmo tempo:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">ipam = [ipaddress.ip_network(n) for n in
+        ("10.20.0.0/16", "10.20.4.0/22", "10.20.4.0/23", "10.20.6.0/24")]
+lease = ipaddress.ip_address("10.20.5.77")
+
+matches = [net for net in ipam if lease in net]
+print([str(n) for n in matches])
+print("mais específica:", max(matches, key=lambda n: n.prefixlen))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>['10.20.0.0/16', '10.20.4.0/22', '10.20.4.0/23']
+mais específica: 10.20.4.0/23</div>
+</div>
+
+    <p>O IP está no bloco do site, no /22 e no /23. A resposta certa é a <strong>mais específica</strong>, a de prefixo mais longo, que é a sub-rede onde o equipamento realmente está. É o mesmo critério que um roteador usa para escolher rota, e tem nome: <em>longest-prefix match</em>.</p>
+
+    <h2>O custo da versão óbvia</h2>
+    <p>A versão óbvia testa cada IP contra cada sub-rede. Com 1.200 sub-redes e 50 mil leases, são até 60 milhões de testes. A alternativa usa a atividade 02: se cada rede é um intervalo de inteiros e elas não se sobrepõem, basta ordenar pelo início e fazer busca binária.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— 1.200 sub-redes /24, 50.000 IPs</span></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">def find_naive(ip):
+    for net in subnets:
+        if ip in net:
+            return net
+    return None
+
+starts = sorted((int(n.network_address), int(n.broadcast_address), n) for n in subnets)
+keys = [s[0] for s in starts]
+
+def find_sorted(ip):
+    i = bisect.bisect_right(keys, int(ip)) - 1
+    if i &gt;= 0 and starts[i][0] &lt;= int(ip) &lt;= starts[i][1]:
+        return starts[i][2]
+    return None
+
+for fn in (find_naive, find_sorted):
+    t0 = time.perf_counter()
+    found = [fn(ip) for ip in leases]
+    print(f"{fn.__name__:&lt;12} {time.perf_counter() - t0:7.3f} s   sem sub-rede: {found.count(None)}")
+
+assert [find_naive(ip) for ip in leases[:2000]] == [find_sorted(ip) for ip in leases[:2000]]</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>find_naive     3.503 s   sem sub-rede: 0
+find_sorted    0.023 s   sem sub-rede: 0</div>
+</div>
+
+    <p>Mesmo resultado (o <code>assert</code> confere), e mais de cem vezes mais rápido. A versão ingênua é O(IPs × redes); a ordenada é O(redes · log redes) para ordenar uma vez, mais O(log redes) por IP.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Quando a busca binária NÃO funciona</div>
+      <p>Ela pressupõe intervalos que não se sobrepõem. Coloque o <code>10.20.0.0/16</code> do site na mesma lista e o <code>bisect</code> passa a achar o intervalo errado para metade dos IPs, sem erro nenhum. Com hierarquia, você precisa de outra estrutura: é o desafio N1.20. E se são 30 sub-redes e 200 IPs, a versão ingênua roda em milissegundos e é mais fácil de revisar. Otimize o join quando ele aparecer na medição, não antes.</p>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-title">O mesmo problema em SQL e em Spark</div>
+      <p>Num banco é um <em>range join</em> (<code>ip BETWEEN rede_inicio AND rede_fim</code>), e a próxima aula mostra como o Postgres e o DuckDB executam isso. No Spark, um range join sem cuidado vira produto cartesiano entre partições; a técnica usual é criar uma chave de igualdade grosseira (o /16, por exemplo) para o join e filtrar o intervalo depois. É a mesma ideia de reduzir o espaço de busca antes de comparar.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="note" data-title="Armadilhas: os bugs que não levantam exceção" data-min="8" hidden>
+  <div class="kicker"><span class="tag is-note">Armadilhas</span><span class="dot"></span><span>Aula R01 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Os bugs que não levantam exceção</h1>
+  <div class="act-meta">08 min</div>
+  <div class="prose">
+    <p class="lead">Um IP inválido que levanta <code>ValueError</code> é fácil: o pipeline para e você conserta. O problema são os que viram outro IP, outro número ou outra rede sem avisar.</p>
+
+    <p>Comece pelo mais traiçoeiro. Uma planilha exportou os IPs com zeros à esquerda, para alinhar as colunas:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">raw = "010.020.001.007"          # exported from a spreadsheet with zero padding
+
+print("socket.inet_aton :", socket.inet_ntoa(socket.inet_aton(raw)))
+print("socket.inet_aton :", socket.inet_ntoa(socket.inet_aton("10.1")), "(de '10.1')")
+try:
+    ipaddress.ip_address(raw)
+except ValueError as error:
+    print("ipaddress        : ValueError:", error)</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>socket.inet_aton : 8.16.1.7
+socket.inet_aton : 10.0.0.1 (de '10.1')
+ipaddress        : ValueError: '010.020.001.007' does not appear to be an IPv4 or IPv6 address</div>
+</div>
+
+    <p>A função clássica do C, que o módulo <code>socket</code> expõe e que muita ferramenta antiga usa por baixo, lê o <code>010</code> como <strong>octal</strong>: 8. E <code>020</code> vira 16. O endereço <code>10.20.1.7</code> vira <code>8.16.1.7</code>, um IP público de outra empresa. Ela também aceita formas curtas: <code>10.1</code> vira <code>10.0.0.1</code>. O <code>ipaddress</code> recusa os dois. A recusa dos zeros à esquerda entrou no Python 3.9.5, justamente por ser uma brecha de segurança: um filtro de acesso que validava com uma biblioteca e conectava com outra podia ser enganado.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3>Zero à esquerda lido como octal</h3>
+        <p>É o caso acima. Não "conserte" removendo os zeros sem saber de onde veio o dado: se a origem for uma ferramenta que já interpretou como octal, o IP correto é o outro. Rejeite, conte e pergunte. O exercício N1.15 pede exatamente essa política.</p>
+      </div>
+      <div class="trap">
+        <h3>Ordenar e comparar como texto</h3>
+        <p><code>MAX</code>, <code>ORDER BY</code> e <code>BETWEEN</code> em coluna de texto devolvem resposta, só que errada (atividade 02). Num relatório de "faixa de IPs livres", a faixa sai invertida e ninguém percebe.</p>
+      </div>
+      <div class="trap">
+        <h3><code>strict=False</code> em coluna de interface</h3>
+        <p>Transforma cada host na rede dele (atividade 03). A contagem de linhas não muda, a de valores distintos despenca, e o join por IP passa a achar zero. Use <code>ip_interface</code> quando a coluna tem host e prefixo juntos.</p>
+      </div>
+      <div class="trap">
+        <h3>Denominador de utilização com <code>num_addresses</code></h3>
+        <p>Subestima o uso, e mais ainda em sub-rede pequena. A <code>/28</code> com 12 IPs aparece com 75% em vez de 85,7%, abaixo do alerta (atividade 05). E se a regra de "em uso" não conta o gateway, você erra mais um.</p>
+      </div>
+      <div class="trap">
+        <h3><code>172.16.0.0/12</code> tratado como <code>/16</code></h3>
+        <p>Um filtro escrito como <code>ip LIKE '172.16.%'</code> deixa de fora 172.17 a 172.31 inteiros, que também são privados. O oposto também acontece: tratar todo <code>172.*</code> como privado coloca 172.32 em diante, que é público, no balaio interno.</p>
+      </div>
+      <div class="trap">
+        <h3><code>is_private</code> contado como "da nossa rede"</h3>
+        <p>Soma loopback, APIPA e endereço de documentação ao tráfego interno (atividade 06). O número fica maior, plausível, e errado.</p>
+      </div>
+      <div class="trap">
+        <h3><code>2 ** (32 - p) - 2</code> em <code>/31</code> e <code>/32</code></h3>
+        <p>Dá 0 e −1 hosts. Um link ponto a ponto some do relatório de capacidade, e uma soma de "hosts disponíveis por site" pode até diminuir com um <code>/32</code> no meio. Trate os dois prefixos como caso especial ou use <code>hosts()</code>.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="lab" data-title="Treino: 14 contas de cabeça (N1.1 a N1.14)" data-min="30" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula R01 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Treino: 14 contas de cabeça</h1>
+  <div class="act-meta">30 min &middot; papel e caneta, sem Python</div>
+  <div class="prose">
+    <p class="lead">Faça todas no papel, com o método da atividade 08, marcando o tempo. Só depois confira no gabarito. A meta é menos de 30 segundos por item de N1.1 a N1.8.</p>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N1.1–N1.8</span><h2>Rede, broadcast, primeiro, último e hosts</h2><span class="ex-kind">cálculo</span></div>
+      <p>Para cada endereço, escreva a máscara, o endereço de rede, o broadcast, o primeiro e o último host utilizável e o número de hosts.</p>
+      <ol>
+        <li><code>192.168.10.77/26</code></li>
+        <li><code>172.16.45.200/20</code></li>
+        <li><code>10.50.3.14/28</code></li>
+        <li><code>172.31.255.9/27</code></li>
+        <li><code>10.10.10.10/19</code></li>
+        <li><code>192.168.0.255/23</code>, e diga: este endereço pode ser dado a um computador?</li>
+        <li><code>10.0.0.1/30</code>, e diga qual é o outro host do enlace</li>
+        <li><code>10.99.200.1/21</code></li>
+      </ol>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N1.9–N1.14</span><h2>Perguntas de planejamento e de leitura</h2><span class="ex-kind">raciocínio</span></div>
+      <ol start="9">
+        <li>Quantas sub-redes <code>/26</code> cabem numa <code>/22</code>?</li>
+        <li>Qual o maior prefixo (a menor rede) que comporta 500 hosts? E 1.000?</li>
+        <li><code>172.32.1.1</code> é RFC 1918?</li>
+        <li><code>10.20.0.0/22</code> e <code>10.20.3.0/24</code> se sobrepõem?</li>
+        <li><code>10.20.4.0/23</code> e <code>10.20.6.0/23</code> agregam numa rede só? E <code>10.20.6.0/23</code> com <code>10.20.8.0/23</code>?</li>
+        <li>O que é <code>100.64.12.5</code>? E o que um <code>169.254.10.3</code> num relatório de inventário diz sobre aquele equipamento?</li>
+      </ol>
+    </div>
+
+    <details class="solution">
+      <summary>Opinião do instrutor</summary>
+      <div class="sol-body">
+        <p>O gabarito abaixo foi gerado pelo <code>ipaddress</code>, não escrito à mão.</p>
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— gabarito de N1.1 a N1.14</span></span><button class="copy">Copiar</button></div>
+  <pre><code>      entrada            máscara          rede           broadcast       primeiro       último         úteis
+N1.1  192.168.10.77/26   255.255.255.192  192.168.10.64  192.168.10.127  192.168.10.65  192.168.10.126 62
+N1.2  172.16.45.200/20   255.255.240.0    172.16.32.0    172.16.47.255   172.16.32.1    172.16.47.254  4094
+N1.3  10.50.3.14/28      255.255.255.240  10.50.3.0      10.50.3.15      10.50.3.1      10.50.3.14     14
+N1.4  172.31.255.9/27    255.255.255.224  172.31.255.0   172.31.255.31   172.31.255.1   172.31.255.30  30
+N1.5  10.10.10.10/19     255.255.224.0    10.10.0.0      10.10.31.255    10.10.0.1      10.10.31.254   8190
+N1.6  192.168.0.255/23   255.255.254.0    192.168.0.0    192.168.1.255   192.168.0.1    192.168.1.254  510
+N1.7  10.0.0.1/30        255.255.255.252  10.0.0.0       10.0.0.3        10.0.0.1       10.0.0.2       2
+N1.8  10.99.200.1/21     255.255.248.0    10.99.200.0    10.99.207.255   10.99.200.1    10.99.207.254  2046
+
+N1.9   16 sub-redes /26 numa /22
+N1.10  500 hosts -&gt; /23 (510 úteis)
+N1.10  1000 hosts -&gt; /22 (1022 úteis)
+N1.11  172.32.1.1 em 172.16.0.0/12: False
+N1.12  sobrepõem: True
+N1.13  10.20.4.0/23 + 10.20.6.0/23 -&gt; ['10.20.4.0/22']
+N1.13  10.20.6.0/23 + 10.20.8.0/23 -&gt; ['10.20.6.0/23', '10.20.8.0/23']
+N1.14  100.64.12.5 em 100.64.0.0/10: True | 169.254.10.3 link-local: True</code></pre>
+</div>
+        <p><strong>Onde a maioria escorrega.</strong> No N1.6: <code>192.168.0.255</code> termina em 255 mas <em>não</em> é broadcast, porque a /23 vai até <code>192.168.1.255</code>. É um host válido. No N1.2, o número mágico é 16 (máscara 240 no terceiro octeto) e o 45 cai no bloco do 32; o escorregão é esquecer que o quarto octeto vira 255 no broadcast e escrever <code>172.16.47.0</code>. No N1.13, a segunda dupla não agrega porque uma /22 precisa começar em múltiplo de 4 no terceiro octeto, e 6 não é.</p>
+        <p>No N1.14: <code>100.64.12.5</code> está no espaço compartilhado de CGNAT (RFC 6598), não é RFC 1918 nem público. E o <code>169.254.10.3</code> diz que o equipamento pediu IP ao DHCP, não recebeu e se autoatribuiu um link-local. É sintoma de escopo cheio, VLAN errada ou DHCP fora do ar, e vale uma linha própria no relatório de saúde.</p>
+      </div>
+    </details>
+  </div>
+</article>
+
+<!-- ==================== 12 ==================== -->
+<article class="act" id="a12" data-kind="lab" data-title="Hora da prática: N1.15 a N1.20 e entrega" data-min="60" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula R01 &middot; Atividade 12</span></div>
+  <h1 class="act-title">Exercícios N1.15 a N1.20 e entrega</h1>
+  <div class="act-meta">60 min &middot; arquivo <code>exercises/python/net01.py</code></div>
+  <div class="prose">
+    <p class="lead">Seis exercícios em Python, só com <code>ipaddress</code> e o resto da biblioteca padrão. As entradas ficam num arquivo separado, para o <code>net01.py</code> conter só lógica.</p>
+
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— crie este arquivo como exercises/python/net01_data.py</span></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python"># exercises/python/net01_data.py — inputs for N1.15 to N1.19
+
+RAW_IPS = ["10.20.1.7", " 10.20.1.8", "10.20.1.9\n", "010.020.001.010", "10.20.1",
+           "10.20.1.256", "", "N/A", "10.20.1.11/24", "10.020.1.12", "10.20.1.13"]
+
+PRINTERS_SUBNET = "10.20.8.0/27"
+PRINTERS_LEASES = ["10.20.8.9", "10.20.8.10", "10.20.8.2", "10.20.8.30", "10.20.8.11",
+                   "10.20.8.3", "10.20.8.20", "10.20.8.4", "10.20.8.12", "10.20.8.21"]
+
+SUBNETS = {"ATL-users": "10.20.4.0/23", "ATL-printers": "10.20.8.0/28", "ATL-voice": "10.20.7.0/25"}
+IN_USE = {"ATL-users": 402, "ATL-printers": 12, "ATL-voice": 96}   # leases + static, gateway excluded
+
+IPAM = [("10.20.0.0/16", "block"), ("10.30.0.0/16", "block"),
+        ("10.20.4.0/23", "subnet"), ("10.20.6.0/24", "subnet"), ("10.20.7.0/25", "subnet"),
+        ("10.20.7.64/26", "subnet"), ("10.30.1.0/24", "subnet"), ("10.40.1.0/24", "subnet")]
+
+FIREWALL_SOURCES = ["10.20.1.7", "172.31.255.9", "172.32.1.1", "192.168.0.15", "100.64.12.5",
+                    "169.254.10.3", "127.0.0.1", "192.0.2.10", "8.8.8.8", "198.51.100.7",
+                    "100.127.255.1", "100.128.0.1", "203.0.113.200", "10.255.255.255"]</code></pre>
+</div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N1.15</span><h2>Limpar uma coluna de IP de export</h2><span class="ex-kind">validação</span></div>
+      <p>Escreva <code>parse_ipv4(text) -&gt; tuple[IPv4Address | None, str]</code> que devolve o endereço (ou <code>None</code>) e um motivo: <code>ok</code>, <code>stripped</code> (valia depois de tirar espaço), <code>leading_zero</code>, <code>incomplete</code>, <code>out_of_range</code>, <code>has_prefix</code>, <code>empty</code> ou <code>not_an_ip</code>. Rode sobre <code>RAW_IPS</code> e imprima a contagem por motivo.</p>
+      <p>Por escrito, num comentário: por que <code>leading_zero</code> é rejeitado em vez de corrigido?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+          <p>A contagem que a solução de referência produz:</p>
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— contagem por motivo</span></span><button class="copy">Copiar</button></div>
+  <pre><code>empty        1
+has_prefix   1
+incomplete   1
+leading_zero 2
+not_an_ip    1
+ok           2
+out_of_range 1
+stripped     2</code></pre>
+</div>
+          <p>A ordem dos testes decide a resposta, e o caso que derruba quase todo mundo é o <code>"N/A"</code>: ele contém uma barra. Quem testa <code>"/" in text</code> para detectar prefixo classifica o <code>N/A</code> como <code>has_prefix</code>, e a contagem fecha 11 do mesmo jeito. Teste o formato inteiro (quatro grupos de dígitos, uma barra, dígitos), não um caractere.</p>
+          <p>Sobre o comentário: o zero à esquerda é ambíguo. A planilha quis dizer decimal, mas uma ferramenta que leu antes de você pode ter entendido octal. Corrigir em silêncio é escolher uma das duas sem saber. Rejeitar, contar e levar o número para o dono do dado é a única opção que não inventa endereço.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N1.16</span><h2>Ordenar e achar os IPs livres</h2><span class="ex-kind">ordenação</span></div>
+      <p>Ordene <code>PRINTERS_LEASES</code> como endereço e liste os IPs livres de <code>PRINTERS_SUBNET</code>: hosts utilizáveis que não estão em lease e não são o gateway (o primeiro host). Imprima quantos são e os seis primeiros.</p>
+      <p>Antes de rodar, preveja num comentário: qual seria o primeiro item de <code>sorted(PRINTERS_LEASES)</code> sem <code>key</code>?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— último octeto de cada IP</span></span><button class="copy">Copiar</button></div>
+  <pre><code>ordenados : 2 3 4 9 10 11 12 20 21 30
+livres    : 19 -&gt; 5 6 7 8 13 14 ...</code></pre>
+</div>
+          <p>Sem <code>key</code>, o primeiro é <code>10.20.8.10</code>, porque o caractere <code>1</code> vem antes do <code>2</code>. Os 19 livres saem de 30 utilizáveis menos 10 leases menos o gateway. O escorregão comum é subtrair o gateway duas vezes (uma vez em <code>hosts()</code>, que <em>não</em> o exclui, e outra à mão porque "o primeiro é sempre especial"), ou esquecer de usar <code>set</code> para o teste de pertinência e fazer uma busca linear por IP.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N1.17</span><h2>Utilização com alerta de 80%</h2><span class="ex-kind">métrica</span></div>
+      <p>Para cada item de <code>SUBNETS</code>, calcule a utilização com a regra "em uso = <code>IN_USE</code> + gateway" sobre os hosts utilizáveis, e marque <code>ALERTA</code> acima de 80%. Depois rode de novo com <code>num_addresses</code> no denominador e escreva num comentário qual linha muda de faixa, ou se nenhuma muda, e por quê.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— denominador = hosts utilizáveis</span></span><button class="copy">Copiar</button></div>
+  <pre><code>ATL-users    10.20.4.0/23    403/510   79.0%  
+ATL-printers 10.20.8.0/28     13/14    92.9%  ALERTA
+ATL-voice    10.20.7.0/25     97/126   77.0%</code></pre>
+</div>
+          <p>Só a de impressoras alerta. Com <code>num_addresses</code> ela cai para 13/16 = 81,25%: continua acima, por pouco. É um bom lembrete de que o erro de denominador nem sempre muda o alerta. Ele muda o <em>número</em>, e em uma /28 com 11 IPs em uso já mudaria a faixa. O que mais aparece errado é esquecer o gateway, ou somá-lo em <code>IN_USE</code> quando o enunciado diz que ele está fora.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N1.18</span><h2>Conflitos e órfãs no IPAM</h2><span class="ex-kind">qualidade de dado</span></div>
+      <p>Em <code>IPAM</code>, cada linha é um <code>block</code> (bloco de site) ou uma <code>subnet</code>. Encontre: (a) <strong>conflitos</strong>, pares de sub-redes que se sobrepõem; (b) <strong>órfãs</strong>, sub-redes que não estão dentro de nenhum bloco. Uma sub-rede dentro de um bloco é hierarquia e não deve aparecer.</p>
+      <p>Por escrito: explique, com a propriedade da atividade 07, por que "se sobrepõem" e "uma contém a outra" são a mesma coisa para blocos CIDR.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— o que deve sair</span></span><button class="copy">Copiar</button></div>
+  <pre><code>conflito: 10.20.7.0/25 x 10.20.7.64/26
+órfã    : 10.40.1.0/24</code></pre>
+</div>
+          <p>A comparação par a par resolve as 8 linhas e é a resposta certa para este tamanho. Com milhares de sub-redes, ordene por <code>(início, prefixo)</code> e percorra com uma pilha das redes abertas: cada rede nova só precisa ser comparada com o topo da pilha. Onde escorregam: comparar blocos com sub-redes e reportar toda a hierarquia como conflito, ou esquecer que um conflito é um <em>par</em> e reportar cada um duas vezes (a, b) e (b, a).</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N1.19</span><h2>Classificar origens do firewall</h2><span class="ex-kind">classificação</span></div>
+      <p>Classifique cada item de <code>FIREWALL_SOURCES</code> em <code>rfc1918</code>, <code>cgnat</code>, <code>link_local</code>, <code>loopback</code>, <code>documentation</code>, <code>public</code> ou <code>other_special</code>, <strong>sem usar <code>is_private</code></strong>, e conte por classe. Depois imprima quantos o <code>is_private</code> marcaria, para comparar.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— contagem por classe</span></span><button class="copy">Copiar</button></div>
+  <pre><code>cgnat          2
+documentation  3
+link_local     1
+loopback       1
+public         3
+rfc1918        4
+(is_private contaria 9 como 'privado')</code></pre>
+</div>
+          <p>Uma lista ordenada de regras <code>(classe, rede)</code>, testada em ordem, é mais legível e mais fácil de auditar que um <code>if</code> por bloco. Os escorregões: <code>100.127.255.1</code> ainda é CGNAT (o /10 vai até 100.127) e <code>100.128.0.1</code> já é público; <code>10.255.255.255</code> é o broadcast do /8, mas como origem num log é só um endereço RFC 1918. E <code>is_global</code> serve para decidir o que sobra entre <code>public</code> e <code>other_special</code> depois das regras, não antes.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">N1.20</span><h2>Desafio: longest-prefix match em escala</h2><span class="ex-kind">desafio</span></div>
+      <p>Gere os dados com o trecho abaixo: um IPAM com hierarquia (blocos /16, /22 e /24 aninhados) e 50 mil IPs. Para cada IP, ache a rede <strong>mais específica</strong> que o contém, ou nenhuma. A varredura ingênua levou entre 1,6 e 2,0 s nesta máquina, em duas medições; a meta é ficar abaixo de 0,2 s com o mesmo resultado, conferido por <code>assert</code> contra a versão ingênua.</p>
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>python</b> <span style="color:var(--ink-3)">— dados do N1.20</span></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import ipaddress
+import random
+
+random.seed(20)
+IPAM = ([ipaddress.ip_network(f"10.{s}.0.0/16") for s in range(20, 26)]
+        + [ipaddress.ip_network(f"10.{s}.{b}.0/22") for s in range(20, 26) for b in range(0, 64, 4)]
+        + [ipaddress.ip_network(f"10.{s}.{b}.0/24") for s in range(20, 26) for b in range(0, 64, 2)])
+low, high = int(ipaddress.ip_address("10.20.0.0")), int(ipaddress.ip_address("10.26.255.255"))
+IPS = [ipaddress.ip_address(random.randint(low, high)) for _ in range(50_000)]</code></pre>
+</div>
+      <p>Imprima quantos IPs caíram em cada prefixo e quantos ficaram sem rede. E responda por escrito: por que a busca binária da atividade 09 não serve aqui?</p>
+      <details class="solution">
+        <summary>Dica, se travar há mais de 20 minutos</summary>
+        <div class="sol-body">
+          <p>Existem só três tamanhos de prefixo no IPAM. Para um IP e um prefixo <code>p</code>, o endereço de rede candidato é o IP com os bits de host zerados, o que é uma operação de máscara sobre o inteiro. Se você tiver um <code>dict</code> por tamanho de prefixo, quantas consultas precisa fazer por IP, e em que ordem?</p>
+        </div>
+      </details>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— contagem e tempos da solução de referência</span></span><button class="copy">Copiar</button></div>
+  <pre><code>294 redes no IPAM, 50,000 IPs
+/24        5385
+/22        5423
+/16       32216
+sem rede   6976
+solução de referência: 0.018 s
+varredura ingênua    : 1.712 s</code></pre>
+</div>
+          <p>A solução de referência faz no máximo uma consulta de dicionário por tamanho de prefixo, do mais longo para o mais curto, e para na primeira que acha: O(número de tamanhos) por IP, independente de quantas redes o IPAM tem. É, de forma simplificada, o que uma tabela de roteamento faz. A busca binária não serve porque, com hierarquia, o intervalo que começa logo antes do IP pode ser um /24 vizinho que não o contém, enquanto o /16 que o contém começou muito antes.</p>
+          <p>Onde escorregam: testar os prefixos do mais curto para o mais longo e devolver o /16 para todo mundo (a contagem de /16 fica em 43 mil e o <code>assert</code> pega), ou montar a máscara com <code>~</code> sem limitar a 32 bits.</p>
+        </div>
+      </details>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Mande o <code>net01.py</code> com as saídas coladas em comentário embaixo de cada exercício e as respostas escritas do N1.15, N1.17, N1.18 e N1.20. Nas contas de cabeça, anote quanto tempo levou e quais errou: é o que decide se vale repetir o treino antes da entrevista.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de entregar</div>
+      <ul>
+        <li>Nenhum IP é comparado, ordenado ou agrupado como texto?</li>
+        <li>O denominador de utilização está escrito num comentário, com a regra do gateway?</li>
+        <li>O N1.20 tem o <code>assert</code> contra a versão ingênua, e não só o tempo?</li>
+        <li>As previsões foram escritas <strong>antes</strong> de rodar?</li>
+      </ul>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 13 ==================== -->
+<article class="act" id="a13" data-kind="recap" data-title="Fechamento" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-lab">Fechamento</span><span class="dot"></span><span>Aula R01 &middot; Atividade 13</span></div>
+  <h1 class="act-title">Fechamento</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">IPv4 é aritmética de inteiros com um disfarce. Tirando o disfarce, quase toda pergunta de inventário vira uma conta de intervalo.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ideia</th><th>Em uma linha</th></tr></thead>
+        <tbody>
+          <tr><td>Endereço</td><td>inteiro de 32 bits; converta na entrada, nunca compare como texto</td></tr>
+          <tr><td>Prefixo</td><td><code>/p</code> fixa p bits; a rede tem 2<sup>(32−p)</sup> endereços</td></tr>
+          <tr><td>Hosts</td><td>endereços − 2, exceto <code>/31</code> (2) e <code>/32</code> (1)</td></tr>
+          <tr><td>Utilização</td><td>em uso / utilizáveis, com a regra do gateway escrita</td></tr>
+          <tr><td>Privado</td><td>RFC 1918 ≠ <code>is_private</code> ≠ "da nossa rede"</td></tr>
+          <tr><td>Sobreposição</td><td>blocos CIDR são disjuntos ou um contém o outro</td></tr>
+          <tr><td>Pertinência</td><td>range join; com hierarquia, vence o prefixo mais longo</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Se perguntarem na entrevista</h2>
+    <p>"O que é um /22?" tem uma resposta de 15 segundos que mostra que você entende e não só decorou: <em>"são 22 bits fixos e 10 livres, então 1.024 endereços e 1.022 hosts. Num relatório de utilização, o denominador é esse 1.022, e o gateway conta como usado."</em> A segunda frase é a que diferencia alguém de dados de alguém que só fez a prova de certificação.</p>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; R02: IPv6 e IP como dado</div>
+      <p>128 bits, o mesmo endereço escrito de cinco jeitos, a sub-rede que nunca enche, e o notebook que troca de IPv6 várias vezes por dia. Depois, a parte de engenharia: como guardar IP num banco, o range join no Postgres com <code>inet</code> e no DuckDB com inteiros, e por que um IPv4 não cabe num <code>INTEGER</code>.</p>
+    </div>
+  </div>
+</article>
+
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/13</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula R01</div>
+          <div class="lh-n">IPv4, CIDR e sub-redes</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/python/net01.py<span class="rs">o arquivo que você entrega</span></span></li>
+        <li><span class="res-static">exercises/python/net01_data.py<span class="rs">as entradas dos exercícios N1.15 a N1.19</span></span></li>
+      </ul>
+      <h3>Vídeos</h3>
+      <ul>
+        <li><a href="https://www.professormesser.com/network-plus/n10-009/n10-009-video/n10-009-training-course/" target="_blank" rel="noopener">Professor Messer, Network+ N10-009<span class="rs">seção 1.7: IPv4 Addressing, Subnet Masks, Magic Number, Seven Second Subnetting</span></a></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://docs.python.org/3/howto/ipaddress.html" target="_blank" rel="noopener">An introduction to the ipaddress module<span class="rs">docs.python.org · o HOWTO oficial</span></a></li>
+        <li><a href="https://www.rfc-editor.org/rfc/rfc1918" target="_blank" rel="noopener">RFC 1918<span class="rs">as três faixas privadas</span></a></li>
+        <li><span class="res-static">RFC 6598, RFC 5737 e RFC 3021<span class="rs">CGNAT, blocos de documentação e o /31 ponto a ponto · busque pelo número em rfc-editor.org</span></span></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../assets/course-data.js"></script>
+<script src="../assets/course.js"></script>
+</body>
+</html>
