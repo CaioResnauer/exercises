@@ -8,7 +8,7 @@ headless Chromium, and measured.
 
 Usage:
     python check.py                # checks every .html under this directory
-    python check.py lessons/04-itertools-e-batching.html
+    python check.py lessons/phase-1/04-itertools-e-batching.html
     python check.py --port 8123    # if the default port is taken
 
 Requires:

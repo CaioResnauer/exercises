@@ -6,9 +6,16 @@ My personal exercises
 (branch `main`, folder `/docs`). Phase 1 is seventeen lessons covering advanced
 Python, advanced SQL and the software-engineering practices around them. A
 separate track, **Redes** (lessons R01 to R03), covers IPv4, IPv6 and DNS from
-the point of view of network inventory data. The
+the point of view of network inventory data. A second one, **Dados em escala**
+(lessons D01 and D02), works through one month of NYC taxi trips with pandas
+and Polars, on the way to SQL on a data lake and Spark. The
 lesson prose is in Portuguese; everything else — file names, folders, code
 comments and this README — is in English.
+
+The Dados em escala lessons are the first to need packages outside the standard
+library. Their exercises live in `exercises/data-at-scale/`, with pandas, pyarrow
+and polars pinned in that folder's `requirements.txt`; the data files are
+downloaded into `exercises/data-at-scale/data/` and never committed.
 
 Every measurement printed in a lesson was executed: the timings, the
 `tracemalloc` peaks, the `EXPLAIN QUERY PLAN` output and the git command
@@ -23,25 +30,30 @@ docs/
 │   ├── course-data.js        # the manifest: every lesson, its state, the storage contract
 │   ├── course.css            # shared stylesheet for every page
 │   └── course.js             # shared behaviour: track tree, progress, stepper, keyboard
-├── lessons/                  # one page per lesson, 01 to 17
-│   ├── 01-protocolo-de-iteracao.html
-│   ├── 04-itertools-e-batching.html
-│   ├── 05-memoria-na-pratica.html
-│   ├── 06-git-e-o-repositorio.html
-│   ├── 07-estruturas-de-dados.html
-│   ├── 08-decorators-e-context-managers.html
-│   ├── 09-poo-para-pipelines.html
-│   ├── 10-testes-com-pytest.html
-│   ├── 11-ambiente-e-dependencias.html
-│   ├── 12-logging-estruturado.html
-│   ├── 13-sql-window-functions.html
-│   ├── 14-sql-ctes-recursivas.html
-│   ├── 15-sql-explain-e-indices.html
-│   ├── 16-git-em-equipe.html
-│   ├── 17-projeto-da-fase-1.html
-│   ├── r01-ipv4-cidr-e-sub-redes.html   # Redes track
-│   ├── r02-ipv6-e-ip-como-dado.html
-│   └── r03-dns-e-zonas-reversas.html
+├── lessons/                  # one folder per track
+│   ├── phase-1/              # lessons 01 to 17
+│   │   ├── 01-protocolo-de-iteracao.html
+│   │   ├── 04-itertools-e-batching.html
+│   │   ├── 05-memoria-na-pratica.html
+│   │   ├── 06-git-e-o-repositorio.html
+│   │   ├── 07-estruturas-de-dados.html
+│   │   ├── 08-decorators-e-context-managers.html
+│   │   ├── 09-poo-para-pipelines.html
+│   │   ├── 10-testes-com-pytest.html
+│   │   ├── 11-ambiente-e-dependencias.html
+│   │   ├── 12-logging-estruturado.html
+│   │   ├── 13-sql-window-functions.html
+│   │   ├── 14-sql-ctes-recursivas.html
+│   │   ├── 15-sql-explain-e-indices.html
+│   │   ├── 16-git-em-equipe.html
+│   │   └── 17-projeto-da-fase-1.html
+│   ├── networks/             # Redes track, R01 to R03
+│   │   ├── r01-ipv4-cidr-e-sub-redes.html
+│   │   ├── r02-ipv6-e-ip-como-dado.html
+│   │   └── r03-dns-e-zonas-reversas.html
+│   └── data-at-scale/        # Dados em escala track, D01 and D02
+│       ├── d01-pandas-em-arquivo-grande.html
+│       └── d02-o-mesmo-em-polars.html
 └── reviews/                  # one page per graded delivery
     └── 04-revisao.html
 ```
@@ -49,8 +61,9 @@ docs/
 Lessons 02 and 03 (generators, pipelines) are not written; the index and
 lesson 04 say so and name what a reader needs to carry in from them.
 
-Lessons and reviews are both one directory deep, so every page reaches the
-shared assets the same way: `../assets/course.css`.
+Each track has its own folder under `lessons/`, so a lesson page is two
+directories deep and reaches the shared assets as `../../assets/course.css`.
+Reviews stay one level deep (`../assets/course.css`).
 
 ### The manifest
 
@@ -66,7 +79,8 @@ A lesson page repeats two of them on `<body>` — `data-lesson` and
 ### Tracks
 
 A lesson with no `track` field belongs to phase 1; the Redes lessons carry
-`track: "redes"` and ids `R01` to `R03`. `tracks` in the manifest names each
+`track: "redes"` and ids `R01` to `R03`, and the Dados em escala lessons carry
+`track: "escala"` and ids `D01` and `D02`. `tracks` in the manifest names each
 track. The sidebar tree and the previous/next links only show lessons from the
 current page's track, so finishing lesson 17 never lands in R01 and the other
 way round. The index shows phase 1 progress in the hero and each extra track as
@@ -75,9 +89,10 @@ its own section.
 To add a lesson to an existing track, set its `track` and give it an id that
 does not contain `-` (a `-` in `data-lesson` marks a review page).
 
-Each page also declares its depth in `data-base` (`.` at the root, `..` inside
-`lessons/` and `reviews/`), which is how links built from the manifest resolve
-from any directory.
+Each page also declares its depth in `data-base` (`.` at the root, `../..`
+inside `lessons/<track>/`, `..` inside `reviews/`), which is how links built
+from the manifest resolve from any directory. A new track gets its own folder
+under `lessons/` and an entry in `tracks`.
 
 ### Progress
 
@@ -114,7 +129,7 @@ the server matches how GitHub Pages resolves the relative paths.
 ```
 cd docs
 python check.py                 # every page
-python check.py lessons/05-memoria-na-pratica.html
+python check.py lessons/phase-1/05-memoria-na-pratica.html
 ```
 
 `check.py` serves `docs/`, opens each page in headless Chromium at 1440px and
@@ -134,11 +149,11 @@ pip install playwright && python -m playwright install --with-deps chromium
 
 ### Adding a lesson
 
-1. Create `docs/lessons/NN-slug.html`. Copy the skeleton from lesson 05: same
-   `<head>` (charset, viewport, Google Fonts, `../assets/course.css`), a
-   `<body data-lesson="NN" data-base=".." data-delivery="pending">`, and at the
-   end of `<body>` the three Prism scripts, then `../assets/course-data.js`,
-   then `../assets/course.js` — in that order and without `defer`, since the
+1. Create `docs/lessons/<track>/NN-slug.html`. Copy the skeleton from lesson 05: same
+   `<head>` (charset, viewport, Google Fonts, `../../assets/course.css`), a
+   `<body data-lesson="NN" data-base="../.." data-delivery="pending">`, and at the
+   end of `<body>` the three Prism scripts, then `../../assets/course-data.js`,
+   then `../../assets/course.js` — in that order and without `defer`, since the
    shared script calls `Prism.highlightAll()` on its last line.
 2. Write the lesson body as a sequence of `<article class="act">` elements. The
    shared script builds the sidebar from their `data-kind`, `data-title` and

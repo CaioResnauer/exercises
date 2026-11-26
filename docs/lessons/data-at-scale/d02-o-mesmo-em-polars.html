@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>O mesmo em Polars</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../../assets/course.css">
+</head>
+<body data-lesson="D02" data-base="../.." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Dados em escala &middot; Trilha extra</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="2">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula D02 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">02 min &middot; pré-requisito: a D01 entregue</div>
+  <div class="prose">
+    <p class="lead">Os mesmos dados, as mesmas perguntas, outra biblioteca. A comparação só vale porque você já tem as respostas da D01: cada número desta aula tem que bater com um número que você já escreveu.</p>
+
+    <p>O Polars não é "um pandas mais rápido". Ele tem outra ideia de execução, e é essa ideia que esta aula persegue. Ao sair dela, você:</p>
+    <ul>
+      <li>Escreve filtro, agregação, comparação com o grupo e join com <strong>expressões</strong>, em vez de índice;</li>
+      <li>Monta uma consulta <strong>lazy</strong>, lê o plano com <code>explain()</code> e aponta onde o otimizador fez sozinho o que você fez à mão na D01;</li>
+      <li>Diz, com números medidos na sua máquina, quanto o Polars ganhou do pandas, e por quê;</li>
+      <li>Explica três diferenças entre os dois em uma entrevista, e liga o modo lazy às transformações e ações do PySpark.</li>
+    </ul>
+
+    <h2>Como estudar</h2>
+    <p>Toda saída desta página foi executada com Python 3.12, Polars 2.2.0 e pandas 3.1.1, no mesmo Linux de 2 vCPUs da D01. O Polars usa todos os núcleos, então na sua máquina a vantagem dele deve ser maior.</p>
+    <p><strong>Tempo estimado:</strong> 45 min de leitura e 40 min de exercícios. O arquivo de entrega é <code>exercises/data-at-scale/scale02.py</code>. Deixe o <code>scale01.py</code> aberto ao lado.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="lab" data-title="Mão na massa: o nulo que não vira float" data-min="4" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula D02 &middot; Atividade 02</span></div>
+  <h1 class="act-title">O nulo que não vira float</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Na D01, <code>passenger_count</code> chegou no pandas como <code>float64</code> por causa dos 140.162 nulos. O arquivo guarda a coluna como <code>int64</code>. Que tipo você acha que o Polars vai mostrar?</p>
+
+    <div class="predict" data-predict="d02-p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="tipo de passenger_count no Polars, e quantos MB as duas colunas ocupam"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a saída</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div style="margin-top:18px">
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import polars as pl
+
+PATH = "data/yellow_tripdata_2024-01.parquet"
+
+dropoffs = pl.read_parquet(PATH, columns=["DOLocationID", "passenger_count"])
+print(dropoffs.schema)
+print(f"{dropoffs.estimated_size('mb'):.1f} MB")
+print(dropoffs.null_count())</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>Schema({'DOLocationID': Int32, 'passenger_count': Int64})
+34.0 MB
+shape: (1, 2)
+┌──────────────┬─────────────────┐
+│ DOLocationID ┆ passenger_count │
+│ ---          ┆ ---             │
+│ u32          ┆ u32             │
+╞══════════════╪═════════════════╡
+│ 0            ┆ 140162          │
+└──────────────┴─────────────────┘</div>
+</div>
+        </div>
+        <p style="margin-top:16px">Continua inteiro. O Polars guarda os dados no formato Arrow, em que cada coluna tem, ao lado dos valores, um mapa de bits que diz quais posições são nulas. Nulo não precisa de um valor especial como o <code>NaN</code>, então nenhum tipo é trocado. É o que o <code>"Int8"</code> anulável do pandas faz, só que aqui é o padrão.</p>
+        <p>Repare também no que não aparece: índice. Um DataFrame do Polars é só colunas. Isso tira da frente uma classe inteira de problemas do pandas, como o alinhamento por índice que muda um resultado sem avisar, e o <code>reset_index()</code> depois de cada agregação.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="video" data-title="Expressões: filter, group_by e agg" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula D02 &middot; Atividade 03</span></div>
+  <h1 class="act-title">Expressões: <code>filter</code>, <code>group_by</code> e <code>agg</code></h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">No pandas você escolhe colunas com colchetes e aplica funções. No Polars você descreve o resultado com expressões, como <code>pl.col("tip_amount").mean()</code>, e entrega a descrição a um contexto (<code>select</code>, <code>filter</code>, <code>with_columns</code>, <code>agg</code>) que decide como executar.</p>
+
+    <p>O mesmo exemplo da D01, sem a forma de pagamento 0:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">by_type = pl.read_parquet(PATH, columns=["payment_type", "tip_amount"])
+
+summary = (
+    by_type
+    .filter(pl.col("payment_type") != 0)
+    .group_by("payment_type")
+    .agg(
+        pl.len().alias("trips"),
+        pl.col("tip_amount").mean().round(2).alias("avg_tip"),
+    )
+    .sort("payment_type")
+)
+print(summary)</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>shape: (4, 3)
+┌──────────────┬─────────┬─────────┐
+│ payment_type ┆ trips   ┆ avg_tip │
+│ ---          ┆ ---     ┆ ---     │
+│ i64          ┆ u32     ┆ f64     │
+╞══════════════╪═════════╪═════════╡
+│ 1            ┆ 2319046 ┆ 4.17    │
+│ 2            ┆ 439191  ┆ 0.0     │
+│ 3            ┆ 19597   ┆ 0.01    │
+│ 4            ┆ 46628   ┆ 0.04    │
+└──────────────┴─────────┴─────────┘</div>
+</div>
+
+    <p>A tradução da D01 é quase linha a linha:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>pandas</th><th>Polars</th></tr></thead>
+        <tbody>
+          <tr><td><code>df[df["x"] != 0]</code></td><td><code>.filter(pl.col("x") != 0)</code></td></tr>
+          <tr><td><code>trips=("tip_amount", "size")</code></td><td><code>pl.len().alias("trips")</code></td></tr>
+          <tr><td><code>avg_tip=("tip_amount", "mean")</code></td><td><code>pl.col("tip_amount").mean().alias("avg_tip")</code></td></tr>
+          <tr><td>chave vira índice</td><td>chave continua coluna</td></tr>
+          <tr><td>resultado ordenado pela chave</td><td>ordem <strong>não garantida</strong>: o <code>.sort()</code> está ali por isso</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>As expressões dentro de um mesmo <code>agg</code> são independentes entre si, então o Polars calcula as duas em paralelo, em núcleos diferentes. Esse é o primeiro motivo do ganho de tempo, e o que aparece mesmo sem o modo lazy.</p>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="video" data-title=".over(): o transform do Polars" data-min="3" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula D02 &middot; Atividade 04</span></div>
+  <h1 class="act-title"><code>.over()</code>: o <code>transform</code> do Polars</h1>
+  <div class="act-meta">03 min</div>
+  <div class="prose">
+    <p class="lead">Na D01, "comparar cada linha com o próprio grupo" era <code>groupby(...).transform(...)</code>. No Polars é uma expressão comum, com <code>.over(chave)</code> no final.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">with_avg = by_type.with_columns(
+    (pl.col("tip_amount") - pl.col("tip_amount").mean().over("payment_type"))
+    .alias("tip_minus_type_avg")
+)
+print(with_avg.shape)
+print(with_avg.head(3))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>(2964624, 3)
+shape: (3, 3)
+┌──────────────┬────────────┬────────────────────┐
+│ payment_type ┆ tip_amount ┆ tip_minus_type_avg │
+│ ---          ┆ ---        ┆ ---                │
+│ i64          ┆ f64        ┆ f64                │
+╞══════════════╪════════════╪════════════════════╡
+│ 2            ┆ 0.0        ┆ -0.002296          │
+│ 1            ┆ 3.75       ┆ -0.419671          │
+│ 1            ┆ 3.0        ┆ -1.169671          │
+└──────────────┴────────────┴────────────────────┘</div>
+</div>
+
+    <p>Mesmo número de linhas que a entrada, uma coluna a mais. Quem já escreveu SQL reconhece: é o <code>AVG(tip_amount) OVER (PARTITION BY payment_type)</code> de uma window function, inclusive no nome. A aula 13 da fase 1, de window functions, usa exatamente essa forma.</p>
+    <p>O <code>-0.002296</code> da primeira linha não é erro: a gorjeta média em dinheiro é um pouco acima de zero, então uma gorjeta zero fica levemente abaixo dela.</p>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="video" data-title="join: validate e o N/A que o Polars não converte" data-min="4" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula D02 &middot; Atividade 05</span></div>
+  <h1 class="act-title">join: <code>validate</code> e o <code>N/A</code> que o Polars não converte</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">O join do Polars tem o mesmo contrato do merge da D01, com outro nome: <code>validate="m:1"</code>. A diferença está em outro lugar, na leitura do CSV.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">dropoffs = pl.read_parquet(PATH, columns=["DOLocationID"])
+
+for label, zones in [("default    ", pl.read_csv("data/taxi_zone_lookup.csv")),
+                     ("null_values", pl.read_csv("data/taxi_zone_lookup.csv", null_values="N/A"))]:
+    joined = dropoffs.join(
+        zones.select("LocationID", "Borough"),
+        left_on="DOLocationID",
+        right_on="LocationID",
+        how="left",
+        validate="m:1",
+    )
+    print(label, "| rows:", joined.height,
+          "| null Borough:", joined["Borough"].null_count(),
+          "| Borough == 'N/A':", (joined["Borough"] == "N/A").sum())</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>default     | rows: 2964624 | null Borough: 0 | Borough == 'N/A': 11967
+null_values | rows: 2964624 | null Borough: 11967 | Borough == 'N/A': 0</div>
+</div>
+
+    <p>Mesma tabela de zonas, mesmo join, e o número de nulos vai de 0 a 11.967 conforme a leitura. O <code>pl.read_csv</code> só trata como nulo o campo vazio. O texto <code>N/A</code> continua texto, a não ser que você peça com <code>null_values</code>. O pandas faz o contrário: converte por padrão.</p>
+    <p>Nenhum dos dois está errado. O que dá errado é migrar um pipeline de pandas para Polars e o relatório de "viagens sem borough" ir de 11.967 para zero sem nenhum erro. Num job migrado, compare as contagens de nulos coluna a coluna antes de desligar a versão antiga.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">E os tipos da chave?</div>
+      <p><code>DOLocationID</code> é <code>Int32</code> no Parquet e <code>LocationID</code> é <code>Int64</code> no CSV. O join funcionou porque o Polars converte os dois inteiros para um tipo comum. Com texto de um lado e número do outro, ele levanta <code>SchemaError</code>, o que é bom: esse erro aparece na hora.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="Lazy: scan_parquet monta um plano" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula D02 &middot; Atividade 06</span></div>
+  <h1 class="act-title">Lazy: <code>scan_parquet</code> monta um plano</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Tudo até aqui foi eager: cada linha de código executa na hora. Troque <code>read_parquet</code> por <code>scan_parquet</code> e nada é lido. Você recebe um <code>LazyFrame</code>, que é a descrição do que fazer.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">cash_trips = (
+    pl.scan_parquet(PATH)
+    .filter(pl.col("payment_type") == 2)
+    .group_by("DOLocationID")
+    .agg(pl.col("trip_distance").mean().alias("avg_distance"))
+)
+print(type(cash_trips).__name__)   # nothing was read yet
+print(cash_trips)                  # printing shows the plan, not data</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>LazyFrame
+naive plan: (run LazyFrame.explain(optimized=True) to see the optimized plan)
+
+AGGREGATE[maintain_order: false]
+  [col("trip_distance").mean().alias("avg_distance")] BY [col("DOLocationID")]
+  FROM
+  FILTER col("payment_type") == 2
+  FROM
+    Parquet SCAN [data/yellow_tripdata_2024-01.parquet]
+    PROJECT */19 COLUMNS
+    ESTIMATED ROWS: 2964624</div>
+</div>
+
+    <p>Esse é o plano <em>ingênuo</em>: exatamente o que você escreveu, de baixo para cima. Ler as 19 colunas (<code>PROJECT */19</code>), depois filtrar, depois agregar. Nada rodou ainda. Os dados só são lidos quando você pede o resultado:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">result = cash_trips.collect()
+print(type(result).__name__, result.shape)</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>DataFrame (259, 2)</div>
+</div>
+
+    <p>Essa separação tem nome, e vale guardar porque é a mesma do Spark:</p>
+    <ul>
+      <li><strong>Transformação</strong>: <code>filter</code>, <code>group_by</code>, <code>agg</code>, <code>join</code>, <code>with_columns</code>. Recebe um plano, devolve um plano maior. Não toca nos dados;</li>
+      <li><strong>Ação</strong>: <code>collect()</code>. Pega o plano inteiro, otimiza e executa.</li>
+    </ul>
+    <p>Como o otimizador vê o plano inteiro antes de executar, ele pode reescrever a ordem das coisas. É o que a próxima atividade mostra.</p>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="lab" data-title="Mão na massa: ler o plano otimizado" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula D02 &middot; Atividade 07</span></div>
+  <h1 class="act-title">Ler o plano otimizado</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">O plano ingênuo lê 19 colunas e filtra depois de ler. A consulta usa três colunas: <code>payment_type</code>, <code>DOLocationID</code> e <code>trip_distance</code>. O que muda no plano otimizado?</p>
+
+    <div class="predict" data-predict="d02-p2">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="quantas colunas o scan lê, e em que ponto do plano o filtro aparece"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a saída</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div style="margin-top:18px">
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">print(cash_trips.explain())</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>AGGREGATE[maintain_order: false]
+  [col("trip_distance").mean().alias("avg_distance")] BY [col("DOLocationID")]
+  FROM
+  simple π 2/2 ["DOLocationID", ... 1 other column]
+    Parquet SCAN [data/yellow_tripdata_2024-01.parquet]
+    PROJECT 3/19 COLUMNS
+    SELECTION: col("payment_type") == 2
+    ESTIMATED ROWS: 2964624</div>
+</div>
+        </div>
+        <p style="margin-top:16px">Duas reescritas, e cada uma tem nome:</p>
+        <ul>
+          <li><strong>Projection pushdown</strong>: <code>PROJECT */19</code> virou <code>PROJECT 3/19</code>. O otimizador descobriu sozinho quais colunas a consulta usa e passou a lista para o leitor do Parquet. É o <code>columns=</code> da D01, sem você escrever;</li>
+          <li><strong>Predicate pushdown</strong>: o nó <code>FILTER</code> sumiu e o filtro virou <code>SELECTION</code> dentro do <code>SCAN</code>. As linhas são descartadas durante a leitura, antes de ocupar memória. Com as estatísticas de mínimo e máximo do Parquet, o leitor ainda pode pular blocos inteiros que não têm nenhuma linha que passe no filtro.</li>
+        </ul>
+        <p>Quem erra costuma prever "lê 2 colunas", esquecendo que a coluna do filtro também precisa ser lida, ainda que não apareça no resultado. O <code>simple π 2/2</code> logo acima do scan é a projeção final, já sem o <code>payment_type</code>.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="note" data-title="Para saber mais: medir memória do Polars" data-min="3" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula D02 &middot; Atividade 08</span></div>
+  <h1 class="act-title">Medir memória do Polars</h1>
+  <div class="act-meta">03 min</div>
+  <div class="prose">
+    <p class="lead">Se no pandas o <code>tracemalloc</code> via 1,9 MB, no Polars ele não vê nada.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import resource
+import tracemalloc
+
+tracemalloc.start()
+trips = pl.read_parquet(PATH)
+_, peak = tracemalloc.get_traced_memory()
+tracemalloc.stop()
+
+print(f"tracemalloc peak   : {peak / 1e6:7.1f} MB")
+print(f"estimated_size     : {trips.estimated_size('mb'):7.1f} MB")
+print(f"process peak (RSS) : {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024 / 1e6:7.1f} MB")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>tracemalloc peak   :     0.0 MB
+estimated_size     :   376.3 MB
+process peak (RSS) :   539.3 MB</div>
+</div>
+
+    <p>O Polars é escrito em Rust e aloca tudo fora do Python. As duas medidas da D01 continuam valendo, com um ajuste: <code>estimated_size()</code> faz o papel do <code>memory_usage(deep=True)</code>, e o <code>ru_maxrss</code> continua sendo o pico do processo.</p>
+    <p>Compare com a D01, lendo o mês inteiro: 376,3 MB de DataFrame e 539 MB de pico no Polars, contra 418,0 MB e 1.077 MB no pandas. Boa parte da diferença vem de não haver a conversão do Arrow para o formato do pandas: o Polars já trabalha no Arrow.</p>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="video" data-title="A ponte para o PySpark" data-min="4" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula D02 &middot; Atividade 09</span></div>
+  <h1 class="act-title">A ponte para o PySpark</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">O modo lazy do Polars é a melhor porta de entrada para o Spark, porque o modelo mental é o mesmo. O que muda é que o Spark distribui o plano entre várias máquinas.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Polars lazy</th><th>PySpark</th><th>O que é</th></tr></thead>
+        <tbody>
+          <tr><td><code>pl.scan_parquet(path)</code></td><td><code>spark.read.parquet(path)</code></td><td>ponto de partida do plano; nada é lido</td></tr>
+          <tr><td><code>filter</code>, <code>group_by</code>, <code>join</code></td><td><code>filter</code>, <code>groupBy</code>, <code>join</code></td><td>transformações: aumentam o plano</td></tr>
+          <tr><td><code>collect()</code></td><td><code>collect()</code>, <code>count()</code>, <code>show()</code>, <code>write</code></td><td>ações: otimizam e executam</td></tr>
+          <tr><td><code>explain()</code></td><td><code>df.explain()</code></td><td>o plano, para conferir antes de rodar</td></tr>
+          <tr><td><code>SELECTION</code> no scan</td><td><code>PushedFilters</code> no <code>FileScan parquet</code></td><td>predicate pushdown</td></tr>
+          <tr><td><code>PROJECT 3/19</code></td><td><code>ReadSchema</code> com só as colunas usadas</td><td>projection pushdown</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Duas diferenças importam já na primeira conversa sobre Spark:</p>
+    <ul>
+      <li><strong>Shuffle.</strong> No Polars, o <code>group_by</code> roda numa máquina só. No Spark, as linhas de uma mesma chave podem estar em executores diferentes, e o <code>groupBy</code> e o <code>join</code> precisam redistribuir os dados pela rede. É a parte cara de quase todo job, e aparece como <code>Exchange</code> no plano;</li>
+      <li><strong>Join com tabela pequena.</strong> A tabela de zonas tem 265 linhas. No Spark, você pede um <em>broadcast join</em>, que copia a tabela pequena para todos os executores, e o join deixa de precisar de shuffle.</li>
+    </ul>
+    <p>E o pushdown é a mesma ideia que reduz a conta do Athena: o Athena cobra por bytes lidos, então Parquet com só as colunas usadas e filtro na coluna de partição custam menos. Você vai ver isso com número na aula de SQL.</p>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="note" data-title="Armadilhas: os bugs que não levantam exceção" data-min="6" hidden>
+  <div class="kicker"><span class="tag is-note">Armadilhas</span><span class="dot"></span><span>Aula D02 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Os bugs que não levantam exceção</h1>
+  <div class="act-meta">06 min</div>
+  <div class="prose">
+    <p class="lead">Trocar de biblioteca traz bugs novos, e quase todos aparecem só na comparação com a versão antiga.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import time
+
+import pandas as pd
+
+trips = pl.read_parquet(PATH, columns=["PULocationID", "fare_amount", "tip_amount"])
+
+# 1. group_by order is not stable
+for run in range(3):
+    print("run", run, trips.group_by("PULocationID").agg(pl.len()).head(3)["PULocationID"].to_list())
+
+# 2. NaN and inf in a mean: same data, two answers
+tip_pct = trips.select((pl.col("tip_amount") / pl.col("fare_amount") * 100).alias("tip_pct"))
+print("polars mean:", tip_pct["tip_pct"].mean(), "| NaN rows:", tip_pct["tip_pct"].is_nan().sum())
+print("pandas mean:", tip_pct.to_pandas()["tip_pct"].mean())
+
+# 3. pl.len() is an unsigned integer
+per_zone = trips.group_by("PULocationID").agg(pl.len().alias("trips"))
+print("trips dtype:", per_zone.schema["trips"])
+print(per_zone.with_columns((pl.col("trips") - 100_000).alias("trips_vs_100k"))
+      .sort(["trips", "PULocationID"]).head(2))
+
+# 4. going back to pandas has a price
+start = time.perf_counter()
+as_pandas = pl.read_parquet(PATH).to_pandas()
+print(f"to_pandas of the full month: {time.perf_counter() - start:.2f}s")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>run 0 [114, 52, 161]
+run 1 [9, 161, 224]
+run 2 [254, 58, 165]
+polars mean: nan | NaN rows: 867
+pandas mean: inf
+trips dtype: UInt32
+shape: (2, 3)
+┌──────────────┬───────┬───────────────┐
+│ PULocationID ┆ trips ┆ trips_vs_100k │
+│ ---          ┆ ---   ┆ ---           │
+│ i32          ┆ u32   ┆ u32           │
+╞══════════════╪═══════╪═══════════════╡
+│ 44           ┆ 1     ┆ 4294867297    │
+│ 105          ┆ 1     ┆ 4294867297    │
+└──────────────┴───────┴───────────────┘
+to_pandas of the full month: 0.53s</div>
+</div>
+
+    <div class="traps">
+      <div class="trap">
+        <h3><code>head()</code> depois de <code>group_by</code> sem <code>sort</code></h3>
+        <p>Três execuções, três respostas. O Polars agrupa em paralelo e devolve os grupos na ordem em que as threads terminam. Um "top 5" sem <code>sort</code>, ou um teste que compara com uma saída gravada, falha de vez em quando, que é o pior jeito de falhar. Use <code>sort</code>, ou <code>maintain_order=True</code> se precisa da ordem de chegada.</p>
+      </div>
+      <div class="trap">
+        <h3><code>NaN</code> não é nulo</h3>
+        <p>A mesma coluna de "% de gorjeta", com as 867 divisões 0/0 e as divisões por zero, dá <code>nan</code> no Polars e <code>inf</code> no pandas. O Polars ignora <em>nulos</em> no <code>mean</code>, mas <code>NaN</code> é um número de ponto flutuante e contamina a soma. O pandas pula o <code>NaN</code>, mas não o <code>inf</code>. As duas respostas estão erradas, e de jeitos diferentes. Filtre <code>fare_amount &gt; 0</code> antes de dividir, ou troque <code>NaN</code> por nulo com <code>fill_nan(None)</code>.</p>
+      </div>
+      <div class="trap">
+        <h3>Contagem sem sinal</h3>
+        <p><code>pl.len()</code> devolve <code>UInt32</code>, um inteiro sem sinal. Subtraia e o resultado negativo vira 4.294.867.297, sem erro. Isso morde em "variação de viagens entre dois meses" e em "viagens abaixo da meta". Converta para <code>Int64</code> antes de qualquer subtração.</p>
+      </div>
+      <div class="trap">
+        <h3><code>N/A</code> que deixou de ser nulo</h3>
+        <p>A atividade 05: mesmo CSV, 11.967 nulos no pandas e zero no Polars. O relatório migrado "melhora" sozinho.</p>
+      </div>
+      <div class="trap">
+        <h3><code>to_pandas()</code> no meio do caminho</h3>
+        <p>Converter o mês inteiro de volta custou 0,53 s, mais que o pipeline lazy inteiro. Se uma biblioteca exige pandas, converta o resultado agregado, que tem 260 linhas, não os dados brutos.</p>
+      </div>
+      <div class="trap">
+        <h3><code>validate</code> esquecido</h3>
+        <p>Como no pandas, o join não confere a chave se você não pedir. A linha repetida do JFK multiplica as viagens do mesmo jeito.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="video" data-title="Quando isso NÃO ajuda" data-min="3" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula D02 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Quando isso NÃO ajuda</h1>
+  <div class="act-meta">03 min</div>
+  <div class="prose">
+    <p class="lead">O modo lazy ganha quando o otimizador tem o que cortar. Quando não tem, ele é só o Polars eager com um passo a mais.</p>
+    <ul>
+      <li><strong>Operações que precisam de todos os dados.</strong> Um <code>sort</code> global, um <code>join</code> entre duas tabelas grandes ou um <code>unique</code> não terminam antes de ver a última linha. O pushdown ainda corta colunas, mas não há filtro para empurrar para dentro do arquivo;</li>
+      <li><strong>Dado pequeno.</strong> A tabela de zonas tem 265 linhas. Ali, qualquer ferramenta responde em microssegundos, e a pergunta certa é qual código a equipe consegue manter;</li>
+      <li><strong><code>collect()</code> no meio do pipeline.</strong> Cada <code>collect()</code> intermediário materializa tudo e corta o plano em dois. O otimizador só enxerga o pedaço depois dele. É o equivalente lazy do <code>list()</code> por acidente da aula 05;</li>
+      <li><strong>O dado já está num banco ou num data lake.</strong> Se a pergunta é um <code>GROUP BY</code> sobre milhões de linhas no S3, escrever SQL no Athena leva o processamento até o dado, em vez de trazer o dado até o seu Python;</li>
+      <li><strong>A biblioteca seguinte só aceita pandas.</strong> A conversão tem custo (atividade 10). Se o resto do código depende de pandas, troque só a etapa pesada, e meça se a troca pagou.</li>
+    </ul>
+  </div>
+</article>
+
+<!-- ==================== 12 ==================== -->
+<article class="act" id="a12" data-kind="lab" data-title="Hora da prática: S2.1 a S2.5 e entrega" data-min="40" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula D02 &middot; Atividade 12</span></div>
+  <h1 class="act-title">Exercícios S2.1 a S2.5 e entrega</h1>
+  <div class="act-meta">40 min &middot; arquivo <code>exercises/data-at-scale/scale02.py</code></div>
+  <div class="prose">
+    <p class="lead">Os quatro primeiros refazem os exercícios da D01 em Polars. O quinto põe os dois lado a lado com número. Cada resultado da D01 que você colou em comentário é o gabarito destes.</p>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">S2.1</span><h2>As cinco colunas, com tipos menores</h2><span class="ex-kind">refaz S1.1 e S1.2</span></div>
+      <p>Leia as mesmas cinco colunas com <code>pl.read_parquet</code> e mostre o <code>estimated_size</code>. Depois aplique tipos menores com <code>with_columns</code> e <code>cast</code>, seguindo as decisões do S1.2, e mostre de novo.</p>
+      <p>Antes de rodar, preveja num comentário: o Polars vai dar mais ou menos MB que os 106,7 e 80,0 do pandas?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+          <p>101,8 MB lendo as cinco colunas, contra 106,7 MB no pandas. Com <code>PULocationID</code> em <code>Int16</code> e <code>payment_type</code> em <code>Int8</code>, cai para 76,3 MB.</p>
+          <p>O <code>category</code> do pandas não tem tradução direta. O <code>pl.Categorical</code> do Polars é para texto: o <code>cast</code> direto de um inteiro levanta <code>ComputeError</code>. Passando por <code>String</code> antes, o total fica em 84,8 MB, maior que com <code>Int8</code>. Com cinco códigos numéricos, o inteiro pequeno é a escolha certa aqui.</p>
+          <p>Onde escorregam: insistir no <code>Categorical</code> só porque o pandas usou <code>category</code>; e pular a conferência de intervalo antes do <code>Int8</code>. O <code>payment_type</code> vai de 0 a 4 e cabe. O <code>PULocationID</code> não.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">S2.2</span><h2>Resumo por zona de embarque</h2><span class="ex-kind">refaz S1.3</span></div>
+      <p>O mesmo resumo do S1.3 (<code>trips</code>, <code>avg_fare</code>, <code>total_tip</code>, <code>avg_distance</code> por <code>PULocationID</code>), as cinco zonas com mais viagens e o <code>assert</code> de que a soma de <code>trips</code> é o número de linhas. Os números têm que bater com os do S1.3.</p>
+      <p>Antes de rodar, preveja num comentário: se você trocar o <code>sort</code> por um <code>head(5)</code> direto, roda três vezes e recebe as mesmas cinco zonas?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— top 5 em Polars</span></span><button class="copy">Copiar</button></div>
+  <pre><code>shape: (5, 5)
+┌──────────────┬────────┬───────────┬───────────┬──────────────┐
+│ PULocationID ┆ trips  ┆ avg_fare  ┆ total_tip ┆ avg_distance │
+│ ---          ┆ ---    ┆ ---       ┆ ---       ┆ ---          │
+│ i32          ┆ u32    ┆ f64       ┆ f64       ┆ f64          │
+╞══════════════╪════════╪═══════════╪═══════════╪══════════════╡
+│ 132          ┆ 145240 ┆ 59.403121 ┆ 1.2873e6  ┆ 15.493778    │
+│ 161          ┆ 143471 ┆ 15.206993 ┆ 441550.59 ┆ 2.562731     │
+│ 237          ┆ 142708 ┆ 12.176192 ┆ 369520.88 ┆ 1.698221     │
+│ 236          ┆ 136465 ┆ 12.713956 ┆ 360595.81 ┆ 1.847222     │
+│ 162          ┆ 106717 ┆ 14.785921 ┆ 322253.11 ┆ 2.231501     │
+└──────────────┴────────┴───────────┴───────────┴──────────────┘</code></pre>
+</div>
+          <p>Os mesmos números do S1.3. O <code>1.2873e6</code> é só a formatação da tabela, o valor é 1.287.335,09. Sem o <code>sort</code>, a resposta à previsão é não: o <code>head(5)</code> devolve cinco zonas diferentes a cada execução (atividade 10).</p>
+          <p>Onde escorregam: comparar a tabela do Polars com a do pandas a olho, em vez de comparar os valores; e esquecer que <code>trips</code> é <code>UInt32</code> se o próximo passo for uma subtração.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">S2.3</span><h2>Join com as zonas, nos dois jeitos de ler o CSV</h2><span class="ex-kind">refaz S1.4</span></div>
+      <p>Repita o S1.4 em Polars: join com <code>Borough</code> e <code>Zone</code>, <code>validate="m:1"</code>, contagem de linhas antes e depois e viagens por borough. Faça primeiro lendo o CSV sem <code>null_values</code>, e depois com <code>null_values="N/A"</code>. Por fim, a linha repetida do JFK, sem e com <code>validate</code>.</p>
+      <p>Antes de rodar, preveja num comentário: na leitura padrão, quantas viagens ficam com <code>Borough</code> nulo?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+          <p>Na leitura padrão, zero. As 1.658 viagens da zona 265 aparecem com o borough <code>"N/A"</code>, como texto. Com <code>null_values="N/A"</code>, a contagem por borough fica idêntica à do S1.4, com 1.658 nulos em <code>Borough</code> e 10.360 em <code>Zone</code>.</p>
+          <p>Com a linha do JFK repetida, o join sem <code>validate</code> devolve 3.109.864 linhas, as mesmas 145.240 a mais do pandas. Com <code>validate="m:1"</code>, o Polars levanta <code>ComputeError: join keys did not fulfill m:1 validation</code>.</p>
+          <p>Onde escorregam: prever "1.658", porque é o número que o pandas deu. É exatamente o tipo de diferença que passa despercebida numa migração.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">S2.4</span><h2>O pipeline inteiro em modo lazy</h2><span class="ex-kind">lazy e explain</span></div>
+      <p>Monte, com <code>scan_parquet</code>, um pipeline que filtra <code>fare_amount &gt; 0</code>, agrega por <code>PULocationID</code> (<code>trips</code>, <code>avg_fare</code>, <code>total_tip</code>), faz o join com as zonas (<code>null_values="N/A"</code>, <code>validate="m:1"</code>), ordena por <code>trips</code> e pega as cinco primeiras. Imprima o <code>explain()</code> antes do <code>collect()</code>.</p>
+      <p>Antes de rodar, preveja num comentário: (a) quantas colunas o scan vai ler; (b) o JFK continua em primeiro depois do filtro?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— explain() da solução de referência</span></span><button class="copy">Copiar</button></div>
+  <pre><code>SORT BY [slice: (0, 5), dynamic_pred: 3b7afd9f-3843-435d-9f58-e20105b40ec6, descending: [true]] [col("trips")]
+  LEFT JOIN:
+  BUILD SIDE: PreferRight
+  LEFT PLAN ON: [col("PULocationID").cast(Int64)]
+    FILTER col("trips").dynamic_predicate()
+    FROM
+      AGGREGATE[maintain_order: false]
+        [len().alias("trips"), col("fare_amount").mean().alias("avg_fare"), col("tip_amount").sum().alias("total_tip")] BY [col("PULocationID")]
+        FROM
+        Parquet SCAN [data/yellow_tripdata_2024-01.parquet]
+        PROJECT 3/19 COLUMNS
+        SELECTION: col("fare_amount") &gt; 0.0
+        ESTIMATED ROWS: 2964624
+  RIGHT PLAN ON: [col("LocationID").cast(Int64)]
+    DF ["LocationID", "Borough", "Zone", "service_zone"]; PROJECT["LocationID", "Borough", "Zone"] 3/4 COLUMNS
+  END LEFT JOIN</code></pre>
+</div>
+          <p>(a) Três colunas: <code>PULocationID</code>, <code>fare_amount</code> e <code>tip_amount</code>, com o filtro dentro do scan. O otimizador fez mais duas coisas que você não pediu: transformou "ordenar e pegar 5" num top-k (<code>slice: (0, 5)</code> no <code>SORT</code>), que não ordena todas as zonas, e leu só 3 das 4 colunas da tabela de zonas. O identificador depois de <code>dynamic_pred</code> muda a cada execução.</p>
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— resultado do collect()</span></span><button class="copy">Copiar</button></div>
+  <pre><code>┌──────────────┬────────┬───────────┬───────────┬───────────┬───────────────────────┐
+│ PULocationID ┆ trips  ┆ avg_fare  ┆ total_tip ┆ Borough   ┆ Zone                  │
+│ ---          ┆ ---    ┆ ---       ┆ ---       ┆ ---       ┆ ---                   │
+│ i32          ┆ u32    ┆ f64       ┆ f64       ┆ str       ┆ str                   │
+╞══════════════╪════════╪═══════════╪═══════════╪═══════════╪═══════════════════════╡
+│ 161          ┆ 141723 ┆ 15.584468 ┆ 441447.15 ┆ Manhattan ┆ Midtown Center        │
+│ 237          ┆ 141250 ┆ 12.424532 ┆ 369420.74 ┆ Manhattan ┆ Upper East Side South │
+│ 132          ┆ 141111 ┆ 62.498305 ┆ 1.2865e6  ┆ Queens    ┆ JFK Airport           │
+│ 236          ┆ 135317 ┆ 12.917663 ┆ 360538.77 ┆ Manhattan ┆ Upper East Side North │
+│ 162          ┆ 105451 ┆ 15.13875  ┆ 322246.12 ┆ Manhattan ┆ Midtown East          │
+└──────────────┴────────┴───────────┴───────────┴───────────┴───────────────────────┘</code></pre>
+</div>
+          <p>(b) Não. O JFK cai para terceiro: 4.129 das suas 145.240 viagens tinham tarifa zero ou negativa, mais que nas zonas de Manhattan. No mês todo, o filtro tira 38.341 viagens e sobram 2.926.283. Um "top zonas" muda de líder conforme o tratamento de estornos, e isso tem que estar escrito na definição da métrica.</p>
+          <p>Onde escorregam: chamar <code>collect()</code> logo depois do <code>scan_parquet</code> "para ver os dados" e montar o resto em eager. O <code>explain()</code> do pedaço lazy denuncia: <code>PROJECT */19</code>, todas as colunas lidas.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">S2.5</span><h2>pandas, Polars eager e Polars lazy, medidos</h2><span class="ex-kind">benchmark e escrita</span></div>
+      <p>Faça o <code>scale02.py</code> aceitar um modo na linha de comando (<code>pandas</code>, <code>polars_eager</code>, <code>polars_lazy</code>) e rodar o pipeline do S2.4 naquele modo, lendo só as três colunas no pandas e no eager. Imprima o tempo total e o pico do processo. Rode cada modo três vezes, um processo por vez, e monte uma tabela com a mediana.</p>
+      <p>Antes de rodar, preveja num comentário a ordem dos três em tempo e em memória. Depois, por escrito, as <strong>três diferenças entre pandas e Polars</strong> que você explicaria numa entrevista, cada uma com um número seu.</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+          <p>A mediana de cinco execuções na máquina desta página, de 2 vCPUs:</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>modo</th><th>tempo</th><th>pico do processo</th></tr></thead>
+              <tbody>
+                <tr><td>pandas</td><td>0,18 s</td><td>409 MB</td></tr>
+                <tr><td>Polars eager</td><td>0,12 s</td><td>274 MB</td></tr>
+                <tr><td>Polars lazy</td><td>0,06 s</td><td>167 MB</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Parte do pico é só o import: 107 MB para pandas com pyarrow e 48 MB para o Polars. Mesmo descontando isso, o lazy usa menos da metade da memória do pandas, porque as 38.341 linhas filtradas nunca chegam a existir na memória. O <code>collect(engine="streaming")</code>, que processa o arquivo em pedaços, deu o mesmo resultado que o lazy comum neste tamanho: 0,06 s e 167 MB. Ele faz diferença quando o arquivo não cabe na RAM.</p>
+          <p>Três diferenças, como ponto de partida para as suas:</p>
+          <ol>
+            <li><strong>Execução:</strong> o pandas executa cada linha na hora. O Polars lazy monta um plano, otimiza com pushdown de colunas e filtros, e só então executa. Aqui, um terço do tempo e 40% do pico.</li>
+            <li><strong>Paralelismo:</strong> o pandas usa um núcleo na maior parte das operações. O Polars, escrito em Rust, divide o trabalho entre todos. Mesmo no eager, sem otimizador, foi um terço mais rápido em 2 núcleos.</li>
+            <li><strong>Modelo de dados:</strong> o Polars não tem índice, guarda nulo sem trocar o tipo e trabalha direto no Arrow. O pandas tem índice e um ecossistema muito maior de bibliotecas que o esperam.</li>
+          </ol>
+          <p>Onde escorregam: rodar os três modos no mesmo processo (o pico do segundo herda o do primeiro); ler as 19 colunas no pandas e comparar com o lazy, que tira a vantagem do <code>columns=</code> e mede outra coisa; e concluir "Polars é 3 vezes mais rápido" sem dizer o tamanho do dado e o número de núcleos.</p>
+        </div>
+      </details>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Faça commit do <code>scale02.py</code> com as saídas em comentário embaixo de cada exercício, as previsões escritas antes, a tabela do S2.5 com as suas medianas e as três diferenças escritas.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de entregar</div>
+      <ul>
+        <li>Todo número do S2.2 e do S2.3 foi comparado com o da D01?</li>
+        <li>Todo <code>group_by</code> que vira tabela tem <code>sort</code>?</li>
+        <li>O S2.4 imprime o <code>explain()</code>, e ele mostra o filtro dentro do scan?</li>
+        <li>Cada medição do S2.5 rodou num processo próprio, e a tabela diz quantos núcleos a sua máquina tem?</li>
+      </ul>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 13 ==================== -->
+<article class="act" id="a13" data-kind="recap" data-title="Fechamento" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Fechamento</span><span class="dot"></span><span>Aula D02 &middot; Atividade 13</span></div>
+  <h1 class="act-title">Fechamento</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">O ganho do Polars nesta aula veio de duas fontes: usar todos os núcleos e não fazer trabalho que o resultado não pede. A segunda é a que vale para qualquer motor, do Spark ao Athena.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ideia</th><th>Em uma linha</th></tr></thead>
+        <tbody>
+          <tr><td>Expressões</td><td>descreva o resultado; o contexto (<code>select</code>, <code>filter</code>, <code>agg</code>) decide como executar</td></tr>
+          <tr><td><code>.over()</code></td><td>o <code>transform</code> do pandas e a window function do SQL</td></tr>
+          <tr><td>Lazy</td><td>transformações montam o plano, <code>collect()</code> executa</td></tr>
+          <tr><td><code>explain()</code></td><td>prove o pushdown: <code>PROJECT n/19</code> e <code>SELECTION</code> dentro do scan</td></tr>
+          <tr><td>Memória</td><td><code>estimated_size()</code> e <code>ru_maxrss</code>; o <code>tracemalloc</code> não vê o Rust</td></tr>
+          <tr><td>Migração</td><td>compare contagens e nulos coluna a coluna; <code>N/A</code>, <code>NaN</code>, ordem e <code>UInt32</code> mudam</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Se perguntarem na entrevista</h2>
+    <p>Os pontos-chave estão em inglês. Troque os números pelos da sua máquina.</p>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">Q1</span><h2>"pandas or Polars? What's the difference?"</h2><span class="ex-kind">Polars</span></div>
+      <ul>
+        <li>Execution: pandas is eager. Polars can be lazy, so an optimizer sees the whole query and pushes column selection and filters into the file scan.</li>
+        <li>Polars is written in Rust and uses all cores. pandas mostly runs on one.</li>
+        <li>Data model: Polars has no index, keeps nulls without changing the type, and works on Arrow memory.</li>
+        <li>Give your measurement: same pipeline on one month of NYC taxi data, pandas 0.18 s and 409 MB, Polars lazy 0.06 s and 167 MB, on 2 cores.</li>
+        <li>pandas still wins on ecosystem. Many libraries expect a pandas DataFrame, so convert the small aggregated result, not the raw data.</li>
+      </ul>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">Q2</span><h2>"What is lazy evaluation, and why does it help?"</h2><span class="ex-kind">lazy</span></div>
+      <ul>
+        <li>Transformations build a plan, and nothing runs until an action (<code>collect</code> in Polars, <code>count</code> or <code>write</code> in Spark).</li>
+        <li>Seeing the whole plan lets the optimizer reorder it: projection pushdown reads 3 of 19 columns, predicate pushdown drops rows while reading.</li>
+        <li>It doesn't help with operations that need all the data, like a global sort, or when you call <code>collect</code> in the middle of the pipeline.</li>
+      </ul>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">Q3</span><h2>"How do you check that a filter is pushed down to the scan?"</h2><span class="ex-kind">plans</span></div>
+      <ul>
+        <li>Read the plan before running: <code>explain()</code> in Polars, <code>df.explain()</code> in Spark.</li>
+        <li>In Polars, the filter shows up as <code>SELECTION</code> inside the Parquet scan instead of a separate <code>FILTER</code> node. In Spark, it shows up under <code>PushedFilters</code> in the <code>FileScan</code>.</li>
+        <li>It matters for cost: on Athena you pay per byte scanned, so columns read and partitions skipped are money.</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Depois desta aula</div>
+      <p>SQL no estilo do Athena: CTEs e window functions sobre este mesmo mês, depois partições no estilo Hive e Parquet no DuckDB, com bytes lidos medidos, que é a conta que o Athena cobra.</p>
+    </div>
+  </div>
+</article>
+
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/13</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula D02</div>
+          <div class="lh-n">O mesmo em Polars</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/data-at-scale/scale02.py<span class="rs">o arquivo que você entrega</span></span></li>
+        <li><span class="res-static">exercises/data-at-scale/scale01.py<span class="rs">o gabarito dos números, da D01</span></span></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://docs.pola.rs/user-guide/concepts/lazy-api/" target="_blank" rel="noopener">Lazy API<span class="rs">Polars · eager x lazy e o otimizador</span></a></li>
+        <li><a href="https://docs.pola.rs/user-guide/lazy/query-plan/" target="_blank" rel="noopener">Query plan<span class="rs">Polars · como ler o explain()</span></a></li>
+        <li><a href="https://docs.pola.rs/user-guide/migration/pandas/" target="_blank" rel="noopener">Coming from pandas<span class="rs">Polars · as diferenças de modelo, do ponto de vista deles</span></a></li>
+        <li><a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.explain.html" target="_blank" rel="noopener">DataFrame.explain<span class="rs">PySpark · o plano do lado do Spark</span></a></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../../assets/course-data.js"></script>
+<script src="../../assets/course.js"></script>
+</body>
+</html>

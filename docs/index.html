@@ -53,6 +53,12 @@
     <ul class="cards" id="redesCards"></ul>
   </section>
 
+  <section class="home-section" id="escalaSection">
+    <h2>Trilha extra &middot; Dados em escala</h2>
+    <p class="home-section-lead">Arquivo grande do jeito que se trabalha com ele no dia a dia: pandas medido, Polars em modo lazy e o caminho até SQL de data lake e Spark, sobre um mês de táxi de Nova York. Fora da sequência da fase 1, com progresso próprio.</p>
+    <ul class="cards" id="escalaCards"></ul>
+  </section>
+
   <section class="home-section" id="reviewsSection" hidden>
     <h2>Revisões de entrega</h2>
     <ul class="cards" id="reviewCards"></ul>
@@ -90,7 +96,9 @@
     "17": "tudo junto: API paginada, validação, JSONL atômico, testes sem rede e um README que se sustenta",
     "R01": "o endereço como inteiro de 32 bits, prefixo e máscara, hosts por sub-rede, RFC 1918, subnetting de cabeça — e o <code>010</code> que vira 8",
     "R02": "notação, o /64, link-local, SLAAC e dual-stack; IP guardado como inteiro, o range join e <code>inet</code> no Postgres",
-    "R03": "A, AAAA, CNAME e PTR, <code>in-addr.arpa</code> e <code>ip6.arpa</code>, consistência forward/reverse — e o ponto final que zera o join"
+    "R03": "A, AAAA, CNAME e PTR, <code>in-addr.arpa</code> e <code>ip6.arpa</code>, consistência forward/reverse — e o ponto final que zera o join",
+    "D01": "<code>columns=</code> e dtypes medidos, named aggregations, <code>agg</code> contra <code>transform</code>, merge com <code>validate</code> — e o <code>tracemalloc</code> que vê 1,9 MB de 418",
+    "D02": "expressões, <code>.over()</code>, join, modo lazy e <code>explain()</code>, pandas contra Polars medido — e o <code>N/A</code> que deixa de ser nulo"
   };
 
   /* ---------- progresso do curso ---------- */
@@ -154,6 +162,7 @@
   };
   document.getElementById("cards").innerHTML = FASE1.map(card).join("");
   document.getElementById("redesCards").innerHTML = COURSE.inTrack("redes").map(card).join("");
+  document.getElementById("escalaCards").innerHTML = COURSE.inTrack("escala").map(card).join("");
 
   /* ---------- revisões publicadas ---------- */
   const comRevisao = COURSE.lessons.filter((l) => l.review);

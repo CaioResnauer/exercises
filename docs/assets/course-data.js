@@ -6,7 +6,7 @@
  * delivery state on <body>; check.py fails if the two ever disagree.
  *
  * Paths are relative to docs/. Each page declares its depth in
- * <body data-base>, so links work from docs/, docs/lessons/ and docs/reviews/.
+ * <body data-base>, so links work from docs/, docs/lessons/<track>/ and docs/reviews/.
  */
 window.COURSE = {
   name: "Fluxo",
@@ -18,7 +18,8 @@ window.COURSE = {
      da última aula da fase 1 não cai numa aula de redes, e vice-versa. */
   tracks: {
     fase1: { name: "Fase 1", title: "Python avançado para engenharia de dados" },
-    redes: { name: "Trilha extra · Redes", title: "Redes para dados de infraestrutura" }
+    redes: { name: "Trilha extra · Redes", title: "Redes para dados de infraestrutura" },
+    escala: { name: "Trilha extra · Dados em escala", title: "Dados em escala: de pandas a Spark" }
   },
 
   /* Assuntos que as aulas 04 a 06 assumem conhecidos e que ainda não têm
@@ -33,7 +34,7 @@ window.COURSE = {
   lessons: [
     {
       id: "01", title: "O protocolo de iteração",
-      slug: "lessons/01-protocolo-de-iteracao.html",
+      slug: "lessons/phase-1/01-protocolo-de-iteracao.html",
       acts: 15, published: true, delivery: "delivered"
     },
     {
@@ -48,90 +49,102 @@ window.COURSE = {
     },
     {
       id: "04", title: "itertools e batching",
-      slug: "lessons/04-itertools-e-batching.html",
+      slug: "lessons/phase-1/04-itertools-e-batching.html",
       acts: 13, published: true, delivery: "reviewed",
       review: "reviews/04-revisao.html"
     },
     {
       id: "05", title: "Memória na prática",
-      slug: "lessons/05-memoria-na-pratica.html",
+      slug: "lessons/phase-1/05-memoria-na-pratica.html",
       acts: 11, published: true, delivery: "pending"
     },
     {
       id: "06", title: "Git e o repositório",
-      slug: "lessons/06-git-e-o-repositorio.html",
+      slug: "lessons/phase-1/06-git-e-o-repositorio.html",
       acts: 10, published: true, delivery: "pending"
     },
     {
       id: "07", title: "Estruturas de dados na prática",
-      slug: "lessons/07-estruturas-de-dados.html",
+      slug: "lessons/phase-1/07-estruturas-de-dados.html",
       acts: 11, published: true, delivery: "pending"
     },
     {
       id: "08", title: "Decorators e context managers",
-      slug: "lessons/08-decorators-e-context-managers.html",
+      slug: "lessons/phase-1/08-decorators-e-context-managers.html",
       acts: 12, published: true, delivery: "pending"
     },
     {
       id: "09", title: "POO para pipelines",
-      slug: "lessons/09-poo-para-pipelines.html",
+      slug: "lessons/phase-1/09-poo-para-pipelines.html",
       acts: 11, published: true, delivery: "pending"
     },
     {
       id: "10", title: "Testes com pytest",
-      slug: "lessons/10-testes-com-pytest.html",
+      slug: "lessons/phase-1/10-testes-com-pytest.html",
       acts: 12, published: true, delivery: "pending"
     },
     {
       id: "11", title: "Ambiente e dependências",
-      slug: "lessons/11-ambiente-e-dependencias.html",
+      slug: "lessons/phase-1/11-ambiente-e-dependencias.html",
       acts: 9, published: true, delivery: "pending"
     },
     {
       id: "12", title: "Logging estruturado",
-      slug: "lessons/12-logging-estruturado.html",
+      slug: "lessons/phase-1/12-logging-estruturado.html",
       acts: 10, published: true, delivery: "pending"
     },
     {
       id: "13", title: "SQL: window functions a fundo",
-      slug: "lessons/13-sql-window-functions.html",
+      slug: "lessons/phase-1/13-sql-window-functions.html",
       acts: 12, published: true, delivery: "pending"
     },
     {
       id: "14", title: "SQL: CTEs recursivas",
-      slug: "lessons/14-sql-ctes-recursivas.html",
+      slug: "lessons/phase-1/14-sql-ctes-recursivas.html",
       acts: 10, published: true, delivery: "pending"
     },
     {
       id: "15", title: "SQL: EXPLAIN, índices e particionamento",
-      slug: "lessons/15-sql-explain-e-indices.html",
+      slug: "lessons/phase-1/15-sql-explain-e-indices.html",
       acts: 11, published: true, delivery: "pending"
     },
     {
       id: "16", title: "Git em equipe: pull requests e conflitos",
-      slug: "lessons/16-git-em-equipe.html",
+      slug: "lessons/phase-1/16-git-em-equipe.html",
       acts: 10, published: true, delivery: "pending"
     },
     {
       id: "17", title: "Projeto da fase 1: da API ao disco",
-      slug: "lessons/17-projeto-da-fase-1.html",
+      slug: "lessons/phase-1/17-projeto-da-fase-1.html",
       acts: 11, published: true, delivery: "pending"
     },
 
     /* ---------- trilha extra: redes ---------- */
     {
       id: "R01", track: "redes", title: "IPv4, CIDR e sub-redes",
-      slug: "lessons/r01-ipv4-cidr-e-sub-redes.html",
+      slug: "lessons/networks/r01-ipv4-cidr-e-sub-redes.html",
       acts: 13, published: true, delivery: "pending"
     },
     {
       id: "R02", track: "redes", title: "IPv6 e IP como dado",
-      slug: "lessons/r02-ipv6-e-ip-como-dado.html",
+      slug: "lessons/networks/r02-ipv6-e-ip-como-dado.html",
       acts: 13, published: true, delivery: "pending"
     },
     {
       id: "R03", track: "redes", title: "DNS e zonas reversas",
-      slug: "lessons/r03-dns-e-zonas-reversas.html",
+      slug: "lessons/networks/r03-dns-e-zonas-reversas.html",
+      acts: 13, published: true, delivery: "pending"
+    },
+
+    /* ---------- trilha extra: dados em escala ---------- */
+    {
+      id: "D01", track: "escala", title: "pandas em arquivo grande",
+      slug: "lessons/data-at-scale/d01-pandas-em-arquivo-grande.html",
+      acts: 12, published: true, delivery: "pending"
+    },
+    {
+      id: "D02", track: "escala", title: "O mesmo em Polars",
+      slug: "lessons/data-at-scale/d02-o-mesmo-em-polars.html",
       acts: 13, published: true, delivery: "pending"
     }
   ],
