@@ -23,25 +23,27 @@ docs/
 │   ├── course-data.js        # the manifest: every lesson, its state, the storage contract
 │   ├── course.css            # shared stylesheet for every page
 │   └── course.js             # shared behaviour: track tree, progress, stepper, keyboard
-├── lessons/                  # one page per lesson, 01 to 17
-│   ├── 01-protocolo-de-iteracao.html
-│   ├── 04-itertools-e-batching.html
-│   ├── 05-memoria-na-pratica.html
-│   ├── 06-git-e-o-repositorio.html
-│   ├── 07-estruturas-de-dados.html
-│   ├── 08-decorators-e-context-managers.html
-│   ├── 09-poo-para-pipelines.html
-│   ├── 10-testes-com-pytest.html
-│   ├── 11-ambiente-e-dependencias.html
-│   ├── 12-logging-estruturado.html
-│   ├── 13-sql-window-functions.html
-│   ├── 14-sql-ctes-recursivas.html
-│   ├── 15-sql-explain-e-indices.html
-│   ├── 16-git-em-equipe.html
-│   ├── 17-projeto-da-fase-1.html
-│   ├── r01-ipv4-cidr-e-sub-redes.html   # Redes track
-│   ├── r02-ipv6-e-ip-como-dado.html
-│   └── r03-dns-e-zonas-reversas.html
+├── lessons/                  # one folder per track
+│   ├── phase-1/              # lessons 01 to 17
+│   │   ├── 01-protocolo-de-iteracao.html
+│   │   ├── 04-itertools-e-batching.html
+│   │   ├── 05-memoria-na-pratica.html
+│   │   ├── 06-git-e-o-repositorio.html
+│   │   ├── 07-estruturas-de-dados.html
+│   │   ├── 08-decorators-e-context-managers.html
+│   │   ├── 09-poo-para-pipelines.html
+│   │   ├── 10-testes-com-pytest.html
+│   │   ├── 11-ambiente-e-dependencias.html
+│   │   ├── 12-logging-estruturado.html
+│   │   ├── 13-sql-window-functions.html
+│   │   ├── 14-sql-ctes-recursivas.html
+│   │   ├── 15-sql-explain-e-indices.html
+│   │   ├── 16-git-em-equipe.html
+│   │   └── 17-projeto-da-fase-1.html
+│   └── networks/             # Redes track, R01 to R03
+│       ├── r01-ipv4-cidr-e-sub-redes.html
+│       ├── r02-ipv6-e-ip-como-dado.html
+│       └── r03-dns-e-zonas-reversas.html
 └── reviews/                  # one page per graded delivery
     └── 04-revisao.html
 ```
@@ -49,8 +51,9 @@ docs/
 Lessons 02 and 03 (generators, pipelines) are not written; the index and
 lesson 04 say so and name what a reader needs to carry in from them.
 
-Lessons and reviews are both one directory deep, so every page reaches the
-shared assets the same way: `../assets/course.css`.
+Each track has its own folder under `lessons/`, so a lesson page is two
+directories deep and reaches the shared assets as `../../assets/course.css`.
+Reviews stay one level deep (`../assets/course.css`).
 
 ### The manifest
 
@@ -75,9 +78,10 @@ its own section.
 To add a lesson to an existing track, set its `track` and give it an id that
 does not contain `-` (a `-` in `data-lesson` marks a review page).
 
-Each page also declares its depth in `data-base` (`.` at the root, `..` inside
-`lessons/` and `reviews/`), which is how links built from the manifest resolve
-from any directory.
+Each page also declares its depth in `data-base` (`.` at the root, `../..`
+inside `lessons/<track>/`, `..` inside `reviews/`), which is how links built
+from the manifest resolve from any directory. A new track gets its own folder
+under `lessons/` and an entry in `tracks`.
 
 ### Progress
 
@@ -114,7 +118,7 @@ the server matches how GitHub Pages resolves the relative paths.
 ```
 cd docs
 python check.py                 # every page
-python check.py lessons/05-memoria-na-pratica.html
+python check.py lessons/phase-1/05-memoria-na-pratica.html
 ```
 
 `check.py` serves `docs/`, opens each page in headless Chromium at 1440px and
@@ -134,11 +138,11 @@ pip install playwright && python -m playwright install --with-deps chromium
 
 ### Adding a lesson
 
-1. Create `docs/lessons/NN-slug.html`. Copy the skeleton from lesson 05: same
-   `<head>` (charset, viewport, Google Fonts, `../assets/course.css`), a
-   `<body data-lesson="NN" data-base=".." data-delivery="pending">`, and at the
-   end of `<body>` the three Prism scripts, then `../assets/course-data.js`,
-   then `../assets/course.js` — in that order and without `defer`, since the
+1. Create `docs/lessons/<track>/NN-slug.html`. Copy the skeleton from lesson 05: same
+   `<head>` (charset, viewport, Google Fonts, `../../assets/course.css`), a
+   `<body data-lesson="NN" data-base="../.." data-delivery="pending">`, and at the
+   end of `<body>` the three Prism scripts, then `../../assets/course-data.js`,
+   then `../../assets/course.js` — in that order and without `defer`, since the
    shared script calls `Prism.highlightAll()` on its last line.
 2. Write the lesson body as a sequence of `<article class="act">` elements. The
    shared script builds the sidebar from their `data-kind`, `data-title` and
