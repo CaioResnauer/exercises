@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>pandas em arquivo grande</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,200..600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../../assets/course.css">
+</head>
+<body data-lesson="D01" data-base="../.." data-delivery="pending">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">&gt;_</span>
+    <span class="brand-name">Fluxo</span>
+  </div>
+  <div class="course">
+    <div class="course-name">Dados em escala &middot; Trilha extra</div>
+  </div>
+  <div class="topbar-end">
+    <button class="btn btn-ghost btn-sm rail-toggle" id="railToggle" aria-expanded="false">Conteúdo</button>
+    <span class="avatar" title="Caio">CR</span>
+  </div>
+</header>
+
+<div class="app">
+  <main class="stage">
+    <div class="reader" id="reader">
+
+<!-- ==================== 01 ==================== -->
+<article class="act" id="a1" data-kind="note" data-title="Apresentação" data-min="2">
+  <div class="kicker"><span class="tag is-note">Para começar</span><span class="dot"></span><span>Aula D01 &middot; Atividade 01</span></div>
+  <h1 class="act-title">Apresentação</h1>
+  <div class="act-meta">02 min &middot; trilha extra &middot; pré-requisito: pandas do dia a dia</div>
+  <div class="prose">
+    <p class="lead">Um mês de táxi amarelo de Nova York: 50 MB em Parquet, quase 3 milhões de viagens. Cabe na RAM de qualquer notebook, e é por isso que serve de treino. Dá para medir quanto custa cada decisão sem esperar meia hora por um resultado.</p>
+
+    <p>Você já usa pandas. Esta aula não ensina <code>groupby</code>. Ela ensina a usar o pandas como quem vai responder por memória, tempo e linhas perdidas. Ao sair dela, você:</p>
+    <ul>
+      <li><strong>Lê só o que precisa</strong> e diz em MB quanto economizou, com número medido, não estimado;</li>
+      <li><strong>Agrega com named aggregations</strong> e sabe quando o certo é <code>agg</code> e quando é <code>transform</code>;</li>
+      <li><strong>Faz merge que não multiplica linhas</strong> e prova isso com uma contagem e um <code>validate</code>;</li>
+      <li>Responde em inglês três perguntas clássicas sobre o assunto.</li>
+    </ul>
+
+    <div class="callout tip">
+      <div class="callout-title">Onde isso encaixa</div>
+      <p>É o primeiro degrau da trilha. A D02 refaz os mesmos exercícios em Polars, e a comparação entre os dois leva direto ao modo lazy, que é a ideia central do Spark. Depois vêm SQL no estilo do Athena e o PySpark.</p>
+    </div>
+
+    <h2>Como estudar</h2>
+    <p>Escreva cada previsão num comentário <em>antes</em> de rodar. Toda saída desta página foi executada com Python 3.12, pandas 3.1.1 e pyarrow 26.0.1, num Linux de 2 vCPUs. Tempo e pico de memória vão mudar na sua máquina. Contagens, totais e MB de cada DataFrame, não.</p>
+    <p><strong>Tempo estimado:</strong> 5 min de preparação, 35 min de leitura e 20 min de exercícios. O arquivo de entrega é <code>exercises/data-at-scale/scale01.py</code>.</p>
+  </div>
+</article>
+
+<!-- ==================== 02 ==================== -->
+<article class="act" id="a2" data-kind="lab" data-title="Preparar o ambiente e os dados" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula D01 &middot; Atividade 02</span></div>
+  <h1 class="act-title">Preparar o ambiente e os dados</h1>
+  <div class="act-meta">05 min &middot; no WSL, na raiz do repositório</div>
+  <div class="prose">
+    <p class="lead">Esta trilha é a primeira a usar dependências de fora da biblioteca padrão. Elas ficam num ambiente próprio, com versão fixada, para os seus números baterem com os desta página.</p>
+
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-bash">mkdir -p exercises/data-at-scale/data
+cd exercises/data-at-scale
+
+python3.12 -m venv .venv
+source .venv/bin/activate
+
+cat &gt; requirements.txt &lt;&lt;'EOF'
+pandas==3.1.1
+pyarrow==26.0.1
+polars==2.2.0
+EOF
+pip install -r requirements.txt
+
+printf 'data/\n.venv/\n' &gt; .gitignore
+
+curl -L -o data/yellow_tripdata_2024-01.parquet \
+  https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet
+curl -L -o data/taxi_zone_lookup.csv \
+  https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv</code></pre>
+</div>
+
+    <p>O <code>polars</code> já entra agora para a D02 não começar com instalação. Os dois arquivos de dados ficam fora do Git: o Parquet tem 50 MB e é público, e quem clonar o repositório baixa com os mesmos dois comandos.</p>
+
+    <p>Antes de seguir, confirme que você tem o mesmo arquivo. O Parquet guarda o número de linhas nos metadados, então a conta é instantânea:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>bash</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-bash">python -c "import pyarrow.parquet as pq; print(pq.ParquetFile('data/yellow_tripdata_2024-01.parquet').metadata.num_rows)"</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>2964624</div>
+</div>
+
+    <p>Rode tudo desta aula de dentro de <code>exercises/data-at-scale/</code>, porque os caminhos são relativos a ela.</p>
+  </div>
+</article>
+
+<!-- ==================== 03 ==================== -->
+<article class="act" id="a3" data-kind="lab" data-title="Mão na massa: 50 MB no disco, quanto na memória?" data-min="3" hidden>
+  <div class="kicker"><span class="tag is-lab">Mão na massa</span><span class="dot"></span><span>Aula D01 &middot; Atividade 03</span></div>
+  <h1 class="act-title">50 MB no disco, quanto na memória?</h1>
+  <div class="act-meta">03 min</div>
+  <div class="prose">
+    <p class="lead">O arquivo tem 50 MB. Sem rodar nada, quanto você acha que o DataFrame inteiro ocupa na memória depois do <code>pd.read_parquet</code>?</p>
+
+    <p>Uma pista: são 19 colunas, quase todas numéricas, e quase 3 milhões de linhas.</p>
+
+    <div class="predict" data-predict="d01-p1">
+      <div class="predict-title">Prever antes de rodar</div>
+      <textarea placeholder="tamanho em memória, em MB, e o seu raciocínio"></textarea>
+      <div class="predict-actions">
+        <button class="btn btn-primary btn-sm" data-reveal>Revelar a saída</button>
+        <span class="hint">Sua resposta fica salva neste navegador.</span>
+      </div>
+      <div class="reveal" hidden>
+        <div style="margin-top:18px">
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import os
+
+import pandas as pd
+
+PATH = "data/yellow_tripdata_2024-01.parquet"
+
+trips = pd.read_parquet(PATH)
+print(f"on disk   : {os.path.getsize(PATH) / 1e6:6.1f} MB")
+print(f"in memory : {trips.memory_usage(deep=True).sum() / 1e6:6.1f} MB")
+print(f"shape     : {trips.shape}")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>on disk   :   50.0 MB
+in memory :  418.0 MB
+shape     : (2964624, 19)</div>
+</div>
+        </div>
+        <p style="margin-top:16px">Mais de oito vezes o tamanho do arquivo. O Parquet guarda cada coluna separada e comprimida: valores repetidos viram um dicionário, sequências iguais viram uma contagem, e tudo ainda passa por um compressor. Na memória não tem nada disso. Cada <code>float64</code> ocupa 8 bytes, então cada coluna numérica custa 2.964.624 &times; 8 = 23,7 MB, comprimida ou não no disco.</p>
+        <p>Quem erra costuma chutar algo perto de 50 MB, como se ler fosse copiar o arquivo para a RAM. Essa conta de "8 bytes por valor" é a que importa quando alguém pergunta se um arquivo cabe na memória.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 04 ==================== -->
+<article class="act" id="a4" data-kind="note" data-title="Para saber mais: por que o tracemalloc diz 1,9 MB" data-min="3" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula D01 &middot; Atividade 04</span></div>
+  <h1 class="act-title">Por que o tracemalloc diz 1,9 MB</h1>
+  <div class="act-meta">03 min</div>
+  <div class="prose">
+    <p class="lead">Na aula 05 você mediu memória com <code>tracemalloc</code>. Aqui ele não serve, e o motivo é bom de saber.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import resource
+import tracemalloc
+
+import pyarrow as pa
+
+tracemalloc.start()
+trips = pd.read_parquet(PATH)
+_, peak = tracemalloc.get_traced_memory()
+tracemalloc.stop()
+
+print(f"tracemalloc peak   : {peak / 1e6:7.1f} MB")
+print(f"memory_usage(deep) : {trips.memory_usage(deep=True).sum() / 1e6:7.1f} MB")
+print(f"Arrow memory pool  : {pa.total_allocated_bytes() / 1e6:7.1f} MB")
+# ru_maxrss is in KiB on Linux (bytes on macOS)
+print(f"process peak (RSS) : {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024 / 1e6:7.1f} MB")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>tracemalloc peak   :     1.9 MB
+memory_usage(deep) :   418.0 MB
+Arrow memory pool  :   418.0 MB
+process peak (RSS) :  1077.0 MB</div>
+</div>
+
+    <p>O <code>tracemalloc</code> só enxerga o que passa pelo alocador do Python. O <code>pd.read_parquet</code> chama o pyarrow, que é C++ e reserva memória no próprio pool do Arrow. O pandas 3 monta o DataFrame em cima desses buffers. Os 418 MB existem, mas o <code>tracemalloc</code> não os vê.</p>
+
+    <p>Nesta trilha, a memória se mede de dois jeitos:</p>
+    <ul>
+      <li><code>df.memory_usage(deep=True).sum()</code>: quanto o DataFrame ocupa <strong>depois</strong> de pronto. O <code>deep=True</code> faz o pandas contar o conteúdo das colunas de texto, não só os ponteiros;</li>
+      <li><code>resource.getrusage(resource.RUSAGE_SELF).ru_maxrss</code>: o <strong>pico</strong> do processo inteiro desde que ele começou, em KiB no Linux. Repare: 1.077 MB de pico para um resultado de 418 MB. Durante a leitura, os dados existem em mais de uma forma ao mesmo tempo.</li>
+    </ul>
+
+    <div class="callout warn">
+      <div class="callout-title">O pico é do processo inteiro</div>
+      <p>Como o <code>ru_maxrss</code> nunca desce, duas medições no mesmo processo não se separam: a segunda herda o pico da primeira. Uma medição por processo, escolhida por argumento na linha de comando. Também não meça tempo com o <code>tracemalloc</code> ligado, porque ele deixa o código mais lento.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 05 ==================== -->
+<article class="act" id="a5" data-kind="video" data-title="Ler menos: columns= e dtypes" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula D01 &middot; Atividade 05</span></div>
+  <h1 class="act-title">Ler menos: <code>columns=</code> e dtypes</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">A economia mais barata é não ler. No Parquet, cada coluna é um bloco separado no arquivo, então pedir menos colunas significa ler menos bytes do disco, não só descartar depois.</p>
+
+    <p>Os exemplos desta atividade usam o lado do <strong>desembarque</strong> (<code>DOLocationID</code>). O do embarque fica para os seus exercícios.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import time
+
+DEMO_COLUMNS = ["DOLocationID", "passenger_count"]
+
+for label, kwargs in [("all columns", {}), ("2 columns", {"columns": DEMO_COLUMNS})]:
+    start = time.perf_counter()
+    df = pd.read_parquet(PATH, **kwargs)
+    elapsed = time.perf_counter() - start
+    print(f"{label:12} {elapsed:5.2f}s  {df.memory_usage(deep=True).sum() / 1e6:6.1f} MB")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>all columns   0.36s   418.0 MB
+2 columns     0.02s    35.6 MB</div>
+</div>
+
+    <p>Duas colunas de 19 custam 35,6 MB e 0,02 s, contra 418,0 MB e 0,36 s. Depois de escolher as colunas, vale olhar o tipo de cada uma:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">dropoffs = pd.read_parquet(PATH, columns=DEMO_COLUMNS)
+print(dropoffs.dtypes.to_dict())
+print("DOLocationID range:", dropoffs["DOLocationID"].min(), "to", dropoffs["DOLocationID"].max())
+print("passenger_count nulls:", dropoffs["passenger_count"].isna().sum(),
+      "| max:", dropoffs["passenger_count"].max())
+
+slim = dropoffs.astype({"DOLocationID": "int16", "passenger_count": "Int8"})
+before = dropoffs.memory_usage(deep=True, index=False) / 1e6
+after = slim.memory_usage(deep=True, index=False) / 1e6
+print(pd.DataFrame({"before_mb": before, "after_mb": after}).round(1))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>{'DOLocationID': dtype('int32'), 'passenger_count': dtype('float64')}
+DOLocationID range: 1 to 265
+passenger_count nulls: 140162 | max: 9.0
+                 before_mb  after_mb
+DOLocationID          11.9       5.9
+passenger_count       23.7       5.9</div>
+</div>
+
+    <p>Cada linha da saída é uma decisão diferente:</p>
+    <ul>
+      <li><code>DOLocationID</code> vai de 1 a 265. O <code>int32</code> aguenta até 2 bilhões. O <code>int16</code> vai até 32.767 e já sobra. Metade da memória.</li>
+      <li><code>passenger_count</code> é contagem de pessoas, mas chegou como <code>float64</code>. O motivo são os 140.162 nulos: o <code>int64</code> do NumPy não tem como representar "vazio", e o pandas converte a coluna para <code>float</code> para usar <code>NaN</code>. O <code>"Int8"</code>, com I maiúsculo, é o inteiro <em>anulável</em> do pandas. Ele guarda o valor em 1 byte e uma máscara de nulos ao lado, e o vazio vira <code>pd.NA</code>.</li>
+      <li>Código com poucos valores distintos, repetidos milhões de vezes, é candidato a <code>category</code>: o pandas guarda cada valor uma vez e, por linha, só um índice pequeno. Você vai aplicar isso no exercício S1.2.</li>
+    </ul>
+    <p>E dinheiro? Dinheiro fica em <code>float64</code>. A atividade 09 mostra por quê.</p>
+  </div>
+</article>
+
+<!-- ==================== 06 ==================== -->
+<article class="act" id="a6" data-kind="video" data-title="groupby: named aggregations, agg e transform" data-min="5" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula D01 &middot; Atividade 06</span></div>
+  <h1 class="act-title">groupby: named aggregations, <code>agg</code> e <code>transform</code></h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Named aggregation é a sintaxe <code>nome_da_saida=("coluna", "função")</code>. Ela dá nome às colunas do resultado já na agregação, sem o MultiIndex de colunas que o <code>agg({"col": ["mean", "max"]})</code> cria.</p>
+
+    <p>O exemplo agrupa por forma de pagamento. Os exercícios agrupam por zona.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">by_type = pd.read_parquet(PATH, columns=["payment_type", "tip_amount"])
+
+summary = by_type.groupby("payment_type").agg(
+    trips=("tip_amount", "size"),
+    avg_tip=("tip_amount", "mean"),
+    max_tip=("tip_amount", "max"),
+)
+print(summary.round(2))
+
+type_avg = by_type.groupby("payment_type")["tip_amount"].transform("mean")
+print("agg      :", summary.shape)
+print("transform:", type_avg.shape)</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>                trips  avg_tip  max_tip
+payment_type                           
+0              140162     1.55    40.00
+1             2319046     4.17   428.00
+2              439191     0.00   141.49
+3               19597     0.01    24.41
+4               46628     0.04    50.80
+agg      : (5, 3)
+transform: (2964624,)</div>
+</div>
+
+    <p>As duas últimas linhas são a diferença inteira entre os dois:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th><code>agg</code></th><th><code>transform</code></th></tr></thead>
+        <tbody>
+          <tr><td>Devolve</td><td>uma linha por grupo (5)</td><td>uma linha por linha de entrada (2.964.624)</td></tr>
+          <tr><td>Índice</td><td>as chaves do grupo</td><td>o mesmo índice do DataFrame original</td></tr>
+          <tr><td>Serve para</td><td>relatório, tabela de resumo</td><td>comparar cada linha com o próprio grupo: "% do total do grupo", "diferença para a média do grupo"</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Como o <code>transform</code> volta alinhado pelo índice, você atribui o resultado direto como coluna nova, sem merge de volta.</p>
+
+    <div class="callout bug">
+      <div class="callout-title">Leia o número antes de confiar</div>
+      <p>A gorjeta média em dinheiro (<code>payment_type</code> 2) é 0,00. O dicionário de dados da TLC registra as formas de pagamento (0 = Flex Fare, 1 = cartão, 2 = dinheiro, 3 = sem cobrança, 4 = disputa), e avisa que a coluna de gorjeta só é preenchida para cartão: gorjeta em dinheiro não entra. Uma "gorjeta média de todas as viagens" mistura gorjeta zero de verdade com gorjeta que não foi registrada.</p>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 07 ==================== -->
+<article class="act" id="a7" data-kind="video" data-title="merge: contar, validar, desconfiar" data-min="4" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula D01 &middot; Atividade 07</span></div>
+  <h1 class="act-title">merge: contar, validar, desconfiar</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead">Um merge de fato com dimensão tem um contrato: cada viagem continua sendo uma viagem. Esse contrato não é verificado por padrão. Você verifica.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">zones = pd.read_csv("data/taxi_zone_lookup.csv")
+dropoffs = pd.read_parquet(PATH, columns=["DOLocationID"])
+
+rows_before = len(dropoffs)
+with_zone = dropoffs.merge(
+    zones[["LocationID", "Borough"]],
+    left_on="DOLocationID",
+    right_on="LocationID",
+    how="left",
+    validate="many_to_one",
+)
+assert len(with_zone) == rows_before, "the merge changed the row count"
+
+print("rows      :", rows_before, "-&gt;", len(with_zone))
+print("no borough:", with_zone["Borough"].isna().sum())
+print(zones[zones["LocationID"] &gt;= 264])</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>rows      : 2964624 -&gt; 2964624
+no borough: 11967
+     LocationID  Borough            Zone service_zone
+263         264  Unknown             NaN          NaN
+264         265      NaN  Outside of NYC          NaN</div>
+</div>
+
+    <p>Três defesas, cada uma contra um problema diferente:</p>
+    <ul>
+      <li><code>how="left"</code>: nenhuma viagem some por não achar zona. O <code>inner</code>, que é o padrão, descartaria em silêncio;</li>
+      <li><code>validate="many_to_one"</code>: o pandas confere que a chave é única do lado direito e levanta <code>MergeError</code> se não for. Sem ele, chave duplicada vira linha duplicada;</li>
+      <li>o <code>assert</code> de contagem: pega o que as outras duas não pegam e documenta a intenção no código.</li>
+    </ul>
+
+    <p>Agora olhe as 11.967 viagens "sem borough". Não falta dado nenhum. No CSV, a zona 265 é <code>265,"N/A","Outside of NYC","N/A"</code>, e o <code>read_csv</code> trata o texto <code>N/A</code> como nulo por padrão. Para o pandas, o borough sumiu. Para a TLC, o borough é "não se aplica", porque a viagem terminou fora de Nova York. Num relatório, essa diferença muda a legenda e o número.</p>
+  </div>
+</article>
+
+<!-- ==================== 08 ==================== -->
+<article class="act" id="a8" data-kind="note" data-title="Para saber mais: apply e iterrows, medidos" data-min="3" hidden>
+  <div class="kicker"><span class="tag is-note">Para saber mais</span><span class="dot"></span><span>Aula D01 &middot; Atividade 08</span></div>
+  <h1 class="act-title">apply e iterrows, medidos</h1>
+  <div class="act-meta">03 min</div>
+  <div class="prose">
+    <p class="lead">"Evite <code>apply</code>" vira dogma quando ninguém mede. A mesma regra, "a viagem saiu de um aeroporto?", em quatro versões, sobre as primeiras 100 mil viagens:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import time
+
+import numpy as np
+
+sample = pd.read_parquet(PATH, columns=["PULocationID"]).head(100_000)
+AIRPORTS = [132, 138]  # JFK, LaGuardia
+
+
+def timed(label, fn):
+    start = time.perf_counter()
+    result = fn()
+    print(f"{label:9} {time.perf_counter() - start:8.4f}s")
+    return result
+
+
+by_apply = timed("apply", lambda: sample.apply(lambda row: int(row["PULocationID"] in AIRPORTS), axis=1))
+by_iter = timed("iterrows", lambda: pd.Series(
+    [int(row["PULocationID"] in AIRPORTS) for _, row in sample.iterrows()], index=sample.index))
+by_isin = timed("isin", lambda: sample["PULocationID"].isin(AIRPORTS).astype("int8"))
+by_where = timed("np.where", lambda: np.where(sample["PULocationID"].isin(AIRPORTS), 1, 0))
+
+print("same answer:", bool((by_apply.to_numpy() == by_isin.to_numpy()).all()
+                           and (by_iter.to_numpy() == by_where).all()))</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>apply       0.2236s
+iterrows    1.0059s
+isin        0.0017s
+np.where    0.0012s
+same answer: True</div>
+</div>
+
+    <p>O <code>apply(axis=1)</code> foi mais de 100 vezes mais lento que o <code>isin</code>, e o <code>iterrows</code> quase 600 vezes. Os dois montam uma <code>Series</code> por linha e chamam uma função Python para cada uma. O <code>isin</code> e o <code>np.where</code> rodam um laço em C sobre o array inteiro. No mês completo, medido na mesma máquina: 7,3 s com <code>apply</code>, 27 s com <code>iterrows</code> e 18 ms com <code>isin</code>.</p>
+
+    <p>Quando o <code>apply</code> é aceitável: lógica que não existe vetorizada (chamar uma biblioteca externa por valor, por exemplo), sobre poucos milhares de linhas, ou <code>groupby().apply</code> com poucos grupos. Escreva o motivo num comentário, como a aula 05 pedia para o <code>list()</code>.</p>
+  </div>
+</article>
+
+<!-- ==================== 09 ==================== -->
+<article class="act" id="a9" data-kind="note" data-title="Armadilhas: os bugs que não levantam exceção" data-min="5" hidden>
+  <div class="kicker"><span class="tag is-note">Armadilhas</span><span class="dot"></span><span>Aula D01 &middot; Atividade 09</span></div>
+  <h1 class="act-title">Os bugs que não levantam exceção</h1>
+  <div class="act-meta">05 min</div>
+  <div class="prose">
+    <p class="lead">Um <code>KeyError</code> para o pipeline e você conserta. Os problemas abaixo devolvem um número plausível, e o relatório sai.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">trips = pd.read_parquet(PATH, columns=["PULocationID", "passenger_count", "fare_amount"])
+
+# 1. size counts rows, count skips nulls
+per_zone = trips.groupby("PULocationID").agg(
+    rows=("passenger_count", "size"), with_value=("passenger_count", "count"))
+print("size :", per_zone["rows"].sum(), "| count:", per_zone["with_value"].sum())
+
+# 2. a ratio against the group mean
+zone_avg = trips.groupby("PULocationID")["fare_amount"].transform("mean")
+ratio = trips["fare_amount"] / zone_avg
+print("ratio mean:", ratio.mean(), "| inf rows:", int(np.isinf(ratio).sum()))
+print(trips.loc[trips["PULocationID"] == 245, ["PULocationID", "fare_amount"]])
+
+# 3. money in float32
+total64 = trips["fare_amount"].sum()
+total32 = trips["fare_amount"].astype("float32").sum()
+print(f"float64: {total64:,.2f} | float32: {float(total32):,.2f}")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>size : 2964624 | count: 2824462
+ratio mean: nan | inf rows: 2
+         PULocationID  fare_amount
+1995551           245         -4.4
+1995552           245          4.4
+float64: 53,882,224.76 | float32: 53,882,224.00</div>
+</div>
+
+    <p>A segunda parte merece atenção. A zona 245 teve duas viagens no mês: uma cobrança de US$ 4,40 e o estorno dela. A média da zona é zero, a razão das duas linhas vira <code>-inf</code> e <code>+inf</code>, e a soma dos dois vira <code>NaN</code>. Duas linhas em 3 milhões apagaram a média geral. O único aviso foi um <code>RuntimeWarning</code> do NumPy no stderr, que num job agendado ninguém lê.</p>
+
+    <div class="traps">
+      <div class="trap">
+        <h3><code>count</code> no lugar de <code>size</code></h3>
+        <p><code>count</code> ignora nulos, <code>size</code> conta linhas. Contando viagens por <code>passenger_count</code>, somem 140.162 viagens, justamente as de Flex Fare. Para "quantas viagens", use <code>size</code>, ou <code>count</code> numa coluna que você <em>provou</em> não ter nulos.</p>
+      </div>
+      <div class="trap">
+        <h3>Razão contra a média do grupo</h3>
+        <p>Estorno anula cobrança, a média vai a zero e a divisão vai a infinito. Prefira diferença à razão quando o denominador pode zerar, ou filtre os valores não positivos antes e conte quantos saíram.</p>
+      </div>
+      <div class="trap">
+        <h3>Dinheiro em <code>float32</code></h3>
+        <p>O <code>float32</code> tem cerca de 7 dígitos significativos. O total de tarifas do mês tem 10. Some em <code>float32</code> e perde 76 centavos, sem erro. Reduza IDs e códigos, não valores monetários.</p>
+      </div>
+      <div class="trap">
+        <h3><code>astype("int8")</code> num ID que passa de 127</h3>
+        <p>O cast não confere o intervalo: 265 vira um número negativo. Em <code>PULocationID</code>, 2.303.392 das 2.964.624 linhas mudam de valor. O merge seguinte não acha a zona, e com <code>how="left"</code> as viagens ficam com borough vazio. Confira <code>min()</code> e <code>max()</code> antes de escolher o tipo.</p>
+      </div>
+      <div class="trap">
+        <h3>Chave duplicada na dimensão</h3>
+        <p>Se a tabela de zonas tiver uma linha repetida, o merge repete cada viagem daquela zona, a soma de tarifas cresce e nenhum erro aparece. O <code>validate</code> não é o padrão: você pede. No S1.4 você mede o tamanho do estrago.</p>
+      </div>
+      <div class="trap">
+        <h3><code>N/A</code> lido como nulo</h3>
+        <p>O <code>read_csv</code> converte <code>N/A</code>, <code>NA</code>, <code>null</code> e outros textos em <code>NaN</code>. Às vezes é o certo. Na tabela de zonas, transforma "não se aplica" em "faltando". Se o texto é um valor válido, leia com <code>keep_default_na=False</code> ou com uma lista própria de <code>na_values</code>.</p>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 10 ==================== -->
+<article class="act" id="a10" data-kind="video" data-title="Quando isso NÃO ajuda" data-min="4" hidden>
+  <div class="kicker"><span class="tag">Conteúdo</span><span class="dot"></span><span>Aula D01 &middot; Atividade 10</span></div>
+  <h1 class="act-title">Quando isso NÃO ajuda</h1>
+  <div class="act-meta">04 min</div>
+  <div class="prose">
+    <p class="lead"><code>columns=</code> e dtypes resolvem bem o caso desta aula. Fora dele, cada um tem um limite, e saber o limite é o que diferencia entender de decorar.</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import time
+
+CSV = "data/yellow_tripdata_2024-01.csv"   # same month, written once with trips.to_csv(CSV, index=False)
+COLS = ["DOLocationID", "passenger_count"]
+
+for label, read in [("parquet, columns=", lambda: pd.read_parquet(PATH, columns=COLS)),
+                    ("csv, usecols=    ", lambda: pd.read_csv(CSV, usecols=COLS))]:
+    start = time.perf_counter()
+    df = read()
+    print(f"{label} {time.perf_counter() - start:5.2f}s  {df.memory_usage(deep=True).sum() / 1e6:5.1f} MB")
+
+pickup = pd.read_parquet(PATH, columns=["tpep_pickup_datetime"])["tpep_pickup_datetime"]
+print("distinct pickup times:", pickup.nunique())
+print(f"datetime64: {pickup.memory_usage(deep=True) / 1e6:.1f} MB"
+      f" | category: {pickup.astype('category').memory_usage(deep=True) / 1e6:.1f} MB")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>parquet, columns=  0.06s   35.6 MB
+csv, usecols=      0.46s   47.4 MB
+distinct pickup times: 1575706
+datetime64: 23.7 MB | category: 24.5 MB</div>
+</div>
+
+    <ul>
+      <li><strong>CSV não é colunar.</strong> O <code>usecols=</code> economiza memória, mas o arquivo inteiro de 311 MB ainda é lido e quebrado em linhas: 0,46 s contra 0,06 s do Parquet para as mesmas duas colunas. Se o dado chega em CSV e vai ser lido muitas vezes, converter uma vez para Parquet costuma valer mais que qualquer ajuste de leitura;</li>
+      <li><strong><code>category</code> em coluna de alta cardinalidade piora.</strong> Com 1,58 milhão de horários distintos, a categoria guarda quase todos os valores de novo, mais um índice por linha: 24,5 MB contra 23,7 MB. A regra é poucos valores repetidos muitas vezes.</li>
+    </ul>
+
+    <p>O terceiro limite é o mais importante, e só aparece medindo o pico:</p>
+
+<div class="code has-out">
+  <div class="code-head"><span class="code-file"><b>python</b></span><button class="copy">Copiar</button></div>
+  <pre><code class="language-python">import resource
+
+
+def peak_mb() -&gt; float:
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024 / 1e6   # KiB on Linux
+
+
+dropoffs = pd.read_parquet(PATH, columns=["DOLocationID", "passenger_count"])
+print(f"after read  : peak {peak_mb():6.1f} MB, frame {dropoffs.memory_usage(deep=True).sum() / 1e6:5.1f} MB")
+dropoffs = dropoffs.astype({"DOLocationID": "int16", "passenger_count": "Int8"})
+print(f"after astype: peak {peak_mb():6.1f} MB, frame {dropoffs.memory_usage(deep=True).sum() / 1e6:5.1f} MB")</code></pre>
+  <div class="out"><span class="out-label">Saída real</span>after read  : peak  237.8 MB, frame  35.6 MB
+after astype: peak  277.5 MB, frame  11.9 MB</div>
+</div>
+
+    <p>O DataFrame encolheu de 35,6 para 11,9 MB, mas o pico <strong>subiu</strong>: o <code>astype</code> monta as colunas novas antes de soltar as antigas. Ajustar o tipo depois de ler reduz o que fica na memória, não o pico da leitura. Se o problema é o pico, leia menos (colunas, filtros na leitura, um row group por vez) ou use um motor que não materializa tudo, que é o assunto da D02.</p>
+
+    <p>E quando nem as colunas certas cabem na RAM, o pandas sozinho para de ser a ferramenta: leitura em lotes com <code>pyarrow.parquet.ParquetFile.iter_batches</code>, o modo streaming do Polars, ou levar o processamento para onde o dado já está, com Spark ou Athena.</p>
+  </div>
+</article>
+
+<!-- ==================== 11 ==================== -->
+<article class="act" id="a11" data-kind="lab" data-title="Hora da prática: S1.1 a S1.4 e entrega" data-min="20" hidden>
+  <div class="kicker"><span class="tag is-lab">Hora da prática</span><span class="dot"></span><span>Aula D01 &middot; Atividade 11</span></div>
+  <h1 class="act-title">Exercícios S1.1 a S1.4 e entrega</h1>
+  <div class="act-meta">20 min &middot; arquivo <code>exercises/data-at-scale/scale01.py</code></div>
+  <div class="prose">
+    <p class="lead">Quatro exercícios curtos, todos no lado do embarque (<code>PULocationID</code>). Cada um tem uma previsão para escrever antes de rodar. A D02 vai refazer exatamente estes quatro em Polars, então escreva funções que você consiga ler de novo amanhã.</p>
+
+    <p>As colunas dos exercícios: <code>PULocationID</code>, <code>payment_type</code>, <code>trip_distance</code>, <code>fare_amount</code> e <code>tip_amount</code>.</p>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">S1.1</span><h2>Medir do jeito certo</h2><span class="ex-kind">medição</span></div>
+      <p>Faça o <code>scale01.py</code> aceitar um modo na linha de comando, <code>all</code> ou <code>cols</code>. O modo <code>all</code> lê o arquivo inteiro, e o <code>cols</code> lê só as cinco colunas. Para cada modo, imprima o tempo de leitura (<code>perf_counter</code>), o tamanho do DataFrame (<code>memory_usage(deep=True)</code>) e o pico do processo (<code>ru_maxrss</code>). Se você fez o <code>measure_elapsed</code> da aula 05, reaproveite a ideia, trocando o <code>tracemalloc</code> pelas duas medidas desta aula.</p>
+      <p>Antes de rodar, preveja num comentário: o modo <code>cols</code> usa que fração do pico do modo <code>all</code>?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+          <p>Os números da solução de referência na máquina desta página (três execuções de cada modo, um processo por execução):</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>modo</th><th>tempo</th><th>DataFrame</th><th>pico do processo</th></tr></thead>
+              <tbody>
+                <tr><td><code>all</code></td><td>0,30 a 0,37 s</td><td>418,0 MB</td><td>1.065 a 1.082 MB</td></tr>
+                <tr><td><code>cols</code></td><td>0,09 a 0,11 s</td><td>106,7 MB</td><td>400 a 402 MB</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>O pico do <code>cols</code> é pouco mais de um terço do <code>all</code>, e não um quarto como o tamanho do DataFrame sugere. Uns 110 MB do pico são só o import do pandas e do pyarrow, e esse custo fixo não encolhe com a leitura. Se você previu "um quarto", errou pelo motivo certo de errar.</p>
+          <p>Onde escorregam: medir os dois modos no mesmo processo (o pico do segundo herda o do primeiro); esquecer o <code>deep=True</code>; e ligar o <code>tracemalloc</code> "para garantir", o que mostra 1,9 MB e ainda atrasa o tempo.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">S1.2</span><h2>Tipos menores, com prova</h2><span class="ex-kind">memória</span></div>
+      <p>Escolha o tipo de cada uma das cinco colunas. Imprima uma tabela com os MB de cada coluna antes e depois, e o total.</p>
+      <p>Antes de rodar, preveja num comentário: qual coluna encolhe mais? Por escrito: por que <code>fare_amount</code> e <code>tip_amount</code> não mudam de tipo?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>coluna</th><th>antes</th><th>depois</th><th>tipo</th></tr></thead>
+              <tbody>
+                <tr><td><code>PULocationID</code></td><td>11,9 MB</td><td>5,9 MB</td><td><code>int32</code> &rarr; <code>int16</code></td></tr>
+                <tr><td><code>payment_type</code></td><td>23,7 MB</td><td>3,0 MB</td><td><code>int64</code> &rarr; <code>category</code> (5 valores)</td></tr>
+                <tr><td><code>trip_distance</code>, <code>fare_amount</code>, <code>tip_amount</code></td><td>23,7 MB cada</td><td>23,7 MB cada</td><td><code>float64</code></td></tr>
+                <tr><td><strong>total</strong></td><td><strong>106,7 MB</strong></td><td><strong>80,0 MB</strong></td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Quem mais encolhe é o <code>payment_type</code>, 8 vezes: chegou como <code>int64</code>, com 8 bytes por linha, para guardar 5 valores. Os três floats ainda são 71 MB dos 80. Passar os três para <code>float32</code> levaria o total a 44,5 MB, mas o total de tarifas perde US$ 0,76 e o de gorjetas US$ 0,31. Essa é a resposta escrita: o ganho de memória não paga um relatório financeiro que não fecha.</p>
+          <p>Onde escorregam: <code>int8</code> em <code>PULocationID</code>. O cast aceita sem reclamar, e 2.303.392 linhas passam a ter outro ID. Também escorrega quem converte <code>payment_type</code> para <code>category</code> e depois compara com <code>== "1"</code>, como texto. As categorias continuam inteiras, a comparação dá falso em todas as linhas, e o filtro devolve vazio.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">S1.3</span><h2>Resumo por zona de embarque</h2><span class="ex-kind">agregação</span></div>
+      <p>Com named aggregations, monte um resumo por <code>PULocationID</code> com <code>trips</code>, <code>avg_fare</code>, <code>total_tip</code> e <code>avg_distance</code>. Mostre as cinco zonas com mais viagens, e prove com um <code>assert</code> que a soma de <code>trips</code> é igual ao número de linhas lidas.</p>
+      <p>Antes de rodar, preveja num comentário: qual zona embarca mais gente em Nova York?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— top 5, valores arredondados em 2 casas</span></span><button class="copy">Copiar</button></div>
+  <pre><code>               trips  avg_fare   total_tip  avg_distance
+PULocationID
+132           145240     59.40  1287335.09         15.49
+161           143471     15.21   441550.59          2.56
+237           142708     12.18   369520.88          1.70
+236           136465     12.71   360595.81          1.85
+162           106717     14.79   322253.11          2.23</code></pre>
+</div>
+          <p>São 260 zonas com embarque, e a soma de <code>trips</code> dá 2.964.624. O topo é o aeroporto JFK (132), mas por pouco: Midtown Center (161) fica a 1.769 viagens. A tarifa média do JFK é quase quatro vezes a de Midtown Center, e a distância média é seis vezes maior.</p>
+          <p>Onde escorregam: usar <code>("passenger_count", "count")</code> como contagem de viagens (atividade 09); ordenar pelo índice em vez de <code>trips</code>; e deixar o <code>assert</code> de fora, que é o que transforma "parece certo" em "está certo".</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">S1.4</span><h2>Merge com as zonas, e o estrago de uma linha repetida</h2><span class="ex-kind">merge</span></div>
+      <p>Junte as viagens com <code>Borough</code> e <code>Zone</code> da tabela de zonas, com as três defesas da atividade 07, e conte as viagens por borough, incluindo os nulos (<code>dropna=False</code>).</p>
+      <p>Depois simule um erro comum: alguém "corrigiu" a tabela de zonas acrescentando uma linha nova para o JFK (132) sem apagar a antiga. Antes de rodar, preveja num comentário quantas linhas a mais o merge <strong>sem</strong> <code>validate</code> vai produzir. Rode sem e com <code>validate</code>.</p>
+      <p>Por escrito: o que são as viagens com <code>Borough</code> nulo, e o que são as com <code>Zone</code> nulo?</p>
+      <details class="solution">
+        <summary>Opinião do instrutor</summary>
+        <div class="sol-body">
+<div class="code">
+  <div class="code-head"><span class="code-file"><b>saída real</b> <span style="color:var(--ink-3)">— viagens por borough, dropna=False</span></span><button class="copy">Copiar</button></div>
+  <pre><code>Manhattan        2646948
+Queens            273128
+Brooklyn           25258
+Unknown            10360
+Bronx               6905
+NaN                 1658
+EWR                  295
+Staten Island         72</code></pre>
+</div>
+          <p>A soma dá 2.964.624, igual antes e depois do merge. Com a linha do JFK repetida, o merge sem <code>validate</code> produz 3.109.864 linhas, 145.240 a mais: exatamente o número de viagens do JFK, porque cada uma casou duas vezes. Com <code>validate="many_to_one"</code>, o pandas levanta <code>MergeError: Merge keys are not unique in right dataset; not a many-to-one merge</code>.</p>
+          <p>A resposta escrita: as 1.658 viagens com <code>Borough</code> nulo saíram da zona 265 ("Outside of NYC"), cujo borough é o texto <code>N/A</code> que o <code>read_csv</code> converteu em nulo. As 10.360 com <code>Zone</code> nulo são da zona 264, de borough <code>Unknown</code>, que também tem <code>N/A</code> no nome. As duas são valores conhecidos, não dados faltando.</p>
+          <p>Onde escorregam: prever "1 linha a mais", pensando na tabela de zonas e não nas viagens; e usar <code>value_counts()</code> sem <code>dropna=False</code>, que esconde a linha de nulos e faz a soma fechar em 2.962.966.</p>
+        </div>
+      </details>
+    </div>
+
+    <hr>
+
+    <h2>Como entregar</h2>
+    <p>Faça commit do <code>scale01.py</code> com as saídas coladas em comentário embaixo de cada exercício, as previsões escritas <strong>antes</strong> das saídas e as respostas escritas do S1.2 e do S1.4.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Checklist antes de entregar</div>
+      <ul>
+        <li>Cada medição de pico rodou num processo próprio?</li>
+        <li>Algum tipo foi escolhido sem conferir <code>min()</code> e <code>max()</code>?</li>
+        <li>Todo merge tem <code>how</code>, <code>validate</code> e um <code>assert</code> de contagem?</li>
+        <li>Nenhum <code>apply</code> ou <code>iterrows</code> sem um comentário explicando por que ele está ali?</li>
+      </ul>
+    </div>
+  </div>
+</article>
+
+<!-- ==================== 12 ==================== -->
+<article class="act" id="a12" data-kind="recap" data-title="Fechamento" data-min="3" hidden>
+  <div class="kicker"><span class="tag is-lab">Fechamento</span><span class="dot"></span><span>Aula D01 &middot; Atividade 12</span></div>
+  <h1 class="act-title">Fechamento</h1>
+  <div class="act-meta">03 min</div>
+  <div class="prose">
+    <p class="lead">Em arquivo grande, o pandas é rápido o bastante. O que estraga o resultado são as decisões tomadas sem medir: ler tudo, tipo largo, merge sem contrato.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ideia</th><th>Em uma linha</th></tr></thead>
+        <tbody>
+          <tr><td>Disco &times; memória</td><td>Parquet comprime; na RAM, cada valor numérico custa 8 bytes</td></tr>
+          <tr><td>Medir memória</td><td><code>memory_usage(deep=True)</code> para o DataFrame, <code>ru_maxrss</code> para o pico, um processo por medição</td></tr>
+          <tr><td>Ler menos</td><td><code>columns=</code> no Parquet pula bytes no disco; no CSV, não</td></tr>
+          <tr><td>Tipos</td><td>IDs e códigos encolhem; dinheiro fica em <code>float64</code>; confira o intervalo antes</td></tr>
+          <tr><td><code>agg</code> &times; <code>transform</code></td><td>uma linha por grupo &times; uma linha por linha, alinhada pelo índice</td></tr>
+          <tr><td>Merge</td><td><code>how="left"</code>, <code>validate</code> e <code>assert</code> de contagem</td></tr>
+          <tr><td>Vetorizar</td><td><code>apply(axis=1)</code> e <code>iterrows</code> são laços em Python, de 100 a 600 vezes mais lentos aqui</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Se perguntarem na entrevista</h2>
+    <p>Treine em voz alta, com as suas palavras e os seus números. Os pontos-chave estão em inglês, porque é assim que você vai falar.</p>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">Q1</span><h2>"How do you process a file that doesn't fit in memory?"</h2><span class="ex-kind">pandas</span></div>
+      <ul>
+        <li>Read only the columns you need. With Parquet that skips bytes on disk. Give your number: 418 MB down to 107 MB for this month.</li>
+        <li>Shrink types where it is safe: IDs to <code>int16</code>, low-cardinality codes to <code>category</code>. Money stays <code>float64</code>.</li>
+        <li>Filter early, and process in batches if it still doesn't fit (<code>iter_batches</code> in pyarrow).</li>
+        <li>Past that point, change tools: Polars lazy/streaming, Spark, or query it where it lives with Athena.</li>
+      </ul>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">Q2</span><h2>"What can go wrong in a merge?"</h2><span class="ex-kind">pandas</span></div>
+      <ul>
+        <li>A duplicated key on the dimension side multiplies rows with no error. One duplicated zone added 145,240 rows here.</li>
+        <li>An inner join silently drops rows with no match, and key type mismatches stop matches entirely.</li>
+        <li>Defense: <code>how="left"</code>, <code>validate="many_to_one"</code>, and an assert on the row count before and after.</li>
+        <li>Check what "null" means after the join. Here, "N/A" was a real value read as missing.</li>
+      </ul>
+    </div>
+
+    <div class="ex">
+      <div class="ex-head"><span class="ex-id">Q3</span><h2>"What's the difference between agg and transform?"</h2><span class="ex-kind">pandas</span></div>
+      <ul>
+        <li><code>agg</code> reduces each group to one row: 260 rows, one per pickup zone.</li>
+        <li><code>transform</code> returns one value per input row, aligned to the original index: 2.96 million rows.</li>
+        <li>Use <code>transform</code> to compare each row with its own group, like "fare minus the zone average", without merging back.</li>
+      </ul>
+    </div>
+
+    <div class="callout next">
+      <div class="callout-title">Próxima aula &mdash; D02: o mesmo em Polars</div>
+      <p>Os mesmos quatro exercícios, agora em Polars: expressões, <code>group_by</code>, <code>join</code> com <code>validate</code> e o modo lazy. Com <code>explain()</code>, você vai ver o otimizador fazer sozinho o <code>columns=</code> desta aula, e medir quanto isso vale.</p>
+    </div>
+  </div>
+</article>
+
+    </div><!-- /reader -->
+
+    <div class="footnav">
+      <button class="btn btn-ghost" id="prevBtn">&larr; Anterior</button>
+      <label class="donebox"><input type="checkbox" id="doneChk"> Marcar como concluída</label>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="nextBtn">Avançar &rarr;</button>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="pConteudo">Conteúdo</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="pRecursos">Recursos</button>
+    </div>
+
+    <div class="tabpanel" id="pConteudo" role="tabpanel">
+      <div class="lesson-head">
+        <div class="ring">
+          <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="3"></circle>
+            <circle class="fill" id="ringFill" cx="26" cy="26" r="22" fill="none" stroke-width="3"
+                    stroke-dasharray="0 138.2"></circle>
+          </svg>
+          <span id="ringTxt">0/12</span>
+        </div>
+        <div class="lh-t">
+          <div class="lh-k">Aula D01</div>
+          <div class="lh-n">pandas em arquivo grande</div>
+        </div>
+      </div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+
+    <div class="tabpanel res" id="pRecursos" role="tabpanel" hidden>
+      <h3>Desta aula</h3>
+      <ul>
+        <li><span class="res-static">exercises/data-at-scale/scale01.py<span class="rs">o arquivo que você entrega</span></span></li>
+        <li><span class="res-static">exercises/data-at-scale/data/<span class="rs">o Parquet e a tabela de zonas, fora do Git</span></span></li>
+      </ul>
+      <h3>Dados</h3>
+      <ul>
+        <li><a href="https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page" target="_blank" rel="noopener">TLC Trip Record Data<span class="rs">nyc.gov · os arquivos mensais e a tabela de zonas</span></a></li>
+        <li><a href="https://www.nyc.gov/assets/tlc/downloads/pdf/data_dictionary_trip_records_yellow.pdf" target="_blank" rel="noopener">Data dictionary, yellow taxi<span class="rs">nyc.gov · o que cada coluna e cada código significa</span></a></li>
+      </ul>
+      <h3>Documentação</h3>
+      <ul>
+        <li><a href="https://pandas.pydata.org/docs/user_guide/scale.html" target="_blank" rel="noopener">Scaling to large datasets<span class="rs">pandas · colunas, tipos e chunks</span></a></li>
+        <li><a href="https://pandas.pydata.org/docs/user_guide/groupby.html" target="_blank" rel="noopener">Group by: split-apply-combine<span class="rs">pandas · named aggregation, agg e transform</span></a></li>
+        <li><a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.merge.html" target="_blank" rel="noopener">DataFrame.merge<span class="rs">pandas · o parâmetro validate</span></a></li>
+        <li><a href="https://docs.python.org/3/library/resource.html" target="_blank" rel="noopener">resource<span class="rs">docs.python.org · getrusage e ru_maxrss</span></a></li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="../../assets/course-data.js"></script>
+<script src="../../assets/course.js"></script>
+</body>
+</html>

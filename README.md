@@ -6,9 +6,16 @@ My personal exercises
 (branch `main`, folder `/docs`). Phase 1 is seventeen lessons covering advanced
 Python, advanced SQL and the software-engineering practices around them. A
 separate track, **Redes** (lessons R01 to R03), covers IPv4, IPv6 and DNS from
-the point of view of network inventory data. The
+the point of view of network inventory data. A second one, **Dados em escala**
+(lessons D01 and D02), works through one month of NYC taxi trips with pandas
+and Polars, on the way to SQL on a data lake and Spark. The
 lesson prose is in Portuguese; everything else — file names, folders, code
 comments and this README — is in English.
+
+The Dados em escala lessons are the first to need packages outside the standard
+library. Their exercises live in `exercises/data-at-scale/`, with pandas, pyarrow
+and polars pinned in that folder's `requirements.txt`; the data files are
+downloaded into `exercises/data-at-scale/data/` and never committed.
 
 Every measurement printed in a lesson was executed: the timings, the
 `tracemalloc` peaks, the `EXPLAIN QUERY PLAN` output and the git command
@@ -40,10 +47,13 @@ docs/
 │   │   ├── 15-sql-explain-e-indices.html
 │   │   ├── 16-git-em-equipe.html
 │   │   └── 17-projeto-da-fase-1.html
-│   └── networks/             # Redes track, R01 to R03
-│       ├── r01-ipv4-cidr-e-sub-redes.html
-│       ├── r02-ipv6-e-ip-como-dado.html
-│       └── r03-dns-e-zonas-reversas.html
+│   ├── networks/             # Redes track, R01 to R03
+│   │   ├── r01-ipv4-cidr-e-sub-redes.html
+│   │   ├── r02-ipv6-e-ip-como-dado.html
+│   │   └── r03-dns-e-zonas-reversas.html
+│   └── data-at-scale/        # Dados em escala track, D01 and D02
+│       ├── d01-pandas-em-arquivo-grande.html
+│       └── d02-o-mesmo-em-polars.html
 └── reviews/                  # one page per graded delivery
     └── 04-revisao.html
 ```
@@ -69,7 +79,8 @@ A lesson page repeats two of them on `<body>` — `data-lesson` and
 ### Tracks
 
 A lesson with no `track` field belongs to phase 1; the Redes lessons carry
-`track: "redes"` and ids `R01` to `R03`. `tracks` in the manifest names each
+`track: "redes"` and ids `R01` to `R03`, and the Dados em escala lessons carry
+`track: "escala"` and ids `D01` and `D02`. `tracks` in the manifest names each
 track. The sidebar tree and the previous/next links only show lessons from the
 current page's track, so finishing lesson 17 never lands in R01 and the other
 way round. The index shows phase 1 progress in the hero and each extra track as

@@ -18,7 +18,8 @@ window.COURSE = {
      da última aula da fase 1 não cai numa aula de redes, e vice-versa. */
   tracks: {
     fase1: { name: "Fase 1", title: "Python avançado para engenharia de dados" },
-    redes: { name: "Trilha extra · Redes", title: "Redes para dados de infraestrutura" }
+    redes: { name: "Trilha extra · Redes", title: "Redes para dados de infraestrutura" },
+    escala: { name: "Trilha extra · Dados em escala", title: "Dados em escala: de pandas a Spark" }
   },
 
   /* Assuntos que as aulas 04 a 06 assumem conhecidos e que ainda não têm
@@ -132,6 +133,18 @@ window.COURSE = {
     {
       id: "R03", track: "redes", title: "DNS e zonas reversas",
       slug: "lessons/networks/r03-dns-e-zonas-reversas.html",
+      acts: 13, published: true, delivery: "pending"
+    },
+
+    /* ---------- trilha extra: dados em escala ---------- */
+    {
+      id: "D01", track: "escala", title: "pandas em arquivo grande",
+      slug: "lessons/data-at-scale/d01-pandas-em-arquivo-grande.html",
+      acts: 12, published: true, delivery: "pending"
+    },
+    {
+      id: "D02", track: "escala", title: "O mesmo em Polars",
+      slug: "lessons/data-at-scale/d02-o-mesmo-em-polars.html",
       acts: 13, published: true, delivery: "pending"
     }
   ],
